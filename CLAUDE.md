@@ -39,6 +39,8 @@ The project structure follows standard Python packaging conventions:
 - `iscc_vdb/` - Main package directory (currently contains only placeholder code)
 - `tests/` - Test files using pytest
 - `docs/` - MkDocs documentation with Material theme
+- `scripts/` - Project-related tools, benchmarks, and experiments (committed to repo)
+- `scratch/` - Local debugging and one-off scripts (not tracked in git)
 - Core dependency: `usearch>=2.18.0` - vector search library
 
 ## Code Standards
@@ -49,6 +51,8 @@ The project structure follows standard Python packaging conventions:
 - **Linting**: Ruff with extensive rule sets for code quality, security, and style
 - **Testing**: pytest with coverage reporting
 - **Pre-commit**: Automated checks run on commit
+
+@~/.claude/docs/python.md
 
 ## Development Notes
 
@@ -64,3 +68,30 @@ The project structure follows standard Python packaging conventions:
 - Run single test: `uv run pytest tests/test_foo.py::test_function_name`
 - Run with coverage: `uv run poe test`
 - Ensure all tests pass before committing
+
+## usearch Library Deep Dive
+
+### Memory Reminder
+
+**IMPORTANT**: When working with usearch functionality beyond basic usage, use `mcp__deepwiki__ask_question`
+with repository `unum-cloud/usearch` to get in-depth, current information about:
+
+- Advanced configuration options
+- Performance optimization techniques
+- Latest API changes and best practices
+- Implementation details not covered in training data
+
+### usearch Key Findings & Notes
+
+*(This section will be updated as I learn more about usearch)*
+
+#### Core Library Information
+
+- Repository: `unum-cloud/usearch`
+- Current project dependency: `usearch>=2.18.0`
+- Primary use case: High-performance vector similarity search
+- Language: C++ with Python bindings
+
+#### Important Actionable Findings
+
+*(To be populated as I discover usearch-specific insights)*

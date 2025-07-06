@@ -144,3 +144,6 @@ cython_debug/
 
 # Hot Shit AI stuff :)
 .claude
+
+# Local scratch directory for debugging and one-off scripts
+scratch/

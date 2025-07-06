@@ -43,6 +43,20 @@ The project structure follows standard Python packaging conventions:
 - `scratch/` - Local debugging and one-off scripts (not tracked in git)
 - Core dependency: `usearch>=2.18.0` - vector search library
 
+## Binary Vector Handling
+
+- **ISCC vectors are binary**: 64, 128, 192, or 256 bits (8, 16, 24, or 32 bytes)
+- **Usearch configuration**: `ndim` specifies bits (not bytes), use `dtype=ScalarKind.B1`
+- **Storage calculations**: Always verify bit-to-byte conversions
+- **Length signalling approach**: 264-bit vectors = 33 bytes (1 byte signal + 32 bytes max ISCC)
+
+## NPHD Metric Properties
+
+- NPHD (Normalized Prefix Hamming Distance) is a **valid metric** for prefix-compatible codes
+- Satisfies all metric axioms: non-negativity, identity, symmetry, triangle inequality
+- Correctly handles variable-length comparisons by normalizing over common prefix length
+- Standard Hamming distance does NOT work because it treats all differences equally regardless of vector length
+
 ## Code Standards
 
 - **Python versions**: 3.9 to 3.13
@@ -73,13 +87,19 @@ The project structure follows standard Python packaging conventions:
 
 ### Memory Reminder
 
-**IMPORTANT**: When working with usearch functionality beyond basic usage, use `mcp__deepwiki__ask_question`
-with repository `unum-cloud/usearch` to get in-depth, current information about:
+**IMPORTANT**: When implementing NPHD or custom metrics, ALWAYS use `mcp__deepwiki__ask_question` with
+repository `unum-cloud/usearch` to verify:
 
-- Advanced configuration options
-- Performance optimization techniques
-- Latest API changes and best practices
-- Implementation details not covered in training data
+- Binary vector handling (`ScalarKind.B1`, bit packing)
+- Custom metric implementation (`CompiledMetric`, Numba requirements)
+- Index initialization parameters for binary data
+- Performance implications of custom metrics
+
+Common pitfalls to avoid:
+
+- Confusing `ndim` (number of bits) with bytes
+- Assuming built-in metrics work for variable-length vectors
+- Not using bit-packing for binary data
 
 ### usearch Key Findings & Notes
 

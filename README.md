@@ -27,13 +27,48 @@ git push -u origin main
 
 ### 2. Set Up Your Development Environment
 
-Then, install the environment and the pre-commit hooks with
+This project supports cross-platform development on Linux, macOS, and Windows. We use `poethepoet` for task automation to ensure compatibility across all platforms.
+
+#### Prerequisites
+
+- Python 3.9 or higher
+- [uv](https://docs.astral.sh/uv/) package manager
+
+#### Installation
+
+Install the environment and the pre-commit hooks:
 
 ```bash
+# Using poethepoet (recommended for cross-platform compatibility)
+uv run poe install
+
+# Or using Make (requires Make to be installed)
 make install
 ```
 
-This will also generate your `uv.lock` file
+This will also generate your `uv.lock` file.
+
+#### Available Commands
+
+All development tasks can be run using `poe`:
+
+```bash
+uv run poe --help  # Show all available tasks
+uv run poe install  # Install dependencies and pre-commit hooks
+uv run poe check    # Run all code quality checks
+uv run poe test     # Run tests
+uv run poe docs     # Serve documentation locally
+uv run poe build    # Build distribution packages
+```
+
+#### Windows Development
+
+On Windows, you have several options:
+- Use PowerShell or Command Prompt with `uv run poe` commands
+- Use WSL (Windows Subsystem for Linux) for a Linux-like environment
+- Use Git Bash if you prefer Unix-style commands
+
+The Makefile is provided for Unix-like systems but all functionality is available through poethepoet commands which work on all platforms
 
 ### 3. Run the pre-commit hooks
 

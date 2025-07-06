@@ -31,7 +31,7 @@ dev = [
     "pytest>=7.2.0",
     "pre-commit>=2.20.0",
     "tox-uv>=1.11.3",
-    
+    "poethepoet>=0.24.0",
     "mypy>=0.991",
     "pytest-cov>=4.0.0",
     "ruff>=0.11.5",
@@ -118,3 +118,20 @@ skip_empty = true
 branch = true
 source = ["iscc_vdb"]
 
+[tool.poe.tasks]
+install = { shell = "uv sync && uv run pre-commit install", help = "Install the virtual environment and install the pre-commit hooks" }
+check = { sequence = [
+    { shell = "echo 🚀 Checking lock file consistency with 'pyproject.toml'" },
+    { shell = "uv lock --locked" },
+    { shell = "echo 🚀 Linting code: Running pre-commit" },
+    { shell = "uv run pre-commit run -a" },
+    { shell = "echo 🚀 Static type checking: Running mypy" },
+    { shell = "uv run mypy" }
+], help = "Run code quality tools" }
+test = { shell = "uv run python -m pytest --cov --cov-config=pyproject.toml --cov-report=xml", help = "Test the code with pytest" }
+build = { sequence = ["clean-build", { shell = "uvx --from build pyproject-build --installer uv" }], help = "Build wheel file" }
+clean-build = { shell = "python -c \"import shutil; import os; shutil.rmtree('dist') if os.path.exists('dist') else None\"", interpreter = "python", help = "Clean build artifacts" }
+publish = { shell = "uvx twine upload --repository-url https://upload.pypi.org/legacy/ dist/*", help = "Publish a release to PyPI" }
+build-and-publish = { sequence = ["build", "publish"], help = "Build and publish" }
+docs-test = { shell = "uv run mkdocs build -s", help = "Test if documentation can be built without warnings or errors" }
+docs = { shell = "uv run mkdocs serve", help = "Build and serve the documentation" }

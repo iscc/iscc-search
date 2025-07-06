@@ -141,3 +141,6 @@ cython_debug/
 
 # Custom virtual env folder
 .venv-wsl/
+
+# Hot Shit AI stuff :)
+.claude

@@ -1,11 +1,11 @@
 site_name: iscc-vdb
-repo_url: https://github.com/titusz/iscc-vdb
-site_url: https://titusz.github.io/iscc-vdb
+repo_url: https://github.com/iscc/iscc-vdb
+site_url: https://vdb.iscc.codes
 site_description: Embedded Vector Database for ISCC
 site_author: Titusz Pan
 edit_uri: edit/main/docs/
-repo_name: titusz/iscc-vdb
-copyright: Maintained by <a href="https://titusz.com">titusz</a>.
+repo_name: iscc/iscc-vdb
+copyright: Maintained by <a href="https://iscc.io">ISCC Foundation</a>.
 
 nav:
   - Home: index.md
@@ -41,7 +41,7 @@ theme:
 extra:
   social:
     - icon: fontawesome/brands/github
-      link: https://github.com/titusz/iscc-vdb
+      link: https://github.com/iscc/iscc-vdb
     - icon: fontawesome/brands/python
       link: https://pypi.org/project/iscc-vdb
 

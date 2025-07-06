@@ -22,9 +22,9 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://titusz.github.io/iscc-vdb/"
-Repository = "https://github.com/titusz/iscc-vdb"
-Documentation = "https://titusz.github.io/iscc-vdb/"
+Homepage = "https:://iscc.io"
+Repository = "https://github.com/iscc/iscc-vdb"
+Documentation = "https://vdb.iscc.codes"
 
 [dependency-groups]
 dev = [

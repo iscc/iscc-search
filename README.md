@@ -1,33 +1,15 @@
 # iscc-vdb
 
-[![Release](https://img.shields.io/github/v/release/titusz/iscc-vdb)](https://img.shields.io/github/v/release/titusz/iscc-vdb)
-[![Build status](https://img.shields.io/github/actions/workflow/status/titusz/iscc-vdb/main.yml?branch=main)](https://github.com/titusz/iscc-vdb/actions/workflows/main.yml?query=branch%3Amain)
-[![codecov](https://codecov.io/gh/titusz/iscc-vdb/branch/main/graph/badge.svg)](https://codecov.io/gh/titusz/iscc-vdb)
-[![Commit activity](https://img.shields.io/github/commit-activity/m/titusz/iscc-vdb)](https://img.shields.io/github/commit-activity/m/titusz/iscc-vdb)
-[![License](https://img.shields.io/github/license/titusz/iscc-vdb)](https://img.shields.io/github/license/titusz/iscc-vdb)
+[![Release](https://img.shields.io/github/v/release/iscc/iscc-vdb)](https://img.shields.io/github/v/release/iscc/iscc-vdb)
+[![Build status](https://img.shields.io/github/actions/workflow/status/iscc/iscc-vdb/main.yml?branch=main)](https://github.com/iscc/iscc-vdb/actions/workflows/main.yml?query=branch%3Amain)
+[![codecov](https://codecov.io/gh/iscc/iscc-vdb/branch/main/graph/badge.svg)](https://codecov.io/gh/iscc/iscc-vdb)
+[![Commit activity](https://img.shields.io/github/commit-activity/m/iscc/iscc-vdb)](https://img.shields.io/github/commit-activity/m/iscc/iscc-vdb)
+[![License](https://img.shields.io/github/license/iscc/iscc-vdb)](https://img.shields.io/github/license/iscc/iscc-vdb)
 
 Embedded Vector Database for ISCC
 
-- **Github repository**: <https://github.com/titusz/iscc-vdb/>
-- **Documentation** <https://titusz.github.io/iscc-vdb/>
-
-## Getting started with your project
-
-### 1. Create a New Repository
-
-First, create a repository on GitHub with the same name as this project, and then run the following commands:
-
-```bash
-git init -b main
-git add .
-git commit -m "init commit"
-git remote add origin git@github.com:titusz/iscc-vdb.git
-git push -u origin main
-```
-
-### 2. Set Up Your Development Environment
-
-This project supports cross-platform development on Linux, macOS, and Windows. We use `poethepoet` for task automation to ensure compatibility across all platforms.
+- **Github repository**: <https://github.com/iscc/iscc-vdb/>
+- **Documentation** <https://vdb.iscc.codes/>
 
 #### Prerequisites
 
@@ -39,14 +21,9 @@ This project supports cross-platform development on Linux, macOS, and Windows. W
 Install the environment and the pre-commit hooks:
 
 ```bash
-# Using poethepoet (recommended for cross-platform compatibility)
 uv run poe install
-
-# Or using Make (requires Make to be installed)
-make install
 ```
 
-This will also generate your `uv.lock` file.
 
 #### Available Commands
 
@@ -61,34 +38,6 @@ uv run poe docs     # Serve documentation locally
 uv run poe build    # Build distribution packages
 ```
 
-#### Windows Development
-
-On Windows, you have several options:
-- Use PowerShell or Command Prompt with `uv run poe` commands
-- Use WSL (Windows Subsystem for Linux) for a Linux-like environment
-- Use Git Bash if you prefer Unix-style commands
-
-The Makefile is provided for Unix-like systems but all functionality is available through poethepoet commands which work on all platforms
-
-### 3. Run the pre-commit hooks
-
-Initially, the CI/CD pipeline might be failing due to formatting issues. To resolve those run:
-
-```bash
-uv run pre-commit run -a
-```
-
-### 4. Commit the changes
-
-Lastly, commit the changes made by the two steps above to your repository.
-
-```bash
-git add .
-git commit -m 'Fix formatting issues'
-git push origin main
-```
-
-You are now ready to start development on your project!
 The CI/CD pipeline will be triggered when you open a pull request, merge to main, or when you create a new release.
 
 To finalize the set-up for publishing to PyPI, see [here](https://fpgmaas.github.io/cookiecutter-uv/features/publishing/#set-up-for-pypi).
@@ -98,8 +47,8 @@ To enable the code coverage reports, see [here](https://fpgmaas.github.io/cookie
 ## Releasing a new version
 
 - Create an API Token on [PyPI](https://pypi.org/).
-- Add the API Token to your projects secrets with the name `PYPI_TOKEN` by visiting [this page](https://github.com/titusz/iscc-vdb/settings/secrets/actions/new).
-- Create a [new release](https://github.com/titusz/iscc-vdb/releases/new) on Github.
+- Add the API Token to your projects secrets with the name `PYPI_TOKEN` by visiting [this page](https://github.com/iscc/iscc-vdb/settings/secrets/actions/new).
+- Create a [new release](https://github.com/iscc/iscc-vdb/releases/new) on Github.
 - Create a new tag in the form `*.*.*`.
 
 For more details, see [here](https://fpgmaas.github.io/cookiecutter-uv/features/cicd/#how-to-trigger-a-release).

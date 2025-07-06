@@ -1,7 +1,7 @@
 # Contributing to `iscc-vdb`
 
-Contributions are welcome, and they are greatly appreciated!
-Every little bit helps, and credit will always be given.
+Contributions are welcome, and they are greatly appreciated! Every little bit helps, and credit will always be
+given.
 
 You can contribute in many ways:
 
@@ -19,17 +19,18 @@ If you are reporting a bug, please include:
 
 ## Fix Bugs
 
-Look through the GitHub issues for bugs.
-Anything tagged with "bug" and "help wanted" is open to whoever wants to implement a fix for it.
+Look through the GitHub issues for bugs. Anything tagged with "bug" and "help wanted" is open to whoever wants
+to implement a fix for it.
 
 ## Implement Features
 
-Look through the GitHub issues for features.
-Anything tagged with "enhancement" and "help wanted" is open to whoever wants to implement it.
+Look through the GitHub issues for features. Anything tagged with "enhancement" and "help wanted" is open to
+whoever wants to implement it.
 
 ## Write Documentation
 
-iscc-vdb could always use more documentation, whether as part of the official docs, in docstrings, or even on the web in blog posts, articles, and such.
+iscc-vdb could always use more documentation, whether as part of the official docs, in docstrings, or even on
+the web in blog posts, articles, and such.
 
 ## Submit Feedback
 
@@ -39,13 +40,12 @@ If you are proposing a new feature:
 
 - Explain in detail how it would work.
 - Keep the scope as narrow as possible, to make it easier to implement.
-- Remember that this is a volunteer-driven project, and that contributions
-  are welcome :)
+- Remember that this is a volunteer-driven project, and that contributions are welcome :)
 
 # Get Started!
 
-Ready to contribute? Here's how to set up `iscc-vdb` for local development.
-Please note this documentation assumes you already have `uv` and `Git` installed and ready to go.
+Ready to contribute? Here's how to set up `iscc-vdb` for local development. Please note this documentation
+assumes you already have `uv` and `Git` installed and ready to go.
 
 1. Fork the `iscc-vdb` repo on GitHub.
 
@@ -56,7 +56,7 @@ cd <directory_in_which_repo_should_be_created>
 git clone git@github.com:YOUR_NAME/iscc-vdb.git
 ```
 
-3. Now we need to install the environment. Navigate into the directory
+1. Now we need to install the environment. Navigate into the directory
 
 ```bash
 cd iscc-vdb
@@ -65,16 +65,16 @@ cd iscc-vdb
 Then, install and activate the environment with:
 
 ```bash
-uv sync
+uv run poe install
 ```
 
-4. Install pre-commit to run linters/formatters at commit time:
+1. Install pre-commit to run linters/formatters at commit time:
 
 ```bash
 uv run pre-commit install
 ```
 
-5. Create a branch for local development:
+1. Create a branch for local development:
 
 ```bash
 git checkout -b name-of-your-bugfix-or-feature
@@ -82,31 +82,35 @@ git checkout -b name-of-your-bugfix-or-feature
 
 Now you can make your changes locally.
 
-6. Don't forget to add test cases for your added functionality to the `tests` directory.
+1. Don't forget to add test cases for your added functionality to the `tests` directory.
 
-7. When you're done making changes, check that your changes pass the formatting tests.
-
-```bash
-make check
-```
-
-Now, validate that all unit tests are passing:
+2. When you're done making changes, run all pre-commit tasks:
 
 ```bash
-make test
+uv run poe all
 ```
 
-9. Before raising a pull request you should also run tox.
-   This will run the tests across different versions of Python:
+This single command will format your code, run all checks, execute tests, and validate documentation.
+Alternatively, you can run individual tasks:
+
+```bash
+uv run poe format    # Format code and markdown
+uv run poe check     # Run linting and type checking
+uv run poe test      # Run unit tests
+uv run poe docs-test # Test documentation build
+```
+
+1. Before raising a pull request you should also run tox. This will run the tests across different versions of
+    Python:
 
 ```bash
 tox
 ```
 
-This requires you to have multiple versions of python installed.
-This step is also triggered in the CI/CD pipeline, so you could also choose to skip this step locally.
+This requires you to have multiple versions of python installed. This step is also triggered in the CI/CD
+pipeline, so you could also choose to skip this step locally.
 
-10. Commit your changes and push your branch to GitHub:
+1. Commit your changes and push your branch to GitHub:
 
 ```bash
 git add .
@@ -114,7 +118,7 @@ git commit -m "Your detailed description of your changes."
 git push origin name-of-your-bugfix-or-feature
 ```
 
-11. Submit a pull request through the GitHub website.
+1. Submit a pull request through the GitHub website.
 
 # Pull Request Guidelines
 
@@ -122,5 +126,5 @@ Before you submit a pull request, check that it meets these guidelines:
 
 1. The pull request should include tests.
 
-2. If the pull request adds functionality, the docs should be updated.
-   Put your new functionality into a function with a docstring, and add the feature to the list in `README.md`.
+2. If the pull request adds functionality, the docs should be updated. Put your new functionality into a
+    function with a docstring, and add the feature to the list in `README.md`.

@@ -20,3 +20,14 @@ repos:
       - id: ruff
         args: [--exit-non-zero-on-fix]
       - id: ruff-format
+
+  - repo: https://github.com/executablebooks/mdformat
+    rev: "0.7.22"
+    hooks:
+      - id: mdformat
+        args: [--end-of-line, lf, --wrap, "112", --number]
+        additional_dependencies:
+          - mdformat-mkdocs
+          - mdformat-footnote
+          - mdformat-tables
+          - mdformat-gfm-alerts

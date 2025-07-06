@@ -38,6 +38,11 @@ dev = [
     "mkdocs>=1.4.2",
     "mkdocs-material>=8.5.10",
     "mkdocstrings[python]>=0.26.1",
+    "mdformat>=0.7.22",
+    "mdformat-mkdocs>=4.3.0",
+    "mdformat-footnote>=0.1.1",
+    "mdformat-tables>=1.0.0",
+    "mdformat-gfm-alerts>=2.0.0",
 ]
 
 [build-system]
@@ -118,16 +123,22 @@ skip_empty = true
 branch = true
 source = ["iscc_vdb"]
 
+
 [tool.poe.tasks]
 install = { shell = "uv sync && uv run pre-commit install", help = "Install the virtual environment and install the pre-commit hooks" }
 check = { sequence = [
     { shell = "echo Checking lock file consistency with 'pyproject.toml'" },
     { shell = "uv lock --locked" },
+    { shell = "echo Formatting markdown: Running mdformat" },
+    { shell = "uv run mdformat --check --end-of-line lf --wrap 112 --number ." },
     { shell = "echo Linting code: Running pre-commit" },
     { shell = "uv run pre-commit run -a" },
     { shell = "echo Static type checking: Running mypy" },
     { shell = "uv run mypy" }
 ], help = "Run code quality tools" }
+format-md = { shell = "uv run mdformat --end-of-line lf --wrap 112 --number . docs", help = "Format markdown files" }
+format-code = { shell = "uv run ruff format .", help = "Format code files" }
+format = { sequence = ["format-code", "format-md"], help = "Format all files" }
 test = { shell = "uv run python -m pytest --cov --cov-config=pyproject.toml --cov-report=xml", help = "Test the code with pytest" }
 build = { sequence = ["clean-build", { shell = "uvx --from build pyproject-build --installer uv" }], help = "Build wheel file" }
 clean-build = { shell = "python -c \"import shutil; import os; shutil.rmtree('dist') if os.path.exists('dist') else None\"", interpreter = "python", help = "Clean build artifacts" }
@@ -135,3 +146,4 @@ publish = { shell = "uvx twine upload --repository-url https://upload.pypi.org/l
 build-and-publish = { sequence = ["build", "publish"], help = "Build and publish" }
 docs-test = { shell = "uv run mkdocs build -s", help = "Test if documentation can be built without warnings or errors" }
 docs = { shell = "uv run mkdocs serve", help = "Build and serve the documentation" }
+all = { sequence = ["format", "check", "test", "docs-test"], help = "Run all pre-commit tasks: format, check, test, and docs-test" }

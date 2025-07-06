@@ -26,6 +26,7 @@ repos:
     hooks:
       - id: mdformat
         args: [--end-of-line, lf, --wrap, "112", --number]
+        exclude: '^(\.venv/|\.venv-wsl/)'
         additional_dependencies:
           - mdformat-mkdocs
           - mdformat-footnote

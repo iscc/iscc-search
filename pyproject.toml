@@ -22,7 +22,7 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https:://iscc.io"
+Homepage = "https://iscc.io"
 Repository = "https://github.com/iscc/iscc-vdb"
 Documentation = "https://vdb.iscc.codes"
 
@@ -121,11 +121,11 @@ source = ["iscc_vdb"]
 [tool.poe.tasks]
 install = { shell = "uv sync && uv run pre-commit install", help = "Install the virtual environment and install the pre-commit hooks" }
 check = { sequence = [
-    { shell = "echo 🚀 Checking lock file consistency with 'pyproject.toml'" },
+    { shell = "echo Checking lock file consistency with 'pyproject.toml'" },
     { shell = "uv lock --locked" },
-    { shell = "echo 🚀 Linting code: Running pre-commit" },
+    { shell = "echo Linting code: Running pre-commit" },
     { shell = "uv run pre-commit run -a" },
-    { shell = "echo 🚀 Static type checking: Running mypy" },
+    { shell = "echo Static type checking: Running mypy" },
     { shell = "uv run mypy" }
 ], help = "Run code quality tools" }
 test = { shell = "uv run python -m pytest --cov --cov-config=pyproject.toml --cov-report=xml", help = "Test the code with pytest" }

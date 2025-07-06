@@ -130,13 +130,13 @@ check = { sequence = [
     { shell = "echo Checking lock file consistency with 'pyproject.toml'" },
     { shell = "uv lock --locked" },
     { shell = "echo Formatting markdown: Running mdformat" },
-    { shell = "uv run mdformat --check --end-of-line lf --wrap 112 --number --exclude '.venv*' ." },
+    { shell = "uv run mdformat --check --end-of-line lf --wrap 112 --number *.md docs" },
     { shell = "echo Linting code: Running pre-commit" },
     { shell = "uv run pre-commit run -a" },
     { shell = "echo Static type checking: Running mypy" },
     { shell = "uv run mypy" }
 ], help = "Run code quality tools" }
-format-md = { shell = "uv run mdformat --end-of-line lf --wrap 112 --number --exclude '.venv*' . docs", help = "Format markdown files" }
+format-md = { shell = "uv run mdformat --end-of-line lf --wrap 112 --number *.md docs", help = "Format markdown files" }
 format-code = { shell = "uv run ruff format .", help = "Format code files" }
 format = { sequence = ["format-code", "format-md"], help = "Format all files" }
 test = { shell = "uv run python -m pytest --cov --cov-config=pyproject.toml --cov-report=xml", help = "Test the code with pytest" }

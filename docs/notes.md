@@ -477,3 +477,75 @@ The length signalling approach with 33-byte vectors is efficient when:
 - You need a single index rather than managing multiple indices
 
 For datasets with mostly shorter ISCCs, consider alternative approaches like separate indices per ISCC length.
+
+## Architecture Decisions
+
+### 1. **Pure Similarity Matching Focus**
+
+`iscc-vdb` focuses exclusively on vector similarity matching without metadata storage:
+
+- **No metadata dependencies**: Users choose their own metadata storage (PostgreSQL, MongoDB, Redis, etc.)
+- **Clean separation of concerns**: iscc-vdb handles similarity, external systems handle metadata
+- **Microservice ready**: Clear API boundaries enable service-oriented architectures
+- **Better composability**: Pairs with any metadata solution without imposing choices
+
+### 2. **Hybrid Index Strategy**
+
+Different indexing approaches for document-level ISCCs vs granular SIMPRINTs:
+
+**Document-level ISCCs (variable length 64/128/192/256-bit)**:
+
+- Use 264-bit vectors with length signalling (1 byte signal + 32 bytes max ISCC)
+- Custom NPHD metric for correct variable-length comparison
+- Single index handles all ISCC lengths
+- Average ~65% storage overhead (acceptable trade-off for simplicity)
+
+**Granular SIMPRINTs (fixed 256-bit)**:
+
+- Use native 256-bit vectors without length signalling
+- Built-in SIMD-optimized Hamming distance (50-100x faster than NPHD)
+- Zero storage overhead (32 bytes stored = 32 bytes used)
+- Multi-key mode: multiple SIMPRINTs per ISCC-ID
+
+**Rationale**: Granular features from small content chunks need maximum discrimination (256 bits) to avoid
+collisions. The performance gain from built-in Hamming distance (50-100x) justifies the fixed-length approach.
+
+### 3. **ISCC-IDs as Native 64-bit Keys**
+
+Using ISCC-IDv1 bodies directly as usearch keys provides:
+
+- Natural time-based ordering (52-bit timestamp + 12-bit server-id)
+- No key translation layer needed
+- Efficient O(1) hash-based lookups
+- Perfect fit for usearch's uint64_t key type
+
+### 4. **Index Organization**
+
+Separate indices by MainType-SubType combinations:
+
+- Prevents comparing incompatible ISCCs
+- Enables type-specific optimizations
+- Simplifies query routing
+- Allows independent scaling
+
+## Implementation Guidelines
+
+### API Design
+
+```python
+# Core operations - no metadata
+class ISCCVectorDB:
+    def add_iscc(self, iscc_id: int, iscc_code: str) -> None
+    def search_iscc(self, iscc_code: str, k: int = 10) -> List[SearchResult]
+    def add_simprints(self, iscc_id: int, simprints: List[str]) -> None
+    def search_simprint(self, simprint: str, k: int = 10) -> List[SIMPRINTResult]
+```
+
+### Performance Characteristics
+
+| Operation     | Document ISCCs (NPHD) | SIMPRINTs (Hamming) | Notes                        |
+| ------------- | --------------------- | ------------------- | ---------------------------- |
+| Distance calc | ~500-1000 ns          | ~10-50 ns           | 50-100x faster for SIMPRINTs |
+| Storage       | 33 bytes/vector       | 32 bytes/vector     | 3% vs 0% overhead            |
+| Index build   | Slower                | 2-3x faster         | Built-in metric advantage    |
+| Query speed   | ~1-10ms               | ~0.1-1ms            | 10x improvement              |

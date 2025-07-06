@@ -373,7 +373,8 @@ similarity index implementation based on usearc.
 
 ### Usearch Multi-key mode for SIMPRINT indexing:
 
-We are planning to index simprints using usearch multi-key moded.
+We are planning to index simprints using usearch multi-key mode. We would have a separate index for each
+simprint maintype/subtype and store all simprints for a given asset under it´s ISCC-IDv1 key.
 
 **Behavior Differences**:
 

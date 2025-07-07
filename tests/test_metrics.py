@@ -297,3 +297,62 @@ def test_nphd_metric_properties():
     dist_b_to_a = next(m for m in matches_from_b if m.key == 0).distance
 
     assert abs(dist_a_to_b - dist_b_to_a) < 1e-6  # Allow small floating point errors
+
+
+def test_pack_binary_vector_numpy_array():
+    # type: () -> None
+    """Test pack_binary_vector with numpy array input."""
+    # Test with numpy array instead of bytes
+    np_array = np.array([0xFF, 0xAA, 0x55, 0x00], dtype=np.uint8)
+
+    # Pack the numpy array
+    packed = pack_binary_vector(np_array, max_bytes=32)
+
+    # Verify packing
+    assert packed.dtype == np.uint8
+    assert len(packed) == 33  # 1 byte signal + 32 bytes max data
+    assert packed[0] == 4  # Length of input array
+    assert np.array_equal(packed[1:5], np_array)
+
+    # Verify unpacking
+    unpacked = unpack_binary_vector(packed)
+    assert unpacked == bytes(np_array)
+
+
+def test_nphd_edge_cases():
+    # type: () -> None
+    """Test NPHD metric with edge cases including minimal length vectors."""
+    nphd_metric = create_nphd_metric()
+
+    index = Index(
+        ndim=264,
+        metric=nphd_metric,
+        dtype=ScalarKind.B1,
+    )
+
+    # Test with 1-byte vectors (minimal length)
+    vec1 = pack_binary_vector(b"\xff")
+    vec2 = pack_binary_vector(b"\x00")
+    vec3 = pack_binary_vector(b"\xf0")  # 4 bits differ from vec1
+
+    vec1_bits = np.packbits(np.unpackbits(vec1))
+    vec2_bits = np.packbits(np.unpackbits(vec2))
+    vec3_bits = np.packbits(np.unpackbits(vec3))
+
+    # Add vectors
+    index.add(0, vec1_bits)
+    index.add(1, vec2_bits)
+    index.add(2, vec3_bits)
+
+    # Test searching for exact match
+    matches = index.search(vec1_bits, 3)
+    assert matches[0].key == 0
+    assert matches[0].distance == 0.0
+
+    # Test completely different 1-byte vectors
+    vec1_match = next(m for m in matches if m.key == 1)
+    assert vec1_match.distance == 1.0  # All 8 bits differ
+
+    # Test partially different 1-byte vector
+    vec3_match = next(m for m in matches if m.key == 2)
+    assert 0.4 < vec3_match.distance < 0.6  # About half the bits differ

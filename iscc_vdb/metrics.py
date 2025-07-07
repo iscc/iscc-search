@@ -36,7 +36,7 @@ def create_nphd_metric(max_bits=264):  # type: ignore[no-any-unimported]
     )
 
     @cfunc(signature)
-    def nphd_distance(a, b):  # type: ignore[no-any-unimported]
+    def nphd_distance(a, b):  # type: ignore[no-any-unimported]  # pragma: no cover
         # type: (types.CPointer[types.uint8], types.CPointer[types.uint8]) -> types.float32
         """Calculate NPHD between two variable-length binary vectors."""
         a_array = carray(a, max_bytes)

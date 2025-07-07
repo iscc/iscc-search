@@ -12,7 +12,7 @@ import ctypes
 import gc
 import os
 import time
-from typing import Callable
+from collections.abc import Callable
 
 import numpy as np
 from numba import carray, cfunc, types
@@ -374,7 +374,7 @@ def micro_benchmark_dense(name: str, metric_func: Callable, n_pairs: int = 100_0
     # Benchmark pure distance computations
     start_time = time.perf_counter()
 
-    for vec_a, vec_b in zip(vectors_a, vectors_b):
+    for vec_a, vec_b in zip(vectors_a, vectors_b, strict=False):
         ptr_a = vec_a.ctypes.data_as(ctypes.POINTER(ctypes.c_uint8))
         ptr_b = vec_b.ctypes.data_as(ctypes.POINTER(ctypes.c_uint8))
         metric_func(ptr_a, ptr_b)

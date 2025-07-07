@@ -140,7 +140,7 @@ check = { sequence = [
 format-md = { shell = "uv run mdformat --end-of-line lf --wrap 112 --number *.md docs", help = "Format markdown files" }
 format-code = { shell = "uv run ruff format .", help = "Format code files" }
 format = { sequence = ["format-code", "format-md"], help = "Format all files" }
-test = { shell = "uv run python -m pytest --cov --cov-config=pyproject.toml --cov-report=xml", help = "Test the code with pytest" }
+test = { shell = "uv run python -m pytest --cov --cov-config=pyproject.toml --cov-report=xml --cov-report=term-missing", help = "Test the code with pytest" }
 build = { sequence = ["clean-build", { shell = "uvx --from build pyproject-build --installer uv" }], help = "Build wheel file" }
 clean-build = { shell = "python -c \"import shutil; import os; shutil.rmtree('dist') if os.path.exists('dist') else None\"", interpreter = "python", help = "Clean build artifacts" }
 publish = { shell = "uvx twine upload --repository-url https://upload.pypi.org/legacy/ dist/*", help = "Publish a release to PyPI" }

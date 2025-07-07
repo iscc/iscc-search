@@ -227,6 +227,17 @@ POPCOUNT_TABLE = np.array([bin(i).count("1") for i in range(256)], dtype=np.uint
 POPCOUNT_PTR = POPCOUNT_TABLE.ctypes.data_as(ctypes.POINTER(ctypes.c_uint8))
 
 
+@cfunc(uint8(uint8))
+def _popcount_byte(value):
+    # type: (uint8) -> uint8
+    """Count set bits in a byte using bit manipulation."""
+    v = value
+    v = (v & 0x55) + ((v >> 1) & 0x55)
+    v = (v & 0x33) + ((v >> 2) & 0x33)
+    v = (v & 0x0F) + ((v >> 4) & 0x0F)
+    return v
+
+
 @cfunc(float32(types.CPointer(uint8), types.CPointer(uint8)))
 def nphd_lookup(a, b):
     # type: (types.CPointer[uint8], types.CPointer[uint8]) -> float32
@@ -246,7 +257,7 @@ def nphd_lookup(a, b):
     hamming_distance = types.uint16(0)
 
     for i in range(1, min_bytes + 1):
-        xor_val = a_array[i] ^ b_array[i]
+        xor_val = types.uint8(a_array[i] ^ b_array[i])
         count = _popcount_byte(xor_val)
         hamming_distance += count
 
@@ -254,17 +265,6 @@ def nphd_lookup(a, b):
     min_bits = types.uint16(min_bytes) * types.uint16(8)
     normalized_distance = types.float32(hamming_distance) / types.float32(min_bits)
     return normalized_distance
-
-
-@cfunc(uint8(uint8))
-def _popcount_byte(value):
-    # type: (uint8) -> uint8
-    """Count set bits in a byte using bit manipulation."""
-    v = value
-    v = (v & 0x55) + ((v >> 1) & 0x55)
-    v = (v & 0x33) + ((v >> 2) & 0x33)
-    v = (v & 0x0F) + ((v >> 4) & 0x0F)
-    return v
 
 
 def generate_dense_iscc_vectors(

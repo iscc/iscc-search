@@ -2,6 +2,7 @@
 
 import os
 import tempfile
+import typing  # noqa: F401 - used in type comments
 
 import numpy as np
 import pytest
@@ -75,31 +76,29 @@ def test_single_vector_operations():
     assert matches.distances[0] == 0.0  # Exact match
 
 
-def test_memory_mapped_save_restore():
-    # type: () -> None
+def test_memory_mapped_save_restore(tmp_path):
+    # type: (typing.Any) -> None
     """Test saving and restoring index."""
     # Create and populate index
     index = NphdIndex()
     index.add([1, 2], [b"\xff" * 8, b"\xaa" * 16])
 
     # Save to temporary file
-    with tempfile.NamedTemporaryFile(delete=False) as tmp:
-        tmp_path = tmp.name
+    tmp_file = tmp_path / "test_index.usearch"
+    index.save(str(tmp_file))
 
-    try:
-        index.save(tmp_path)
+    # Restore and verify
+    restored = NphdIndex.restore(str(tmp_file))
+    assert len(restored) == 2
+    assert 1 in restored
+    assert 2 in restored
 
-        # Restore and verify
-        restored = NphdIndex.restore(tmp_path)
-        assert len(restored) == 2
-        assert 1 in restored
-        assert 2 in restored
+    # Search should work
+    matches = restored.search(b"\xff" * 8, count=1)
+    assert matches.keys[0] == 1
 
-        # Search should work
-        matches = restored.search(b"\xff" * 8, count=1)
-        assert matches.keys[0] == 1
-    finally:
-        os.unlink(tmp_path)
+    # Important: Close the memory-mapped view before pytest cleans up
+    del restored
 
 
 def test_max_bits_configuration():
@@ -215,22 +214,20 @@ def test_restore_metadata_failure():
         NphdIndex.restore(non_existent_path)
 
 
-def test_restore_without_view():
-    # type: () -> None
+def test_restore_without_view(tmp_path):
+    # type: (typing.Any) -> None
     """Test restore with view=False."""
     # Create and save index
     index = NphdIndex()
     index.add(1, b"\xff" * 8)
 
-    with tempfile.NamedTemporaryFile(delete=False) as tmp:
-        tmp_path = tmp.name
+    tmp_file = tmp_path / "test_index_no_view.usearch"
+    index.save(str(tmp_file))
 
-    try:
-        index.save(tmp_path)
+    # Restore without view (covers line 158)
+    restored = NphdIndex.restore(str(tmp_file), view=False)
+    assert len(restored) == 1
+    assert 1 in restored
 
-        # Restore without view (covers line 158)
-        restored = NphdIndex.restore(tmp_path, view=False)
-        assert len(restored) == 1
-        assert 1 in restored
-    finally:
-        os.unlink(tmp_path)
+    # No need to worry about file locking when view=False
+    del restored

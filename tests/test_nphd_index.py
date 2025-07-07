@@ -4,6 +4,7 @@ import os
 import tempfile
 
 import numpy as np
+import pytest
 
 from iscc_vdb.nphd_index import NphdIndex
 
@@ -154,3 +155,82 @@ def test_inherited_functionality():
     assert 10 in index
     index.remove(10)
     assert 10 not in index
+
+
+def test_numpy_2d_array_operations():
+    # type: () -> None
+    """Test add and search with numpy 2D arrays."""
+    index = NphdIndex()
+
+    # Test add with numpy 2D array (covers lines 81-83)
+    # Create 2D array with same-length vectors
+    vectors_2d = np.array(
+        [
+            [0xFF, 0xAA, 0xFF, 0xAA, 0xFF, 0xAA, 0xFF, 0xAA],  # 8 bytes
+            [0x55, 0x00, 0x55, 0x00, 0x55, 0x00, 0x55, 0x00],  # 8 bytes
+        ],
+        dtype=np.uint8,
+    )
+    index.add([1, 2], vectors_2d)
+    assert len(index) == 2
+
+    # Test search with numpy 2D array (covers lines 109-111)
+    queries_2d = np.array(
+        [
+            [0xFF, 0xAA, 0xFF, 0xAA, 0xFF, 0xAA, 0xFF, 0xAA],
+            [0x55, 0x00, 0x55, 0x00, 0x55, 0x00, 0x55, 0x00],
+        ],
+        dtype=np.uint8,
+    )
+    matches = index.search(queries_2d, count=1)
+    assert matches.keys.shape == (2, 1)
+    assert matches.keys[0, 0] == 1
+    assert matches.keys[1, 0] == 2
+
+
+def test_single_vector_unexpected_format():
+    # type: () -> None
+    """Test add and search with unexpected single vector formats."""
+    index = NphdIndex()
+
+    # Test add with unexpected format (covers lines 85-87)
+    # Use a tuple - not a list, not bytes, not a numpy array
+    vector_tuple = (0xFF, 0xAA, 0xFF, 0xAA, 0xFF, 0xAA, 0xFF, 0xAA)
+    index.add(1, vector_tuple)
+    assert 1 in index
+
+    # Test search with unexpected format (covers lines 113-115)
+    matches = index.search(vector_tuple, count=1)
+    assert matches.keys[0] == 1
+
+
+def test_restore_metadata_failure():
+    # type: () -> None
+    """Test restore with invalid file that has no metadata."""
+    # Test with non-existent file (metadata returns None)
+    non_existent_path = os.path.join(tempfile.gettempdir(), "non_existent_file_12345.usearch")
+
+    # Test metadata failure (covers lines 145-146)
+    with pytest.raises(RuntimeError, match="Failed to read metadata"):
+        NphdIndex.restore(non_existent_path)
+
+
+def test_restore_without_view():
+    # type: () -> None
+    """Test restore with view=False."""
+    # Create and save index
+    index = NphdIndex()
+    index.add(1, b"\xff" * 8)
+
+    with tempfile.NamedTemporaryFile(delete=False) as tmp:
+        tmp_path = tmp.name
+
+    try:
+        index.save(tmp_path)
+
+        # Restore without view (covers line 158)
+        restored = NphdIndex.restore(tmp_path, view=False)
+        assert len(restored) == 1
+        assert 1 in restored
+    finally:
+        os.unlink(tmp_path)

@@ -19,7 +19,7 @@ def create_nphd_metric(max_bits=264):  # type: ignore[no-any-unimported]
     It normalizes the Hamming distance by the length of the common prefix (shorter vector).
 
     The metric expects binary vectors with a length signal in the first byte:
-    - First byte: length signal (0-3) indicating vector length in bytes
+    - First byte: length signal (1-255) indicating actual vector length in bytes
     - Remaining bytes: actual binary vector data
 
     :param max_bits: Maximum number of bits supported (default: 264 for 33 bytes)
@@ -42,14 +42,9 @@ def create_nphd_metric(max_bits=264):  # type: ignore[no-any-unimported]
         a_array = carray(a, max_bytes)
         b_array = carray(b, max_bytes)
 
-        # Extract length signals from first byte
-        a_length_signal = types.int32(a_array[0])
-        b_length_signal = types.int32(b_array[0])
-
-        # Convert length signals to actual byte lengths
-        # 0 -> 8 bytes, 1 -> 16 bytes, 2 -> 24 bytes, 3 -> 32 bytes
-        a_bytes = (a_length_signal + 1) * 8
-        b_bytes = (b_length_signal + 1) * 8
+        # Extract length from first byte (1-255 bytes)
+        a_bytes = types.int32(a_array[0])
+        b_bytes = types.int32(b_array[0])
 
         # Use the shorter length for comparison (prefix compatibility)
         min_bytes = min(a_bytes, b_bytes)
@@ -83,42 +78,42 @@ def create_nphd_metric(max_bits=264):  # type: ignore[no-any-unimported]
     )
 
 
-def pack_iscc_vector(iscc_bytes, max_bytes=32):
+def pack_binary_vector(vector_bytes, max_bytes=32):
     # type: (bytes | np.ndarray, int) -> np.ndarray
     """
-    Pack an ISCC binary vector with a length signal.
+    Pack a binary vector with a length signal.
 
-    :param iscc_bytes: ISCC binary data (8, 16, 24, or 32 bytes)
+    :param vector_bytes: Binary data (1-255 bytes)
     :param max_bytes: Maximum bytes for padding (default: 32)
     :return: Packed vector with length signal as first byte
     """
-    if isinstance(iscc_bytes, bytes):
-        iscc_bytes = np.frombuffer(iscc_bytes, dtype=np.uint8)
+    if isinstance(vector_bytes, bytes):
+        vector_bytes = np.frombuffer(vector_bytes, dtype=np.uint8)
 
-    length = len(iscc_bytes)
-    if length not in [8, 16, 24, 32]:
-        msg = f"ISCC must be 8, 16, 24, or 32 bytes, got {length}"
+    length = len(vector_bytes)
+    if length < 1 or length > 255:
+        msg = f"Vector must be 1-255 bytes, got {length}"
         raise ValueError(msg)
 
-    # Calculate length signal (0-3)
-    length_signal = (length // 8) - 1
+    if length > max_bytes:
+        msg = f"Vector length {length} exceeds max_bytes {max_bytes}"
+        raise ValueError(msg)
 
     # Create packed vector with length signal + padded data
     packed = np.zeros(max_bytes + 1, dtype=np.uint8)
-    packed[0] = length_signal
-    packed[1 : length + 1] = iscc_bytes
+    packed[0] = length  # Store actual length in first byte
+    packed[1 : length + 1] = vector_bytes
 
     return packed
 
 
-def unpack_iscc_vector(packed_vector):
+def unpack_binary_vector(packed_vector):
     # type: (np.ndarray) -> bytes
     """
-    Unpack an ISCC vector to extract the original binary data.
+    Unpack a binary vector to extract the original binary data.
 
     :param packed_vector: Packed vector with length signal
-    :return: Original ISCC binary data as bytes
+    :return: Original binary data as bytes
     """
-    length_signal = packed_vector[0]
-    actual_bytes = (length_signal + 1) * 8
+    actual_bytes = int(packed_vector[0])  # Convert to Python int to avoid numpy overflow
     return bytes(packed_vector[1 : actual_bytes + 1])

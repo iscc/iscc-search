@@ -4,7 +4,58 @@ import numpy as np
 import pytest
 from usearch.index import Index, ScalarKind
 
-from iscc_vdb.metrics import create_nphd_metric, pack_iscc_vector, unpack_iscc_vector
+from iscc_vdb.metrics import (
+    create_nphd_metric,
+    pack_binary_vector,
+    unpack_binary_vector,
+)
+
+
+def test_pack_unpack_binary_vector():
+    # type: () -> None
+    """Test packing and unpacking of binary vectors with length signals."""
+    # Test various lengths from 1 to 255 bytes
+    test_cases = [
+        (b"\x00", 1),
+        (b"\xff" * 5, 5),
+        (b"\xaa" * 10, 10),
+        (b"\x55" * 32, 32),
+        (b"\x12" * 100, 100),
+        (b"\x34" * 255, 255),
+    ]
+
+    for vector_bytes, expected_length in test_cases:
+        # Pack the vector with appropriate max_bytes
+        max_bytes = max(32, expected_length)  # Ensure max_bytes >= length
+        packed = pack_binary_vector(vector_bytes, max_bytes)
+
+        # Check packed vector properties
+        assert packed.dtype == np.uint8
+        assert len(packed) == max_bytes + 1  # 1 byte signal + max_bytes data
+
+        # Check length signal
+        assert packed[0] == expected_length
+
+        # Unpack and verify
+        unpacked = unpack_binary_vector(packed)
+        assert unpacked == vector_bytes
+        assert len(unpacked) == expected_length
+
+
+def test_pack_binary_vector_invalid_length():
+    # type: () -> None
+    """Test that pack_binary_vector raises error for invalid lengths."""
+    # Test length 0
+    with pytest.raises(ValueError, match="Vector must be 1-255 bytes"):
+        pack_binary_vector(b"")
+
+    # Test length > 255
+    with pytest.raises(ValueError, match="Vector must be 1-255 bytes"):
+        pack_binary_vector(b"\x00" * 256, max_bytes=256)
+
+    # Test length > max_bytes
+    with pytest.raises(ValueError, match="Vector length 33 exceeds max_bytes 32"):
+        pack_binary_vector(b"\x00" * 33, max_bytes=32)
 
 
 def test_pack_unpack_iscc_vector():
@@ -20,30 +71,31 @@ def test_pack_unpack_iscc_vector():
 
     for iscc_bytes, expected_length in test_cases:
         # Pack the vector
-        packed = pack_iscc_vector(iscc_bytes)
+        packed = pack_binary_vector(iscc_bytes)
 
         # Check packed vector properties
         assert packed.dtype == np.uint8
         assert len(packed) == 33  # 1 byte signal + 32 bytes max data
 
-        # Check length signal
-        expected_signal = (expected_length // 8) - 1
-        assert packed[0] == expected_signal
+        # Check length signal (now stores actual byte count)
+        assert packed[0] == expected_length
 
         # Unpack and verify
-        unpacked = unpack_iscc_vector(packed)
+        unpacked = unpack_binary_vector(packed)
         assert unpacked == iscc_bytes
         assert len(unpacked) == expected_length
 
 
 def test_pack_iscc_vector_invalid_length():
     # type: () -> None
-    """Test that pack_iscc_vector raises error for invalid lengths."""
-    with pytest.raises(ValueError, match="ISCC must be 8, 16, 24, or 32 bytes"):
-        pack_iscc_vector(b"\x00" * 7)
+    """Test that pack_binary_vector validates ISCC-specific lengths."""
+    # Note: generic pack_binary_vector doesn't enforce ISCC-specific lengths
+    # These tests now just verify general length constraints
+    with pytest.raises(ValueError, match="Vector must be 1-255 bytes"):
+        pack_binary_vector(b"")
 
-    with pytest.raises(ValueError, match="ISCC must be 8, 16, 24, or 32 bytes"):
-        pack_iscc_vector(b"\x00" * 20)
+    with pytest.raises(ValueError, match="Vector must be 1-255 bytes"):
+        pack_binary_vector(b"\x00" * 256, max_bytes=32)
 
 
 def test_nphd_metric_creation():
@@ -79,11 +131,11 @@ def test_nphd_with_usearch_index():
     iscc5_32 = b"\x55" * 32
 
     # Pack vectors
-    packed1 = pack_iscc_vector(iscc1_8)
-    packed2 = pack_iscc_vector(iscc2_8)
-    packed3 = pack_iscc_vector(iscc3_16)
-    packed4 = pack_iscc_vector(iscc4_24)
-    packed5 = pack_iscc_vector(iscc5_32)
+    packed1 = pack_binary_vector(iscc1_8)
+    packed2 = pack_binary_vector(iscc2_8)
+    packed3 = pack_binary_vector(iscc3_16)
+    packed4 = pack_binary_vector(iscc4_24)
+    packed5 = pack_binary_vector(iscc5_32)
 
     # Convert to bit arrays for usearch
     bit_packed1 = np.packbits(np.unpackbits(packed1))
@@ -125,7 +177,7 @@ def test_nphd_distance_calculations():
     )
 
     # Test case 1: Identical vectors (8 bytes)
-    vec1 = pack_iscc_vector(b"\xff" * 8)
+    vec1 = pack_binary_vector(b"\xff" * 8)
     vec1_bits = np.packbits(np.unpackbits(vec1))
     index.add(0, vec1_bits)
 
@@ -133,7 +185,7 @@ def test_nphd_distance_calculations():
     assert matches[0].distance == 0.0  # Identical vectors
 
     # Test case 2: Completely different vectors (8 bytes)
-    vec2 = pack_iscc_vector(b"\x00" * 8)
+    vec2 = pack_binary_vector(b"\x00" * 8)
     vec2_bits = np.packbits(np.unpackbits(vec2))
     index.add(1, vec2_bits)
 
@@ -144,7 +196,7 @@ def test_nphd_distance_calculations():
     assert matches[1].distance == 1.0
 
     # Test case 3: Partially similar vectors
-    vec3 = pack_iscc_vector(b"\xf0" * 8)  # Half bits match with vec1
+    vec3 = pack_binary_vector(b"\xf0" * 8)  # Half bits match with vec1
     vec3_bits = np.packbits(np.unpackbits(vec3))
     index.add(2, vec3_bits)
 
@@ -169,17 +221,17 @@ def test_nphd_variable_length_comparison():
 
     # Add vectors of different lengths
     # 8-byte vector: all ones
-    vec_8 = pack_iscc_vector(b"\xff" * 8)
+    vec_8 = pack_binary_vector(b"\xff" * 8)
     vec_8_bits = np.packbits(np.unpackbits(vec_8))
     index.add(0, vec_8_bits)
 
     # 16-byte vector: first 8 bytes all ones, next 8 all zeros
-    vec_16 = pack_iscc_vector(b"\xff" * 8 + b"\x00" * 8)
+    vec_16 = pack_binary_vector(b"\xff" * 8 + b"\x00" * 8)
     vec_16_bits = np.packbits(np.unpackbits(vec_16))
     index.add(1, vec_16_bits)
 
     # 32-byte vector: first 8 bytes all ones, rest all zeros
-    vec_32 = pack_iscc_vector(b"\xff" * 8 + b"\x00" * 24)
+    vec_32 = pack_binary_vector(b"\xff" * 8 + b"\x00" * 24)
     vec_32_bits = np.packbits(np.unpackbits(vec_32))
     index.add(2, vec_32_bits)
 
@@ -215,9 +267,9 @@ def test_nphd_metric_properties():
     )
 
     # Create test vectors
-    vec_a = pack_iscc_vector(b"\xaa" * 8)
-    vec_b = pack_iscc_vector(b"\xbb" * 8)
-    vec_c = pack_iscc_vector(b"\xcc" * 8)
+    vec_a = pack_binary_vector(b"\xaa" * 8)
+    vec_b = pack_binary_vector(b"\xbb" * 8)
+    vec_c = pack_binary_vector(b"\xcc" * 8)
 
     vec_a_bits = np.packbits(np.unpackbits(vec_a))
     vec_b_bits = np.packbits(np.unpackbits(vec_b))

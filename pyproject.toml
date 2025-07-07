@@ -18,6 +18,7 @@ classifiers = [
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
 dependencies = [
+    "numba>=0.60.0",
     "usearch>=2.18.0",
 ]
 

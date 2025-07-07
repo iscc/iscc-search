@@ -22,7 +22,7 @@ uv run poe check        # Run all checks (lock file, pre-commit, mypy)
 
 # Testing
 uv run poe test         # Run tests with coverage
-tox                     # Test across Python 3.9-3.13
+tox                     # Test across Python 3.10-3.13
 
 # Documentation
 uv run poe docs         # Serve documentation locally at http://localhost:8000
@@ -59,7 +59,7 @@ The project structure follows standard Python packaging conventions:
 
 ## Code Standards
 
-- **Python versions**: 3.9 to 3.13
+- **Python versions**: 3.10 to 3.13
 - **Line length**: 120 characters
 - **Type checking**: Strict mypy configuration - all functions must be typed
 - **Linting**: Ruff with extensive rule sets for code quality, security, and style
@@ -72,7 +72,7 @@ The project structure follows standard Python packaging conventions:
 
 1. This is a greenfield project - the actual vector database implementation hasn't been started yet
 2. All infrastructure is in place for a production-ready library
-3. When implementing features, maintain compatibility with Python 3.9+
+3. When implementing features, maintain compatibility with Python 3.10+
 4. Use `usearch` library for vector operations
 5. Follow existing patterns from the ISCC ecosystem
 

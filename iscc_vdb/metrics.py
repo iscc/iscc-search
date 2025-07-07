@@ -32,15 +32,15 @@ def nphd_distance(a, b):  # type: ignore[no-any-unimported]  # pragma: no cover
     b_array = carray(b, MAX_BYTES)
 
     # Extract length from first byte (1-255 bytes)
-    a_bytes = types.int32(a_array[0])
-    b_bytes = types.int32(b_array[0])
+    a_bytes = types.uint8(a_array[0])
+    b_bytes = types.uint8(b_array[0])
 
     # Use the shorter length for comparison (prefix compatibility)
     min_bytes = min(a_bytes, b_bytes)
 
     # Calculate Hamming distance over the common prefix
     # Start from byte 1 (skip length signal byte)
-    hamming_distance = types.int32(0)
+    hamming_distance = types.uint16(0)
     for byte_idx in range(1, min_bytes + 1):
         # XOR the bytes and count differing bits
         xor_result = types.uint8(a_array[byte_idx] ^ b_array[byte_idx])

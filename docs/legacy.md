@@ -1,7 +1,11 @@
-## Old ISCC Vector Search Implementation
+# Legacy Vector DB
+
+Old ISCC Vector Search Implementation
 
 As a reference here is an older (pre-standard) legacy first attempt at a specialized similarity search index for
 the ISCC:
+
+## Legacy LMDB/Annoy Implementation
 
 ```python
 """Persistent inverted index for ISCC components and granular features.
@@ -710,6 +714,8 @@ class Index:
         return False if key is None else True
 ```
 
+## Legacy Object Schema
+
 The REST api of our legacy implementation was built on top of this schema:
 
 ```
@@ -968,7 +974,9 @@ if __name__ == "__main__":
         outf.write(ISCC.schema_json(indent=2))
 ```
 
-Based on this the FastAPI implementation was quite minimal:
+## Lecacy REST API server
+
+The FastAPI implementation was quite minimal:
 
 ```
 # -*- coding: utf-8 -*-
@@ -1030,6 +1038,8 @@ def run_server():
 if __name__ == "__main__":
     uvicorn.run("iscc_index.main:app", host="127.0.0.1", port=8090, reload=True)
 ```
+
+## Lecacy CLI API
 
 We had a CLI api based on click:
 

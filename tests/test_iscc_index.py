@@ -2,7 +2,7 @@
 
 import json
 import tempfile
-import typing  # noqa: F401 - used in type comments
+import typing
 from pathlib import Path
 
 import pytest

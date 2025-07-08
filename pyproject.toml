@@ -72,6 +72,8 @@ line-length = 120
 fix = true
 
 [tool.ruff.lint]
+# Don't auto-fix F401 (unused imports) to prevent removal of imports used in type comments
+unfixable = ["F401"]
 select = [
     # flake8-2020
     "YTT",
@@ -109,6 +111,8 @@ ignore = [
     "E501",
     # DoNotAssignLambda
     "E731",
+    # UnusedImport - disabled due to imports used in type comments
+    "F401",
 ]
 
 [tool.ruff.lint.per-file-ignores]

@@ -2,7 +2,7 @@
 
 import os
 import tempfile
-import typing  # noqa: F401 - used in type comments
+import typing
 
 import numpy as np
 import pytest

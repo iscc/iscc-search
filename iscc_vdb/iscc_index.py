@@ -31,10 +31,10 @@ Example:
 """
 
 import json
-import typing  # noqa: F401 - used in type comments
+import typing
 from pathlib import Path
 
-from iscc_vdb.nphd_index import NphdIndex  # noqa: F401 - used in type comments
+from iscc_vdb.nphd_index import NphdIndex
 
 
 class IsccIndex:

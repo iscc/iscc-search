@@ -26,7 +26,7 @@ Example:
     >>> restored = NphdIndex.restore("my_index.usearch")
 """
 
-import typing  # noqa: F401 - used in type comments
+import typing
 
 import numpy as np
 from usearch.index import Index, ScalarKind

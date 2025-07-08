@@ -34,6 +34,8 @@ import json
 import typing  # noqa: F401 - used in type comments
 from pathlib import Path
 
+from iscc_vdb.nphd_index import NphdIndex  # noqa: F401 - used in type comments
+
 
 class IsccIndex:
     """

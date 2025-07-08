@@ -496,6 +496,7 @@ source = { editable = "." }
 dependencies = [
     { name = "iscc-core" },
     { name = "numba" },
+    { name = "platformdirs" },
     { name = "usearch" },
 ]
 
@@ -522,6 +523,7 @@ dev = [
 requires-dist = [
     { name = "iscc-core", specifier = ">=1.2.1" },
     { name = "numba", specifier = ">=0.60.0" },
+    { name = "platformdirs", specifier = ">=4.3.8" },
     { name = "usearch", specifier = ">=2.18.0" },
 ]
 

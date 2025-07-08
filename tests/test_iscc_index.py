@@ -1,190 +1,250 @@
 """Test the IsccIndex multi-index class implementation."""
 
 import json
+import os
 import tempfile
 import typing
+from datetime import datetime
 from pathlib import Path
 
+import platformdirs
 import pytest
 
 from iscc_vdb.iscc_index import IsccIndex
 
 
-def test_init_with_valid_path():
+def test_init_with_custom_path(tmp_path):
+    # type: (typing.Any) -> None
+    """Test initialization with a custom path."""
+    custom_path = tmp_path / "custom_index"
+    index = IsccIndex(custom_path)
+
+    assert index.path == custom_path
+    assert index.max_bits == 256
+    assert custom_path.exists()
+    assert (custom_path / "index.json").exists()
+
+    # Check metadata file
+    with open(custom_path / "index.json") as f:
+        metadata = json.load(f)
+
+    assert metadata["max_bits"] == 256
+    assert metadata["version"] == "0.0.1"
+    assert "created" in metadata
+    # Verify timestamp is recent (within last minute)
+    created_time = datetime.fromisoformat(metadata["created"].replace("Z", "+00:00"))
+    assert (datetime.now(created_time.tzinfo) - created_time).total_seconds() < 60
+
+
+def test_init_with_default_path():
     # type: () -> None
-    """Test IsccIndex initialization with valid path."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        index_path = Path(tmp_dir) / "test_index"
+    """Test initialization without providing a path (uses default)."""
+    index = IsccIndex()
 
-        # Create index
-        index = IsccIndex(index_path)
+    # Should use platformdirs default location
+    expected_base = Path(platformdirs.user_data_dir("iscc-vdb", "iscc"))
+    expected_path = expected_base / "default"
 
-        # Check initialization
-        assert index.path == index_path
-        assert index.max_bits == 256  # default
-        assert isinstance(index.indices, dict)
-        assert len(index.indices) == 0
+    assert index.path == expected_path
+    assert index.max_bits == 256
 
-        # Check directory was created
-        assert index_path.exists()
-        assert index_path.is_dir()
+    # Clean up default directory
+    if expected_path.exists():
+        import shutil
 
-
-def test_init_with_string_path():
-    # type: () -> None
-    """Test IsccIndex initialization with string path."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        index_path = str(Path(tmp_dir) / "test_index")
-
-        # Create index
-        index = IsccIndex(index_path)
-
-        # Check path conversion
-        assert index.path == Path(index_path)
-        assert index.path.exists()
+        shutil.rmtree(expected_path)
+        # Also try to clean up parent if empty
+        if expected_base.exists() and not any(expected_base.iterdir()):
+            expected_base.rmdir()
 
 
-def test_init_with_custom_max_bits():
-    # type: () -> None
-    """Test IsccIndex initialization with custom max_bits."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        index_path = Path(tmp_dir) / "test_index"
+def test_init_with_string_path(tmp_path):
+    # type: (typing.Any) -> None
+    """Test initialization with string path instead of Path object."""
+    custom_path = str(tmp_path / "string_path_index")
+    index = IsccIndex(custom_path)
 
-        # Create index with custom max_bits
-        index = IsccIndex(index_path, max_bits=128)
-
-        # Check max_bits
-        assert index.max_bits == 128
+    assert index.path == Path(custom_path)
+    assert Path(custom_path).exists()
 
 
-def test_directory_creation():
-    # type: () -> None
-    """Test directory creation including nested paths."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        # Create nested path
-        index_path = Path(tmp_dir) / "nested" / "path" / "test_index"
+def test_init_with_custom_max_bits(tmp_path):
+    # type: (typing.Any) -> None
+    """Test initialization with custom max_bits."""
+    custom_path = tmp_path / "custom_bits_index"
+    index = IsccIndex(custom_path, max_bits=128)
 
-        # Create index
-        IsccIndex(index_path)
+    assert index.max_bits == 128
 
-        # Check all directories were created
-        assert index_path.exists()
-        assert index_path.is_dir()
-        assert index_path.parent.exists()
-        assert index_path.parent.parent.exists()
+    # Check metadata file
+    with open(custom_path / "index.json") as f:
+        metadata = json.load(f)
+
+    assert metadata["max_bits"] == 128
 
 
-def test_metadata_file_creation():
-    # type: () -> None
-    """Test metadata file creation with correct content."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        index_path = Path(tmp_dir) / "test_index"
+def test_load_existing_metadata(tmp_path):
+    # type: (typing.Any) -> None
+    """Test loading from existing metadata file."""
+    # Create index first
+    custom_path = tmp_path / "existing_index"
+    IsccIndex(custom_path, max_bits=192)
 
-        # Create index
-        IsccIndex(index_path, max_bits=128)
+    # Create another instance that should load existing metadata
+    index2 = IsccIndex(custom_path, max_bits=256)  # Different max_bits
 
-        # Check metadata file exists
-        metadata_path = index_path / "index.json"
-        assert metadata_path.exists()
-
-        # Check metadata content
-        with metadata_path.open("r") as f:
-            metadata = json.load(f)
-
-        assert "max_bits" in metadata
-        assert metadata["max_bits"] == 128
-        assert "version" in metadata
-        assert metadata["version"] == "0.0.1"
-        assert "created" in metadata
+    # Should use max_bits from metadata, not constructor argument
+    assert index2.max_bits == 192
 
 
-def test_reinit_with_existing_directory():
-    # type: () -> None
-    """Test re-initialization with existing directory and metadata."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        index_path = Path(tmp_dir) / "test_index"
+def test_metadata_validation_error(tmp_path):
+    # type: (typing.Any) -> None
+    """Test error handling for invalid metadata."""
+    custom_path = tmp_path / "invalid_metadata_index"
+    custom_path.mkdir(parents=True)
 
-        # Create first index
-        index1 = IsccIndex(index_path, max_bits=128)
+    # Create invalid metadata (missing max_bits)
+    metadata_path = custom_path / "index.json"
+    with open(metadata_path, "w") as f:
+        json.dump({"version": "0.0.1"}, f)
 
-        # Create second index with same path
-        index2 = IsccIndex(index_path, max_bits=256)
-
-        # Check that max_bits was loaded from metadata (should be 128)
-        assert index2.max_bits == 128
-
-        # Check both indices point to same directory
-        assert index1.path == index2.path
+    with pytest.raises(ValueError, match="Invalid metadata.*missing max_bits"):
+        IsccIndex(custom_path)
 
 
-def test_init_with_existing_metadata():
-    # type: () -> None
-    """Test initialization with existing metadata file."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        index_path = Path(tmp_dir) / "test_index"
-        index_path.mkdir(parents=True)
+def test_metadata_json_decode_error(tmp_path):
+    # type: (typing.Any) -> None
+    """Test error handling for corrupted metadata JSON."""
+    custom_path = tmp_path / "corrupted_metadata_index"
+    custom_path.mkdir(parents=True)
 
-        # Create metadata file manually
-        metadata_path = index_path / "index.json"
-        metadata = {"max_bits": 192, "version": "0.0.1", "created": "2024-01-01T00:00:00Z"}
-        with metadata_path.open("w") as f:
-            json.dump(metadata, f)
+    # Create corrupted JSON
+    metadata_path = custom_path / "index.json"
+    with open(metadata_path, "w") as f:
+        f.write("{ invalid json")
 
-        # Create index (should load existing metadata)
-        index = IsccIndex(index_path, max_bits=256)
-
-        # Check max_bits was loaded from metadata
-        assert index.max_bits == 192
+    with pytest.raises(RuntimeError, match="Failed to load metadata"):
+        IsccIndex(custom_path)
 
 
-def test_init_with_invalid_metadata():
-    # type: () -> None
-    """Test initialization with invalid metadata file."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        index_path = Path(tmp_dir) / "test_index"
-        index_path.mkdir(parents=True)
+def test_metadata_read_permission_error(tmp_path):
+    # type: (typing.Any) -> None
+    """Test error handling for permission errors reading metadata."""
+    custom_path = tmp_path / "permission_error_index"
+    custom_path.mkdir(parents=True)
 
-        # Create invalid metadata file
-        metadata_path = index_path / "index.json"
-        with metadata_path.open("w") as f:
-            f.write("invalid json")
+    # Create metadata file
+    metadata_path = custom_path / "index.json"
+    with open(metadata_path, "w") as f:
+        json.dump({"max_bits": 256, "version": "0.0.1"}, f)
 
-        # Should raise RuntimeError
-        with pytest.raises(RuntimeError, match="Failed to load metadata"):
-            IsccIndex(index_path)
-
-
-def test_init_with_missing_max_bits_in_metadata():
-    # type: () -> None
-    """Test initialization with metadata missing max_bits."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        index_path = Path(tmp_dir) / "test_index"
-        index_path.mkdir(parents=True)
-
-        # Create metadata without max_bits
-        metadata_path = index_path / "index.json"
-        metadata = {"version": "0.0.1"}
-        with metadata_path.open("w") as f:
-            json.dump(metadata, f)
-
-        # Should raise ValueError
-        with pytest.raises(ValueError, match="Invalid metadata"):
-            IsccIndex(index_path)
-
-
-def test_init_with_readonly_directory():
-    # type: () -> None
-    """Test initialization with read-only directory."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        # Create directory and make it read-only
-        index_path = Path(tmp_dir) / "readonly"
-        index_path.mkdir()
-        index_path.chmod(0o444)
+    # Make file unreadable (skip on Windows as it handles permissions differently)
+    if os.name != "nt":
+        os.chmod(metadata_path, 0o000)
 
         try:
-            # Should raise RuntimeError for directory creation
-            with pytest.raises(RuntimeError, match="Failed to create index directory"):
-                IsccIndex(index_path / "test_index")
+            with pytest.raises(RuntimeError, match="Failed to load metadata"):
+                IsccIndex(custom_path)
         finally:
             # Restore permissions for cleanup
-            index_path.chmod(0o755)
+            os.chmod(metadata_path, 0o644)
+
+
+def test_directory_creation_error():
+    # type: () -> None
+    """Test error handling when directory creation fails."""
+    # Use a path that cannot be created
+    if os.name == "nt":
+        # Windows: use invalid path characters
+        invalid_path = "C:\\<>:|?*invalid"
+    else:
+        # Unix: use a file as parent directory
+        with tempfile.NamedTemporaryFile(delete=False) as f:
+            invalid_path = f.name + "/subdir"
+
+    try:
+        with pytest.raises(RuntimeError, match="Failed to create index directory"):
+            IsccIndex(invalid_path)
+    finally:
+        # Clean up temp file on Unix
+        if os.name != "nt" and os.path.exists(f.name):
+            os.unlink(f.name)
+
+
+def test_metadata_write_permission_error(tmp_path):
+    # type: (typing.Any) -> None
+    """Test error handling for permission errors writing metadata."""
+    # Skip on Windows as it handles permissions differently
+    if os.name == "nt":
+        return
+
+    custom_path = tmp_path / "write_permission_error"
+    custom_path.mkdir(parents=True)
+
+    # Make directory read-only
+    os.chmod(custom_path, 0o555)  # noqa: S103
+
+    try:
+        with pytest.raises(RuntimeError, match="Failed to create metadata file"):
+            IsccIndex(custom_path)
+    finally:
+        # Restore permissions for cleanup
+        os.chmod(custom_path, 0o755)  # noqa: S103
+
+
+def test_indices_initialization(tmp_path):
+    # type: (typing.Any) -> None
+    """Test that indices dictionary is properly initialized."""
+    custom_path = tmp_path / "indices_test"
+    index = IsccIndex(custom_path)
+
+    assert isinstance(index.indices, dict)
+    assert len(index.indices) == 0
+
+
+def test_multiple_instances_same_path(tmp_path):
+    # type: (typing.Any) -> None
+    """Test multiple instances can access the same index path."""
+    custom_path = tmp_path / "shared_index"
+
+    # Create first instance
+    index1 = IsccIndex(custom_path, max_bits=128)
+
+    # Create second instance - should load existing metadata
+    index2 = IsccIndex(custom_path, max_bits=256)
+
+    # Both should have same configuration from metadata
+    assert index1.max_bits == 128
+    assert index2.max_bits == 128
+
+
+def test_parent_directory_creation(tmp_path):
+    # type: (typing.Any) -> None
+    """Test that parent directories are created if they don't exist."""
+    custom_path = tmp_path / "deep" / "nested" / "path" / "index"
+
+    # Parent directories don't exist yet
+    assert not custom_path.parent.exists()
+
+    IsccIndex(custom_path)
+
+    # All parent directories should be created
+    assert custom_path.exists()
+    assert (custom_path / "index.json").exists()
+
+
+def test_metadata_same_max_bits(tmp_path):
+    # type: (typing.Any) -> None
+    """Test loading metadata when max_bits matches constructor argument."""
+    custom_path = tmp_path / "same_max_bits_index"
+
+    # Create first instance with max_bits=256
+    index1 = IsccIndex(custom_path, max_bits=256)
+
+    # Create second instance with same max_bits
+    # This tests the branch where metadata["max_bits"] == self.max_bits
+    index2 = IsccIndex(custom_path, max_bits=256)
+
+    # Both should have the same max_bits
+    assert index1.max_bits == 256
+    assert index2.max_bits == 256

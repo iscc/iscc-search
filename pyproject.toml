@@ -19,6 +19,7 @@ classifiers = [
 dependencies = [
     "iscc-core>=1.2.1",
     "numba>=0.60.0",
+    "platformdirs>=4.3.8",
     "usearch>=2.18.0",
 ]
 

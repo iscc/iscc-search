@@ -32,7 +32,10 @@ Example:
 
 import json
 import typing
+from datetime import datetime, timezone
 from pathlib import Path
+
+import platformdirs
 
 from iscc_vdb.nphd_index import NphdIndex
 
@@ -43,15 +46,22 @@ class IsccIndex:
     for different ISCC component types.
     """
 
-    def __init__(self, path, max_bits=256):
-        # type: (str | Path, int) -> None
+    def __init__(self, path=None, max_bits=256):
+        # type: (str | Path | None, int) -> None
         """
         Initialize IsccIndex with path and maximum bits configuration.
 
-        :param path: Directory path where index files will be stored
+        :param path: Directory path where index files will be stored.
+                     If None, uses default directory in user data folder.
         :param max_bits: Maximum supported vector size in bits (default: 256)
         """
-        self.path = Path(path)
+        if path is None:
+            # Use platformdirs for cross-platform user data directory
+            user_data_dir = platformdirs.user_data_dir("iscc-vdb", "iscc")
+            self.path = Path(user_data_dir) / "default"
+        else:
+            self.path = Path(path)
+
         self.max_bits = max_bits
         self.indices = {}  # type: dict[str, NphdIndex]
 
@@ -92,7 +102,7 @@ class IsccIndex:
             metadata = {
                 "max_bits": self.max_bits,
                 "version": "0.0.1",
-                "created": "2024-01-01T00:00:00Z",  # Will be updated with actual timestamp
+                "created": datetime.now(timezone.utc).isoformat(),
             }
 
             try:

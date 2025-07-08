@@ -23,11 +23,11 @@ Example:
     >>> index = IsccIndex("/path/to/index")
     >>>
     >>> # Add ISCCs
-    >>> index.add("zQmNLLg7PEsKo5DXW", "ISCC:KACYPXW52WUAAJGFR")
+    >>> index.add("ISCC:MAIGHFECJMOPMIAB", "ISCC:KACT4EBWK27737D2AYCJRAL5Z36G76RFRMO4554RU26HZ4ORJGIVHDI")
     >>>
     >>> # Search for similar ISCCs
-    >>> results = index.search("ISCC:KACYPXW52WUAAJGFR", count=10)
-    >>> print(results.keys)  # ['zQmNLLg7PEsKo5DXW']
+    >>> results = index.search("ISCC:KACT4EBWK27737D2AYCJRAL5Z36G76RFRMO4554RU26HZ4ORJGIVHDI", count=10)
+    >>> print(results.keys)  # ['ISCC:MAIGHFECJMOPMIAB']
 """
 
 import json

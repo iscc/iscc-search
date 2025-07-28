@@ -1,15 +1,15 @@
 # iscc-vdb
 
-> [!WARNING]
-> **This project is in early development and not ready for production use.**
->
-> The API and features are subject to significant changes. Use at your own risk.
-
 [![Release](https://img.shields.io/github/v/release/iscc/iscc-vdb)](https://img.shields.io/github/v/release/iscc/iscc-vdb)
 [![Build status](https://img.shields.io/github/actions/workflow/status/iscc/iscc-vdb/main.yml?branch=main)](https://github.com/iscc/iscc-vdb/actions/workflows/main.yml?query=branch%3Amain)
 [![codecov](https://codecov.io/gh/iscc/iscc-vdb/branch/main/graph/badge.svg)](https://codecov.io/gh/iscc/iscc-vdb)
 [![Commit activity](https://img.shields.io/github/commit-activity/m/iscc/iscc-vdb)](https://img.shields.io/github/commit-activity/m/iscc/iscc-vdb)
 [![License](https://img.shields.io/github/license/iscc/iscc-vdb)](https://img.shields.io/github/license/iscc/iscc-vdb)
+
+> [!WARNING]
+> **This project is in early development and not ready for production use.**
+>
+> The API and features are subject to significant changes. Use at your own risk.
 
 Embedded Vector Database for ISCC
 
@@ -18,7 +18,7 @@ Embedded Vector Database for ISCC
 
 #### Prerequisites
 
-- Python 3.9 or higher
+- Python 3.10 or higher
 - [uv](https://docs.astral.sh/uv/) package manager
 
 #### Installation

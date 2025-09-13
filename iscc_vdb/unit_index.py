@@ -266,7 +266,9 @@ class IsccUnitIndex(NphdIndex):
             if not valid_keys:
                 return [None] * len(keys)
 
-            packed_vectors = super().get(normalized_keys, dtype)
+            # Filter out invalid keys for parent get
+            filtered_keys = [k if k >= 0 and k in self else 0 for k in normalized_keys]
+            packed_vectors = super().get(filtered_keys, dtype)
 
             if packed_vectors is None:
                 return None
@@ -274,7 +276,7 @@ class IsccUnitIndex(NphdIndex):
             # Reconstruct ISCC units for batch
             results = []
             for key, packed in zip(normalized_keys, packed_vectors, strict=False):
-                if key in self and packed is not None:
+                if key >= 0 and key in self and packed is not None:
                     results.append(self._reconstruct_iscc_unit(packed))
                 else:
                     results.append(None)  # type: ignore[arg-type]
@@ -316,7 +318,8 @@ class IsccUnitIndex(NphdIndex):
                     row_keys = []
                     for j in range(results.keys.shape[1]):
                         key = int(results.keys[i, j])
-                        if key >= 0:  # Valid key (usearch uses unsigned integers)
+                        # Check if it's a valid key (usearch uses max uint64 for invalid)
+                        if key >= 0 and key < 2**64 - 1:  # Valid key
                             row_keys.append(self._int_to_iscc_id(key))
                         else:
                             row_keys.append(None)  # type: ignore[arg-type]

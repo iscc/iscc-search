@@ -1,1 +1,1 @@
-::: iscc_vdb.foo
+::: iscc_vdb.metrics

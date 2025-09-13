@@ -22,7 +22,6 @@ uv run poe check        # Run all checks (lock file, pre-commit, mypy)
 
 # Testing
 uv run poe test         # Run tests with coverage
-tox                     # Test across Python 3.10-3.13
 
 # Documentation
 uv run poe docs         # Serve documentation locally at http://localhost:8000

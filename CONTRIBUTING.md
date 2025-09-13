@@ -100,17 +100,10 @@ uv run poe test      # Run unit tests
 uv run poe docs-test # Test documentation build
 ```
 
-1. Before raising a pull request you should also run tox. This will run the tests across different versions of
-    Python:
+1. Before raising a pull request, ensure all tests pass. The CI/CD pipeline will test across different Python
+    versions automatically.
 
-```bash
-tox
-```
-
-This requires you to have multiple versions of python installed. This step is also triggered in the CI/CD
-pipeline, so you could also choose to skip this step locally.
-
-1. Commit your changes and push your branch to GitHub:
+2. Commit your changes and push your branch to GitHub:
 
 ```bash
 git add .

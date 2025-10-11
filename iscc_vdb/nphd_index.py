@@ -127,6 +127,8 @@ class NphdIndex(Index):
         To get original vectors, extract bytes 1:length+1 where length = vector[0].
         """
         # Just return the packed vectors - user can unpack if needed
+        # WARNING: usearch 2.21.0 returns uninitialized memory for non-existent keys with multi=False
+        # The issue is reported and should be fixed in the next release.
         return super().get(keys, dtype)
 
     @staticmethod

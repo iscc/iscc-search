@@ -88,3 +88,24 @@ def pad_vectors(vectors, nbytes):
         for j in range(min(length, nbytes)):
             padded[i, j + 1] = vec[j]
     return padded
+
+
+@njit(cache=True)
+def unpad_vectors(padded):
+    # type: (NDArray[np.uint8]) -> list[NDArray[np.uint8]]
+    """
+    Extract variable-length bit-vectors from length-prefixed padded matrix.
+
+    Reverses the pad_vectors operation by reading length prefix from first byte
+    and extracting only the valid data bytes for each vector.
+
+    :param padded: 2D array of shape (batch_size, nbytes + 1) with length-prefixed padded vectors.
+    :return: List of variable-length uint8 arrays without padding.
+    """
+    batch_size = len(padded)
+    result = []
+    for i in range(batch_size):
+        length = int(padded[i, 0])
+        vector = padded[i, 1 : length + 1].copy()
+        result.append(vector)
+    return result

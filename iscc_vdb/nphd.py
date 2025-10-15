@@ -5,6 +5,7 @@ Scalable ANNS search for variable-length binary bit-vectors with NPHD metric.
 from typing import Any
 
 import numpy as np
+from numba import njit
 from numpy.typing import NDArray
 from usearch.index import Index, KeyOrKeysLike, ScalarKind, VectorOrVectorsLike
 
@@ -17,12 +18,6 @@ class NphdIndex(Index):
     Supports Normalized Prefix Hamming Distance (NPHD) metric and packed binary vectors
     as np.uint8 arrays of variable length. Vector keys must be integers.
     Vector keys must be integers.
-
-    Example:
-
-        >>> index = NphdIndex(max_dim=32)
-        >>> vector = np.array([32, 64, 128, 255], dtype=np.uint8)])
-        >>> index.add(1, vector))
     """
 
     def __init__(self, max_dim=256, **kwargs):
@@ -44,29 +39,43 @@ class NphdIndex(Index):
             **kwargs,
         )
 
+    def add_one(self, key, vector, **kwargs):
+        # type: (int|None, NDArray[np.uint8], Any) -> int
+        """Add a single vector to the index."""
+        length = len(vector)
+        padded = np.zeros(self.max_bytes + 1, dtype=np.uint8)
+        padded[0] = length
+        padded[1 : length + 1] = vector
+        return super().add(key, padded, **kwargs)
+
+    def add_many(self, keys, vectors, **kwargs):
+        """Add multiple vectors to the index."""
+        return super().add(keys, pad_vectors(vectors), **kwargs)
+
+    def get_one(self, key):
+        # type: (int) -> NDArray[np.uint8] | None
+        padded = super().get(key)
+        if padded is not None and padded.ndim == 1:
+            length = padded[0]
+            return padded[1 : length + 1]
+        return None
+
     def add(self, keys, vectors, **kwargs):
         # type: (KeyOrKeysLike, VectorOrVectorsLike, Any) -> int | NDArray[np.uint64]
-        """Insert a single vector into the index."""
-
-        # Convert 1D vector to 2D matrix
-        if vectors.ndim == 1:
-            vectors = vectors.reshape(1, len(vectors))
-
-        return super().add(keys, pad_vector(vectors, self.max_bytes), **kwargs)
+        """Inserts one or more variable length binary bit-vectors into the index."""
+        pass
 
 
-def pad_vector(vector, nbytes):
-    # type: (NDArray[np.uint8], int) -> NDArray[np.uint8]
-    """Add length prefix and padding to a packed binary bit-vector."""
-    length = len(vector)
-    padded = np.zeros(nbytes + 1, dtype=np.uint8)
-    padded[0] = length
-    padded[1 : length + 1] = vector
+@njit(cache=True)
+def pad_vectors(vectors, nbytes):
+    """Add length prefix and padding to a batch of bit-vectors."""
+    batch_size = len(vectors)
+    padded = np.zeros((batch_size, nbytes + 1), dtype=np.uint8)
+
+    for i in range(batch_size):
+        vec = vectors[i]
+        length = len(vec)
+        padded[i, 0] = length
+        for j in range(min(length, nbytes)):
+            padded[i, j + 1] = vec[j]
     return padded
-
-
-def unpad_vector(vector):
-    # type: (NDArray[np.uint8]) -> NDArray[np.uint8]
-    """Remove length prefix and padding from the packed binary bit-vector."""
-    original_length = vector[0]
-    return vector[1 : original_length + 1]

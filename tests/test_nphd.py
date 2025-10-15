@@ -122,6 +122,92 @@ def test_nphd_index_add_one_and_retrieve():
     np.testing.assert_array_equal(retrieved, original)
 
 
+def test_nphd_index_add_many_with_explicit_keys():
+    """Add multiple vectors with explicit keys."""
+    index = NphdIndex(max_dim=128)
+    keys = [10, 20, 30]
+    vectors = [
+        np.array([1, 2, 3], dtype=np.uint8),
+        np.array([4, 5], dtype=np.uint8),
+        np.array([6, 7, 8, 9], dtype=np.uint8),
+    ]
+
+    result_keys = index.add_many(keys, vectors)
+
+    assert isinstance(result_keys, np.ndarray)
+    assert len(result_keys) == 3
+    np.testing.assert_array_equal(result_keys, [10, 20, 30])
+    assert len(index) == 3
+
+
+def test_nphd_index_add_many_with_auto_keys():
+    """Add multiple vectors with auto-generated keys."""
+    index = NphdIndex(max_dim=128)
+    vectors = [
+        np.array([1, 2, 3], dtype=np.uint8),
+        np.array([4, 5, 6], dtype=np.uint8),
+        np.array([7, 8, 9], dtype=np.uint8),
+    ]
+
+    result_keys = index.add_many(None, vectors)
+
+    assert isinstance(result_keys, np.ndarray)
+    assert len(result_keys) == 3
+    # Auto-generated keys should be increasing
+    assert result_keys[0] < result_keys[1] < result_keys[2]
+    assert len(index) == 3
+
+
+def test_nphd_index_add_many_with_2d_array():
+    """Add multiple vectors as 2D numpy array."""
+    index = NphdIndex(max_dim=128)
+    keys = [100, 101, 102]
+    vectors = np.array(
+        [[1, 2, 3], [4, 5, 6], [7, 8, 9]],
+        dtype=np.uint8,
+    )
+
+    result_keys = index.add_many(keys, vectors)
+
+    np.testing.assert_array_equal(result_keys, [100, 101, 102])
+    assert len(index) == 3
+
+
+def test_nphd_index_add_many_variable_lengths():
+    """Add multiple vectors of different lengths."""
+    index = NphdIndex(max_dim=256)
+    keys = [1, 2, 3, 4]
+    vectors = [
+        np.array([1] * 8, dtype=np.uint8),   # 8 bytes = 64 bits
+        np.array([2] * 16, dtype=np.uint8),  # 16 bytes = 128 bits
+        np.array([3] * 24, dtype=np.uint8),  # 24 bytes = 192 bits
+        np.array([4] * 32, dtype=np.uint8),  # 32 bytes = 256 bits
+    ]
+
+    result_keys = index.add_many(keys, vectors)
+
+    assert len(result_keys) == 4
+    assert len(index) == 4
+
+
+def test_nphd_index_add_many_and_retrieve():
+    """Add multiple vectors and retrieve them with get_one."""
+    index = NphdIndex(max_dim=128)
+    keys = [10, 20, 30]
+    originals = [
+        np.array([1, 2, 3], dtype=np.uint8),
+        np.array([4, 5, 6, 7], dtype=np.uint8),
+        np.array([8, 9], dtype=np.uint8),
+    ]
+
+    index.add_many(keys, originals)
+
+    for key, original in zip(keys, originals):
+        retrieved = index.get_one(key)
+        assert retrieved is not None
+        np.testing.assert_array_equal(retrieved, original)
+
+
 def test_pad_vectors_with_list():
     """Pad a list of variable-length vectors."""
     vectors = [

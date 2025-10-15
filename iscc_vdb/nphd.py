@@ -11,6 +11,12 @@ from usearch.index import Index, KeyOrKeysLike, ScalarKind, VectorOrVectorsLike
 
 from iscc_vdb.metrics import create_nphd_metric
 
+# Type aliases for cleaner type comments
+Key = int | None
+Keys = Sequence[int] | None
+Vector = NDArray[np.uint8]
+Vectors = Sequence[NDArray[np.uint8]] | NDArray[np.uint8]
+
 
 class NphdIndex(Index):
     """Fast approximate nearest neighbor search for variable-length binary bit-vectors.
@@ -40,7 +46,7 @@ class NphdIndex(Index):
         )
 
     def add_one(self, key, vector, **kwargs):
-        # type: (int|None, NDArray[np.uint8], Any) -> int
+        # type: (Key, Vector, Any) -> int
         """
         Add a single variable-length binary vector to the index.
 
@@ -57,11 +63,24 @@ class NphdIndex(Index):
         return int(result[0]) if isinstance(result, np.ndarray) else result
 
     def add_many(self, keys, vectors, **kwargs):
-        """Add multiple vectors to the index."""
+        # type: (Keys, Vectors, Any) -> NDArray[np.uint64]
+        """
+        Add multiple variable-length binary vectors to the index.
+
+        :param keys: Sequence of integer keys for the vectors, or None to auto-generate.
+        :param vectors: Sequence of variable-length uint8 arrays or 2D uint8 array with uniform-length vectors.
+        :return: Array of keys as uint64.
+        """
         return super().add(keys, pad_vectors(vectors, self.max_bytes), **kwargs)
 
     def get_one(self, key):
-        # type: (int) -> NDArray[np.uint8] | None
+        # type: (int) -> Vector | None
+        """
+        Retrieve a single vector from the index by key.
+
+        :param key: Integer key of the vector to retrieve.
+        :return: Variable-length binary vector as uint8 array, or None if not found.
+        """
         padded = super().get(key)
         if padded is not None and padded.ndim == 1:
             length = padded[0]
@@ -76,7 +95,7 @@ class NphdIndex(Index):
 
 @njit(cache=True)
 def pad_vectors(vectors, nbytes):
-    # type: (Sequence[NDArray[np.uint8]] | NDArray[np.uint8], int) -> NDArray[np.uint8]
+    # type: (Vectors, int) -> NDArray[np.uint8]
     """
     Add length prefix and padding to a batch of variable-length bit-vectors.
 
@@ -100,7 +119,7 @@ def pad_vectors(vectors, nbytes):
 
 @njit(cache=True)
 def unpad_vectors(padded):
-    # type: (NDArray[np.uint8]) -> list[NDArray[np.uint8]]
+    # type: (NDArray[np.uint8]) -> list[Vector]
     """
     Extract variable-length bit-vectors from length-prefixed padded matrix.
 

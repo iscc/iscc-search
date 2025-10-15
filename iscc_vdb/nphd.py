@@ -50,7 +50,7 @@ class NphdIndex(Index):
 
     def add_many(self, keys, vectors, **kwargs):
         """Add multiple vectors to the index."""
-        return super().add(keys, pad_vectors(vectors), **kwargs)
+        return super().add(keys, pad_vectors(vectors, self.max_bytes), **kwargs)
 
     def get_one(self, key):
         # type: (int) -> NDArray[np.uint8] | None

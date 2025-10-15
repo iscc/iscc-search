@@ -1,8 +1,51 @@
 """Tests for NPHD index functionality."""
 
 import numpy as np
+import pytest
+from usearch.index import ScalarKind
 
-from iscc_vdb.nphd import pad_vectors, unpad_vectors
+from iscc_vdb.nphd import NphdIndex, pad_vectors, unpad_vectors
+
+
+def test_nphd_index_default_initialization():
+    """Initialize NphdIndex with default max_dim."""
+    index = NphdIndex()
+
+    assert index.max_dim == 256
+    assert index.max_bytes == 32
+    assert index.ndim == 264  # 256 + 8 bits for length signal
+    assert index.dtype == ScalarKind.B1
+
+
+def test_nphd_index_custom_max_dim():
+    """Initialize NphdIndex with custom max_dim values."""
+    index64 = NphdIndex(max_dim=64)
+    assert index64.max_dim == 64
+    assert index64.max_bytes == 8
+    assert index64.ndim == 72
+
+    index128 = NphdIndex(max_dim=128)
+    assert index128.max_dim == 128
+    assert index128.max_bytes == 16
+    assert index128.ndim == 136
+
+
+def test_nphd_index_rejects_ndim_kwarg():
+    """NphdIndex should reject ndim in kwargs."""
+    with pytest.raises(AssertionError, match="`ndim` is calculated from `max_dim`"):
+        NphdIndex(ndim=256)
+
+
+def test_nphd_index_rejects_metric_kwarg():
+    """NphdIndex should reject metric in kwargs."""
+    with pytest.raises(AssertionError, match="`metric` is set automatically"):
+        NphdIndex(metric="hamming")
+
+
+def test_nphd_index_rejects_dtype_kwarg():
+    """NphdIndex should reject dtype in kwargs."""
+    with pytest.raises(AssertionError, match="`dtype` is set automatically"):
+        NphdIndex(dtype=ScalarKind.F32)
 
 
 def test_pad_vectors_with_list():

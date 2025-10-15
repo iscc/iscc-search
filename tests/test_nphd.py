@@ -110,17 +110,6 @@ def test_nphd_index_add_one_variable_lengths():
     assert len(index) == 3
 
 
-def test_nphd_index_add_one_and_retrieve():
-    """Add a vector and retrieve it with get_one."""
-    index = NphdIndex(max_dim=128)
-    original = np.array([10, 20, 30, 40, 50], dtype=np.uint8)
-
-    index.add_one(100, original)
-    retrieved = index.get_one(100)
-
-    assert retrieved is not None
-    np.testing.assert_array_equal(retrieved, original)
-
 
 def test_nphd_index_add_many_with_explicit_keys():
     """Add multiple vectors with explicit keys."""
@@ -188,24 +177,6 @@ def test_nphd_index_add_many_variable_lengths():
 
     assert len(result_keys) == 4
     assert len(index) == 4
-
-
-def test_nphd_index_add_many_and_retrieve():
-    """Add multiple vectors and retrieve them with get_one."""
-    index = NphdIndex(max_dim=128)
-    keys = [10, 20, 30]
-    originals = [
-        np.array([1, 2, 3], dtype=np.uint8),
-        np.array([4, 5, 6, 7], dtype=np.uint8),
-        np.array([8, 9], dtype=np.uint8),
-    ]
-
-    index.add_many(keys, originals)
-
-    for key, original in zip(keys, originals):
-        retrieved = index.get_one(key)
-        assert retrieved is not None
-        np.testing.assert_array_equal(retrieved, original)
 
 
 def test_pad_vectors_with_list():
@@ -302,3 +273,96 @@ def test_pad_unpad_roundtrip():
     assert len(recovered) == len(original)
     for i in range(len(original)):
         np.testing.assert_array_equal(recovered[i], original[i])
+
+
+def test_nphd_index_get_key_single_vector():
+    """Retrieve a single vector that was added to the index."""
+    index = NphdIndex(max_dim=128)
+    vector = np.array([1, 2, 3, 4, 5], dtype=np.uint8)
+
+    index.add_one(42, vector)
+    retrieved = index.get_key(42)
+
+    assert retrieved is not None
+    np.testing.assert_array_equal(retrieved, vector)
+
+
+def test_nphd_index_get_key_after_add_many():
+    """Retrieve individual vectors after adding multiple vectors."""
+    index = NphdIndex(max_dim=128)
+    keys = [10, 20, 30]
+    vectors = [
+        np.array([1, 2, 3], dtype=np.uint8),
+        np.array([4, 5, 6, 7], dtype=np.uint8),
+        np.array([8], dtype=np.uint8),
+    ]
+
+    index.add_many(keys, vectors)
+
+    for i, key in enumerate(keys):
+        retrieved = index.get_key(key)
+        assert retrieved is not None
+        np.testing.assert_array_equal(retrieved, vectors[i])
+
+
+def test_nphd_index_get_key_variable_lengths():
+    """Retrieve vectors of different lengths."""
+    index = NphdIndex(max_dim=256)
+
+    # Add vectors of various lengths
+    vec_short = np.array([1, 2], dtype=np.uint8)  # 2 bytes
+    vec_medium = np.array([3] * 16, dtype=np.uint8)  # 16 bytes
+    vec_long = np.array([4] * 32, dtype=np.uint8)  # 32 bytes (max)
+
+    index.add_one(1, vec_short)
+    index.add_one(2, vec_medium)
+    index.add_one(3, vec_long)
+
+    np.testing.assert_array_equal(index.get_key(1), vec_short)
+    np.testing.assert_array_equal(index.get_key(2), vec_medium)
+    np.testing.assert_array_equal(index.get_key(3), vec_long)
+
+
+def test_nphd_index_get_key_single_byte_vector():
+    """Retrieve a single-byte vector."""
+    index = NphdIndex(max_dim=64)
+    vector = np.array([255], dtype=np.uint8)
+
+    index.add_one(100, vector)
+    retrieved = index.get_key(100)
+
+    assert retrieved is not None
+    assert len(retrieved) == 1
+    np.testing.assert_array_equal(retrieved, vector)
+
+
+def test_nphd_index_get_key_preserves_values():
+    """Retrieved vector values match exactly what was stored."""
+    index = NphdIndex(max_dim=256)
+
+    # Use various byte values to ensure no data corruption
+    vector = np.array([0, 1, 127, 128, 255, 42, 200], dtype=np.uint8)
+
+    index.add_one(50, vector)
+    retrieved = index.get_key(50)
+
+    assert retrieved is not None
+    assert retrieved.dtype == np.uint8
+    np.testing.assert_array_equal(retrieved, vector)
+
+
+def test_nphd_index_get_key_roundtrip_all_lengths():
+    """Verify get_key roundtrip for all possible lengths up to max_dim."""
+    index = NphdIndex(max_dim=64)  # 8 bytes max
+
+    # Test all lengths from 1 to max_bytes
+    for length in range(1, 9):
+        vector = np.array([length] * length, dtype=np.uint8)
+        key = length * 10
+
+        index.add_one(key, vector)
+        retrieved = index.get_key(key)
+
+        assert retrieved is not None
+        assert len(retrieved) == length
+        np.testing.assert_array_equal(retrieved, vector)

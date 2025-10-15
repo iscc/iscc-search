@@ -73,18 +73,24 @@ class NphdIndex(Index):
         """
         return super().add(keys, pad_vectors(vectors, self.max_bytes), **kwargs)
 
-    def get_one(self, key):
-        # type: (int) -> Vector | None
+    def get_key(self, key):
+        # type: (int) -> Vector | Vectors | None
         """
-        Retrieve a single vector from the index by key.
+        Retrieve a vector(s) for a single key from the index.
+        Returns `None`, if one key is requested, and its not present.
+        Returns a (row) vector, if the key maps into a single vector.
+        Returns a list of vectors if the key maps into a multiple vectors.
 
         :param key: Integer key of the vector to retrieve.
-        :return: Variable-length binary vector as uint8 array, or None if not found.
+        :return: Variable-length binary vector as an uint8 array, or None if not found.
         """
         padded = super().get(key)
-        if padded is not None and padded.ndim == 1:
-            length = padded[0]
-            return padded[1 : length + 1]
+        if isinstance(padded, np.ndarray):
+            if padded.ndim == 1:
+                length = padded[0]
+                return padded[1 : length + 1]
+            elif padded.ndim == 2:
+                return unpad_vectors(padded)
         return None
 
     def add(self, keys, vectors, **kwargs):

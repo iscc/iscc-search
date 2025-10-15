@@ -48,6 +48,80 @@ def test_nphd_index_rejects_dtype_kwarg():
         NphdIndex(dtype=ScalarKind.F32)
 
 
+def test_nphd_index_add_one_with_explicit_key():
+    """Add a single vector with explicit key."""
+    index = NphdIndex(max_dim=128)
+    vector = np.array([1, 2, 3, 4, 5], dtype=np.uint8)
+
+    key = index.add_one(42, vector)
+
+    assert key == 42
+    assert len(index) == 1
+
+
+def test_nphd_index_add_one_with_auto_key():
+    """Add a single vector with auto-generated key."""
+    index = NphdIndex(max_dim=128)
+    vector = np.array([1, 2, 3, 4, 5], dtype=np.uint8)
+
+    key = index.add_one(None, vector)
+
+    assert isinstance(key, int)
+    assert len(index) == 1
+
+
+def test_nphd_index_add_one_auto_keys_increasing():
+    """Auto-generated keys should increase with multiple add_one calls."""
+    index = NphdIndex(max_dim=128)
+
+    key1 = index.add_one(None, np.array([1, 2, 3], dtype=np.uint8))
+    key2 = index.add_one(None, np.array([4, 5, 6], dtype=np.uint8))
+    key3 = index.add_one(None, np.array([7, 8, 9], dtype=np.uint8))
+
+    assert key1 < key2 < key3
+    assert len(index) == 3
+
+
+def test_nphd_index_add_one_multiple_vectors():
+    """Add multiple vectors one at a time."""
+    index = NphdIndex(max_dim=128)
+
+    key1 = index.add_one(10, np.array([1, 2, 3], dtype=np.uint8))
+    key2 = index.add_one(20, np.array([4, 5, 6, 7], dtype=np.uint8))
+    key3 = index.add_one(30, np.array([8, 9], dtype=np.uint8))
+
+    assert key1 == 10
+    assert key2 == 20
+    assert key3 == 30
+    assert len(index) == 3
+
+
+def test_nphd_index_add_one_variable_lengths():
+    """Add vectors of different lengths within max_dim."""
+    index = NphdIndex(max_dim=256)
+
+    # 8 bytes = 64 bits
+    key1 = index.add_one(1, np.array([1] * 8, dtype=np.uint8))
+    # 16 bytes = 128 bits
+    key2 = index.add_one(2, np.array([2] * 16, dtype=np.uint8))
+    # 32 bytes = 256 bits (max)
+    key3 = index.add_one(3, np.array([3] * 32, dtype=np.uint8))
+
+    assert len(index) == 3
+
+
+def test_nphd_index_add_one_and_retrieve():
+    """Add a vector and retrieve it with get_one."""
+    index = NphdIndex(max_dim=128)
+    original = np.array([10, 20, 30, 40, 50], dtype=np.uint8)
+
+    index.add_one(100, original)
+    retrieved = index.get_one(100)
+
+    assert retrieved is not None
+    np.testing.assert_array_equal(retrieved, original)
+
+
 def test_pad_vectors_with_list():
     """Pad a list of variable-length vectors."""
     vectors = [

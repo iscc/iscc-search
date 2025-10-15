@@ -41,12 +41,20 @@ class NphdIndex(Index):
 
     def add_one(self, key, vector, **kwargs):
         # type: (int|None, NDArray[np.uint8], Any) -> int
-        """Add a single vector to the index."""
+        """
+        Add a single variable-length binary vector to the index.
+
+        :param key: Integer key for the vector, or None to auto-generate.
+        :param vector: Variable-length binary vector as uint8 array.
+        :return: The key as integer.
+        """
         length = len(vector)
         padded = np.zeros(self.max_bytes + 1, dtype=np.uint8)
         padded[0] = length
         padded[1 : length + 1] = vector
-        return super().add(key, padded, **kwargs)
+        result = super().add(key, padded, **kwargs)
+        # Extract scalar when key is auto-generated (returns array)
+        return int(result[0]) if isinstance(result, np.ndarray) else result
 
     def add_many(self, keys, vectors, **kwargs):
         """Add multiple vectors to the index."""

@@ -2,7 +2,7 @@
 Scalable ANNS search for variable-length binary bit-vectors with NPHD metric.
 """
 
-from typing import Any
+from typing import Any, Sequence
 
 import numpy as np
 from numba import njit
@@ -68,10 +68,19 @@ class NphdIndex(Index):
 
 @njit(cache=True)
 def pad_vectors(vectors, nbytes):
-    """Add length prefix and padding to a batch of bit-vectors."""
+    # type: (Sequence[NDArray[np.uint8]] | NDArray[np.uint8], int) -> NDArray[np.uint8]
+    """
+    Add length prefix and padding to a batch of variable-length bit-vectors.
+
+    Prepends each vector with a length byte and pads to uniform size for fixed-size index storage.
+    First byte stores original length, followed by vector bytes and zero padding up to nbytes.
+
+    :param vectors: Sequence of variable-length uint8 arrays or 2D uint8 array with uniform-length vectors.
+    :param nbytes: Maximum number of bytes per vector (excluding length prefix byte).
+    :return: 2D array of shape (batch_size, nbytes + 1) with length-prefixed padded vectors.
+    """
     batch_size = len(vectors)
     padded = np.zeros((batch_size, nbytes + 1), dtype=np.uint8)
-
     for i in range(batch_size):
         vec = vectors[i]
         length = len(vec)

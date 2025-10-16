@@ -181,16 +181,14 @@ def test_nphd_index_add_and_search():
     vec2 = np.array([255, 128, 64, 33], dtype=np.uint8)  # Similar to vec1 (1 bit diff)
     vec3 = np.array([0, 1, 2, 3], dtype=np.uint8)  # Very different
 
-    # Pad vectors
-    padded = pad_vectors([vec1, vec2, vec3], nbytes=index.max_bytes)
+    # Add to index with integer keys (add() handles padding automatically)
+    index.add(1, vec1)
+    index.add(2, vec2)
+    index.add(3, vec3)
 
-    # Add to index with integer keys
-    index.add(1, padded[0])
-    index.add(2, padded[1])
-    index.add(3, padded[2])
-
-    # Search for vec1 - should find itself as closest match
-    matches = index.search(padded[0], count=1)
+    # Pad query vector for search
+    query_padded = pad_vectors([vec1], nbytes=index.max_bytes)
+    matches = index.search(query_padded[0], count=1)
     assert matches.keys[0] == 1
 
 
@@ -202,17 +200,15 @@ def test_nphd_index_batch_add_and_search():
     vectors = [np.array([i, i + 1, i + 2, i + 3], dtype=np.uint8) for i in range(0, 50, 10)]
     keys = list(range(100, 100 + len(vectors)))
 
-    # Pad all vectors
-    padded = pad_vectors(vectors, nbytes=index.max_bytes)
-
-    # Batch add to index
-    index.add(keys, padded)
+    # Batch add to index (add() handles padding automatically)
+    index.add(keys, vectors)
 
     # Verify index size
     assert index.size == len(vectors)
 
-    # Search for first vector
-    matches = index.search(padded[0], count=1)
+    # Pad query vector for search
+    query_padded = pad_vectors([vectors[0]], nbytes=index.max_bytes)
+    matches = index.search(query_padded[0], count=1)
     assert matches.keys[0] == keys[0]
 
 
@@ -225,12 +221,10 @@ def test_nphd_index_variable_length_vectors():
     medium_vec = np.array([255, 128], dtype=np.uint8)
     long_vec = np.array([255, 128, 64], dtype=np.uint8)
 
-    # Pad vectors
-    padded = pad_vectors([short_vec, medium_vec, long_vec], nbytes=index.max_bytes)
+    # Add to index (add() handles padding automatically)
+    index.add([10, 20, 30], [short_vec, medium_vec, long_vec])
 
-    # Add to index
-    index.add([10, 20, 30], padded)
-
-    # Search with medium vector - should be able to find similar matches
-    matches = index.search(padded[1], count=3)
+    # Pad query vector for search
+    query_padded = pad_vectors([medium_vec], nbytes=index.max_bytes)
+    matches = index.search(query_padded[0], count=3)
     assert 20 in matches.keys  # Should find itself

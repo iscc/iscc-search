@@ -3,6 +3,7 @@ Scalable ANNS search for variable-length binary bit-vectors with NPHD metric.
 """
 
 from collections.abc import Sequence
+from typing import Any
 
 import numpy as np
 from numba import njit
@@ -89,3 +90,23 @@ class NphdIndex(Index):
             dtype=ScalarKind.B1,
             **kwargs,
         )
+
+    def add(self, keys, vectors, **kwargs):
+        # type: (Key | Sequence[int], Vectors, Any) -> NDArray[np.uint64]
+        """
+        Add variable-length binary vectors to the index.
+
+        :param keys: Integer key(s) or None for auto-generation
+        :param vectors: Single vector, 2D array of uniform vectors, or list of variable-length vectors
+        :param kwargs: Additional arguments passed to parent Index.add()
+        :return: Array of keys for added vectors
+        """
+        # Handle single vector - wrap in list for padding
+        if hasattr(vectors, "ndim") and vectors.ndim == 1:
+            vectors = [vectors]
+
+        # Pad vectors to uniform size
+        padded = pad_vectors(vectors, self.max_bytes)
+
+        # Call parent add with padded vectors
+        return super().add(keys, padded, **kwargs)

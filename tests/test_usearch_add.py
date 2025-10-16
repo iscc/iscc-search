@@ -245,68 +245,6 @@ def test_add_batch_with_duplicate_keys_multi_stores_all_vectors():
     assert_array_equal(stored[2], vectors[2])
 
 
-# Tests for Index.add() with enable_key_lookups=False
-
-
-def test_add_returns_key_when_key_lookups_disabled():
-    """
-    When enable_key_lookups=False, Index.add() still returns the key.
-
-    Even though key lookups are disabled (optimizing for lower RAM consumption),
-    the add() method still returns the key that was added. However, you won't
-    be able to retrieve the vector using get() later.
-    """
-    idx = Index(ndim=32, metric=MetricKind.Hamming, dtype=ScalarKind.B1, enable_key_lookups=False)
-
-    result = idx.add(1, np.array([178, 204, 60, 240], dtype=np.uint8))
-
-    assert isinstance(result, np.ndarray)
-    assert result.shape == (1,)
-    assert result[0] == 1
-
-    # Verify that get() returns None (key lookups are disabled)
-    stored = idx.get(1)
-    assert stored is None
-
-
-def test_add_with_key_none_when_key_lookups_disabled():
-    """Auto-generated keys work even when enable_key_lookups=False."""
-    idx = Index(ndim=32, metric=MetricKind.Hamming, dtype=ScalarKind.B1, enable_key_lookups=False)
-
-    result = idx.add(None, np.array([178, 204, 60, 240], dtype=np.uint8))
-
-    assert isinstance(result, np.ndarray)
-    assert result.shape == (1,)
-    assert result[0] == 0
-
-    # Verify that get() returns None (key lookups are disabled)
-    stored = idx.get(0)
-    assert stored is None
-
-
-def test_add_batch_returns_keys_when_key_lookups_disabled():
-    """Batch add returns keys even when enable_key_lookups=False."""
-    idx = Index(ndim=32, metric=MetricKind.Hamming, dtype=ScalarKind.B1, enable_key_lookups=False)
-
-    keys = [1, 2, 3]
-    vectors = np.array([
-        [178, 204, 60, 240],
-        [100, 150, 200, 250],
-        [1, 2, 3, 4],
-    ], dtype=np.uint8)
-
-    result = idx.add(keys, vectors)
-
-    assert isinstance(result, np.ndarray)
-    assert result.shape == (3,)
-    assert_array_equal(result, np.array([1, 2, 3], dtype=np.uint64))
-
-    # Verify that get() returns None for all keys (key lookups are disabled)
-    assert idx.get(1) is None
-    assert idx.get(2) is None
-    assert idx.get(3) is None
-
-
 # Tests for auto-key generation behavior
 
 

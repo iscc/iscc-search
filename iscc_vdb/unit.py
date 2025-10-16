@@ -72,6 +72,34 @@ class UnitIndex(NphdIndex):
         # Convert result keys back to ISCC-IDs
         return self._to_iscc_ids(result_keys)
 
+    def get(self, keys, dtype=None):
+        # type: (str | Sequence[str], Any) -> str | list[str | None] | None
+        """
+        Retrieve ISCC-UNITs by ISCC-ID key(s).
+
+        :param keys: ISCC-ID string(s) to lookup
+        :param dtype: Optional data type (defaults to index dtype)
+        :return: ISCC-UNIT string(s) or None for missing keys
+        """
+        # Track if single key was passed and normalize to list
+        single = isinstance(keys, str)
+        iscc_ids = [keys] if single else list(keys)
+
+        # Convert ISCC-IDs to integer keys
+        int_keys = self._to_keys(iscc_ids)
+
+        # Call parent get with list of keys
+        results = super().get(int_keys, dtype=dtype)
+
+        # Convert binary vectors to ISCC-UNITs
+        iscc_units = [None if r is None else self._vector_to_iscc_unit(r) for r in results]
+
+        # Unwrap single result
+        if single:
+            return iscc_units[0]
+
+        return iscc_units
+
     @cached_property
     def _iscc_id_header(self):
         # type: () -> bytes
@@ -119,3 +147,24 @@ class UnitIndex(NphdIndex):
         digests = [row.tobytes() for row in byte_array]
         iscc_ids = ["ISCC:" + ic.encode_base32(self._iscc_id_header + digest) for digest in digests]
         return iscc_ids
+
+    def _vector_to_iscc_unit(self, vector):
+        # type: (NDArray[np.uint8]) -> str
+        """Convert binary vector to ISCC-UNIT string."""
+        # Parse unit_type to extract MT, ST, VS
+        parts = self.unit_type.split("-")
+        mt = getattr(ic.MT, parts[0])
+
+        # Handle subtype (either ST.NONE or ST_CC.*)
+        if parts[1] == "NONE":
+            st = ic.ST.NONE
+        else:
+            st = getattr(ic.ST_CC, parts[1])
+
+        vs = getattr(ic.VS, parts[2])
+
+        # Calculate bit length from vector size
+        bit_length = len(vector) * 8
+
+        # Reconstruct ISCC-UNIT using encode_component
+        return "ISCC:" + ic.encode_component(mt, st, vs, bit_length, vector.tobytes())

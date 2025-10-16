@@ -75,11 +75,14 @@ def test_add_batch_with_explicit_keys_returns_all_keys():
     idx = Index(ndim=32, metric=MetricKind.Hamming, dtype=ScalarKind.B1, multi=False)
 
     keys = [1, 2, 3]
-    vectors = np.array([
-        [178, 204, 60, 240],
-        [100, 150, 200, 250],
-        [1, 2, 3, 4],
-    ], dtype=np.uint8)
+    vectors = np.array(
+        [
+            [178, 204, 60, 240],
+            [100, 150, 200, 250],
+            [1, 2, 3, 4],
+        ],
+        dtype=np.uint8,
+    )
 
     result = idx.add(keys, vectors)
 
@@ -98,11 +101,14 @@ def test_add_batch_with_key_none_generates_sequential_keys():
     """Batch add with key=None auto-generates sequential keys starting from 0."""
     idx = Index(ndim=32, metric=MetricKind.Hamming, dtype=ScalarKind.B1, multi=False)
 
-    vectors = np.array([
-        [178, 204, 60, 240],
-        [100, 150, 200, 250],
-        [1, 2, 3, 4],
-    ], dtype=np.uint8)
+    vectors = np.array(
+        [
+            [178, 204, 60, 240],
+            [100, 150, 200, 250],
+            [1, 2, 3, 4],
+        ],
+        dtype=np.uint8,
+    )
 
     result = idx.add(None, vectors)
 
@@ -179,11 +185,14 @@ def test_add_batch_with_explicit_keys_multi_returns_all_keys():
     idx = Index(ndim=32, metric=MetricKind.Hamming, dtype=ScalarKind.B1, multi=True)
 
     keys = [1, 2, 3]
-    vectors = np.array([
-        [178, 204, 60, 240],
-        [100, 150, 200, 250],
-        [1, 2, 3, 4],
-    ], dtype=np.uint8)
+    vectors = np.array(
+        [
+            [178, 204, 60, 240],
+            [100, 150, 200, 250],
+            [1, 2, 3, 4],
+        ],
+        dtype=np.uint8,
+    )
 
     result = idx.add(keys, vectors)
 
@@ -202,11 +211,14 @@ def test_add_batch_with_key_none_multi_generates_sequential_keys():
     """Batch add with key=None and multi=True auto-generates sequential keys."""
     idx = Index(ndim=32, metric=MetricKind.Hamming, dtype=ScalarKind.B1, multi=True)
 
-    vectors = np.array([
-        [178, 204, 60, 240],
-        [100, 150, 200, 250],
-        [1, 2, 3, 4],
-    ], dtype=np.uint8)
+    vectors = np.array(
+        [
+            [178, 204, 60, 240],
+            [100, 150, 200, 250],
+            [1, 2, 3, 4],
+        ],
+        dtype=np.uint8,
+    )
 
     result = idx.add(None, vectors)
 
@@ -226,11 +238,14 @@ def test_add_batch_with_duplicate_keys_multi_stores_all_vectors():
 
     # Add multiple vectors to key 1 in a single batch
     keys = [1, 1, 1]
-    vectors = np.array([
-        [178, 204, 60, 240],
-        [100, 150, 200, 250],
-        [1, 2, 3, 4],
-    ], dtype=np.uint8)
+    vectors = np.array(
+        [
+            [178, 204, 60, 240],
+            [100, 150, 200, 250],
+            [1, 2, 3, 4],
+        ],
+        dtype=np.uint8,
+    )
 
     result = idx.add(keys, vectors)
 
@@ -342,11 +357,14 @@ def test_autokey_batch_uses_sequential_sizes():
     assert len(idx) == 2
 
     # Batch add 3 vectors with key=None
-    vectors = np.array([
-        [10, 10, 10, 10],
-        [11, 11, 11, 11],
-        [12, 12, 12, 12],
-    ], dtype=np.uint8)
+    vectors = np.array(
+        [
+            [10, 10, 10, 10],
+            [11, 11, 11, 11],
+            [12, 12, 12, 12],
+        ],
+        dtype=np.uint8,
+    )
 
     result = idx.add(None, vectors)
 

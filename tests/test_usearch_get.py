@@ -229,5 +229,3 @@ def test_get_single_key_returns_none_when_key_lookups_disabled():
 
     assert result_exists is None
     assert result_missing is None
-
-

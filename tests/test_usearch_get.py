@@ -1,4 +1,12 @@
-"""Confirm expected behaviour of usearch."""
+"""
+Confirm the expected behavior of usearch Index.get() with
+
+- metric=MetricKind.Hamming
+- dtype=ScalarKind.B1
+- multi=False (single vector per key)
+- multi=True (multiple vectors per key)
+"""
+
 import numpy as np
 from numpy.testing import assert_array_equal
 from usearch.index import Index, ScalarKind, MetricKind
@@ -125,11 +133,14 @@ def test_get_single_key_multiple_vectors_returns_2d_array():
     idx.add(1, np.array([1, 2, 3, 4], dtype=np.uint8))
 
     result = idx.get(1)
-    expected = np.array([
-        [178, 204, 60, 240],
-        [100, 150, 200, 250],
-        [1, 2, 3, 4],
-    ], dtype=np.uint8)
+    expected = np.array(
+        [
+            [178, 204, 60, 240],
+            [100, 150, 200, 250],
+            [1, 2, 3, 4],
+        ],
+        dtype=np.uint8,
+    )
 
     assert isinstance(result, np.ndarray)
     assert result.ndim == 2
@@ -192,3 +203,66 @@ def test_get_multiple_keys_mixed_returns_list_with_none_multi():
     assert result[2].shape[0] == 1  # One vector for key 3
     assert_array_equal(result[0], expected[0])
     assert_array_equal(result[2], expected[2])
+
+
+# Tests for Index.get() with enable_key_lookups=False
+
+
+def test_get_single_key_returns_none_when_key_lookups_disabled():
+    """
+    When enable_key_lookups=False, Index.get() returns None for all keys.
+
+    This is expected behavior because disabling key lookups optimizes for
+    lower RAM consumption by not storing the reverse mapping from keys to vectors.
+    Without this mapping, the index cannot retrieve vectors by key, so get()
+    returns None even for keys that were successfully added to the index.
+
+    Important: When enable_key_lookups=False, there is NO way to distinguish
+    between a missing key and an existing key - both return None.
+    """
+    idx = Index(ndim=32, metric=MetricKind.Hamming, dtype=ScalarKind.B1, enable_key_lookups=False)
+    idx.add(1, np.array([178, 204, 60, 240], dtype=np.uint8))
+
+    # Both existing and missing keys return None
+    result_exists = idx.get(1)
+    result_missing = idx.get(999)
+
+    assert result_exists is None
+    assert result_missing is None
+
+
+def test_get_multiple_keys_returns_list_of_none_when_key_lookups_disabled():
+    """
+    When enable_key_lookups=False, Index.get() with multiple keys returns a list of None values.
+    """
+    idx = Index(ndim=32, metric=MetricKind.Hamming, dtype=ScalarKind.B1, enable_key_lookups=False)
+    idx.add(1, np.array([178, 204, 60, 240], dtype=np.uint8))
+    idx.add(2, np.array([100, 150, 200, 250], dtype=np.uint8))
+
+    # Both existing and missing keys return None
+    result = idx.get([1, 2, 999])
+    expected = [None, None, None]
+
+    assert isinstance(result, list)
+    assert len(result) == 3
+    assert all(r is None for r in result)
+    assert result == expected
+
+
+def test_get_returns_none_when_key_lookups_disabled_multi_true():
+    """
+    When enable_key_lookups=False with multi=True, Index.get() also returns None.
+
+    The enable_key_lookups parameter affects all get() operations regardless of
+    whether the index is configured for single or multiple vectors per key.
+    """
+    idx = Index(ndim=32, metric=MetricKind.Hamming, dtype=ScalarKind.B1, multi=True, enable_key_lookups=False)
+    idx.add(1, np.array([178, 204, 60, 240], dtype=np.uint8))
+    idx.add(1, np.array([100, 150, 200, 250], dtype=np.uint8))
+
+    # Even though we added 2 vectors for key 1, get() returns None
+    result_exists = idx.get(1)
+    result_missing = idx.get(999)
+
+    assert result_exists is None
+    assert result_missing is None

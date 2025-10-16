@@ -2,6 +2,8 @@
 Scalable ANNS search for variable-length ISCC-UNITs.
 """
 
+import json
+import os
 from collections.abc import Sequence
 from dataclasses import dataclass
 from functools import cached_property
@@ -10,7 +12,7 @@ from typing import Any
 import iscc_core as ic
 import numpy as np
 from numpy.typing import NDArray
-from usearch.index import BatchMatches, Matches
+from usearch.index import BatchMatches, Index, Matches
 
 from iscc_vdb.nphd import NphdIndex
 
@@ -272,6 +274,103 @@ class UnitIndex(NphdIndex):
             visited_members=result.visited_members,
             computed_distances=result.computed_distances,
         )
+
+    def save(self, path_or_buffer=None, progress=None):
+        # type: (Any, Any) -> bytes | None
+        """Save index and metadata to file.
+
+        Metadata (unit_type, realm_id) is saved alongside index when using file paths.
+
+        :param path_or_buffer: Path to save to (defaults to self.path)
+        :param progress: Optional progress callback
+        :return: Bytes if saving to buffer, None if saving to file
+        """
+        result = super().save(path_or_buffer, progress)
+
+        target = path_or_buffer if path_or_buffer is not None else self.path
+        if isinstance(target, (str, os.PathLike)):
+            meta_path = os.fspath(target) + ".meta"
+            with open(meta_path, "w") as f:
+                json.dump({"unit_type": self.unit_type, "realm_id": self.realm_id}, f)
+
+        return result
+
+    def load(self, path_or_buffer=None, progress=None):
+        # type: (Any, Any) -> None
+        """Load index and metadata from file.
+
+        :param path_or_buffer: Path to load from (defaults to self.path)
+        :param progress: Optional progress callback
+        """
+        super().load(path_or_buffer, progress)
+
+        target = path_or_buffer if path_or_buffer is not None else self.path
+        if isinstance(target, (str, os.PathLike)):
+            meta_path = os.fspath(target) + ".meta"
+            if os.path.exists(meta_path):
+                with open(meta_path, "r") as f:
+                    meta = json.load(f)
+                    self.unit_type = meta.get("unit_type")
+                    self.realm_id = meta.get("realm_id")
+
+    def view(self, path_or_buffer=None, progress=None):
+        # type: (Any, Any) -> None
+        """Memory-map index and load metadata from file.
+
+        :param path_or_buffer: Path to view from (defaults to self.path)
+        :param progress: Optional progress callback
+        """
+        super().view(path_or_buffer, progress)
+
+        target = path_or_buffer if path_or_buffer is not None else self.path
+        if isinstance(target, (str, os.PathLike)):
+            meta_path = os.fspath(target) + ".meta"
+            if os.path.exists(meta_path):
+                with open(meta_path, "r") as f:
+                    meta = json.load(f)
+                    self.unit_type = meta.get("unit_type")
+                    self.realm_id = meta.get("realm_id")
+
+    def copy(self):
+        # type: () -> UnitIndex
+        """Create a copy of this index.
+
+        :return: New UnitIndex with same configuration and data
+        """
+        result = UnitIndex(
+            unit_type=self.unit_type,
+            max_dim=self.max_dim,
+            realm_id=self.realm_id,
+            connectivity=self.connectivity,
+            expansion_add=self.expansion_add,
+            expansion_search=self.expansion_search,
+        )
+        result._compiled = self._compiled.copy()
+        return result
+
+    @staticmethod
+    def restore(path_or_buffer, view=False, **kwargs):
+        # type: (Any, bool, Any) -> UnitIndex | None
+        """Restore a UnitIndex from a saved file.
+
+        :param path_or_buffer: Path to restore from
+        :param view: If True, memory-map the index instead of loading
+        :param kwargs: Additional arguments passed to UnitIndex constructor
+        :return: Restored UnitIndex or None if file is invalid
+        """
+        meta = Index.metadata(path_or_buffer)
+        if not meta:
+            return None
+
+        max_dim = meta["dimensions"] - 8
+        index = UnitIndex(max_dim=max_dim, **kwargs)
+
+        if view:
+            index.view(path_or_buffer)
+        else:
+            index.load(path_or_buffer)
+
+        return index
 
     @cached_property
     def _iscc_id_header(self):

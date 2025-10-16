@@ -3,12 +3,12 @@ Scalable ANNS search for variable-length binary bit-vectors with NPHD metric.
 """
 
 from collections.abc import Sequence
-from typing import Any
+from typing import Any, Union
 
 import numpy as np
 from numba import njit
 from numpy.typing import NDArray
-from usearch.index import Index, ScalarKind
+from usearch.index import BatchMatches, Index, Matches, ScalarKind
 
 from iscc_vdb.metrics import create_nphd_metric
 
@@ -134,3 +134,23 @@ class NphdIndex(Index):
             None if r is None else unpad_vectors(r.reshape(1, -1))[0] if r.ndim == 1 else unpad_vectors(r)
             for r in results
         ]
+
+    def search(self, vectors, count=10, **kwargs):
+        # type: (Vectors, int, Any) -> Union[Matches, BatchMatches]
+        """
+        Search for nearest neighbors of query vector(s).
+
+        :param vectors: Single vector or batch of variable-length vectors to query
+        :param count: Maximum number of nearest neighbors to return per query
+        :param kwargs: Additional arguments passed to parent Index.search()
+        :return: Matches for single query or BatchMatches for batch queries
+        """
+        # Handle single vector - wrap in list for padding
+        if hasattr(vectors, "ndim") and vectors.ndim == 1:
+            vectors = [vectors]
+
+        # Pad vectors to uniform size
+        padded = pad_vectors(vectors, self.max_bytes)
+
+        # Call parent search with padded vectors
+        return super().search(padded, count=count, **kwargs)

@@ -186,9 +186,8 @@ def test_nphd_index_add_and_search():
     index.add(2, vec2)
     index.add(3, vec3)
 
-    # Pad query vector for search
-    query_padded = pad_vectors([vec1], nbytes=index.max_bytes)
-    matches = index.search(query_padded[0], count=1)
+    # Search with unpadded query (search() handles padding automatically)
+    matches = index.search(vec1, count=1)
     assert matches.keys[0] == 1
 
 
@@ -206,9 +205,8 @@ def test_nphd_index_batch_add_and_search():
     # Verify index size
     assert index.size == len(vectors)
 
-    # Pad query vector for search
-    query_padded = pad_vectors([vectors[0]], nbytes=index.max_bytes)
-    matches = index.search(query_padded[0], count=1)
+    # Search with unpadded query (search() handles padding automatically)
+    matches = index.search(vectors[0], count=1)
     assert matches.keys[0] == keys[0]
 
 
@@ -224,7 +222,6 @@ def test_nphd_index_variable_length_vectors():
     # Add to index (add() handles padding automatically)
     index.add([10, 20, 30], [short_vec, medium_vec, long_vec])
 
-    # Pad query vector for search
-    query_padded = pad_vectors([medium_vec], nbytes=index.max_bytes)
-    matches = index.search(query_padded[0], count=3)
+    # Search with unpadded query (search() handles padding automatically)
+    matches = index.search(medium_vec, count=3)
     assert 20 in matches.keys  # Should find itself

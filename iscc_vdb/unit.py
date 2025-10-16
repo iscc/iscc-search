@@ -9,6 +9,7 @@ from typing import Any
 import iscc_core as ic
 import numpy as np
 from numpy.typing import NDArray
+from usearch.index import BatchMatches, Matches
 
 from iscc_vdb.nphd import NphdIndex
 
@@ -99,6 +100,45 @@ class UnitIndex(NphdIndex):
             return iscc_units[0]
 
         return iscc_units
+
+    def search(self, vectors, count=10, **kwargs):
+        # type: (str | Sequence[str], int, Any) -> Matches | BatchMatches
+        """
+        Search for nearest neighbors of ISCC-UNIT query vector(s).
+
+        :param vectors: ISCC-UNIT string(s) to query
+        :param count: Maximum number of nearest neighbors to return per query
+        :param kwargs: Additional arguments passed to parent Index.search()
+        :return: Matches for single query or BatchMatches for batch queries with ISCC-ID keys
+        """
+        # Normalize input and convert ISCC-UNITs to binary vectors
+        iscc_units = [vectors] if isinstance(vectors, str) else list(vectors)
+        bin_vectors = self._to_vectors(iscc_units)
+
+        # Call parent search
+        result = super().search(bin_vectors, count=count, **kwargs)
+
+        # Convert integer keys to ISCC-IDs
+        if result.keys.ndim == 1:
+            # Matches object (single query)
+            iscc_ids = np.array(self._to_iscc_ids(result.keys))
+            return Matches(
+                keys=iscc_ids,
+                distances=result.distances,
+                visited_members=result.visited_members,
+                computed_distances=result.computed_distances,
+            )
+
+        # BatchMatches object (multiple queries)
+        iscc_ids_list = [self._to_iscc_ids(row) for row in result.keys]
+        iscc_ids_array = np.array(iscc_ids_list)
+        return BatchMatches(
+            keys=iscc_ids_array,
+            distances=result.distances,
+            counts=result.counts,
+            visited_members=result.visited_members,
+            computed_distances=result.computed_distances,
+        )
 
     @cached_property
     def _iscc_id_header(self):

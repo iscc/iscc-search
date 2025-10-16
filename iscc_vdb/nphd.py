@@ -153,3 +153,68 @@ class NphdIndex(Index):
 
         # Call parent search with padded vectors
         return super().search(padded, count=count, **kwargs)
+
+    def load(self, path_or_buffer=None, progress=None):
+        # type: (Any, Any) -> None
+        """
+        Load index from file or buffer and restore max_dim from saved ndim.
+
+        :param path_or_buffer: Path or buffer to load from (defaults to self.path)
+        :param progress: Optional progress callback
+        """
+        super().load(path_or_buffer, progress)
+        self.max_dim = self.ndim - 8
+        self.max_bytes = self.max_dim // 8
+
+    def view(self, path_or_buffer=None, progress=None):
+        # type: (Any, Any) -> None
+        """
+        Memory-map index from file or buffer and restore max_dim from saved ndim.
+
+        :param path_or_buffer: Path or buffer to view from (defaults to self.path)
+        :param progress: Optional progress callback
+        """
+        super().view(path_or_buffer, progress)
+        self.max_dim = self.ndim - 8
+        self.max_bytes = self.max_dim // 8
+
+    def copy(self):
+        # type: () -> NphdIndex
+        """
+        Create a copy of this index.
+
+        :return: New NphdIndex with same configuration and data
+        """
+        result = NphdIndex(
+            max_dim=self.max_dim,
+            connectivity=self.connectivity,
+            expansion_add=self.expansion_add,
+            expansion_search=self.expansion_search,
+        )
+        result._compiled = self._compiled.copy()
+        return result
+
+    @staticmethod
+    def restore(path_or_buffer, view=False, **kwargs):
+        # type: (Any, bool, Any) -> NphdIndex | None
+        """
+        Restore a NphdIndex from a saved file or buffer.
+
+        :param path_or_buffer: Path or buffer to restore from
+        :param view: If True, memory-map the index instead of loading
+        :param kwargs: Additional arguments passed to NphdIndex constructor
+        :return: Restored NphdIndex or None if file is invalid
+        """
+        meta = Index.metadata(path_or_buffer)
+        if not meta:
+            return None
+
+        max_dim = meta["dimensions"] - 8
+        index = NphdIndex(max_dim=max_dim, **kwargs)
+
+        if view:
+            index.view(path_or_buffer)
+        else:
+            index.load(path_or_buffer)
+
+        return index

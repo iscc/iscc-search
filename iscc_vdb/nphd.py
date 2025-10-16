@@ -69,7 +69,6 @@ class NphdIndex(Index):
 
     Supports Normalized Prefix Hamming Distance (NPHD) metric and packed binary vectors
     as np.uint8 arrays of variable length. Vector keys must be integers.
-    Vector keys must be integers.
     """
 
     def __init__(self, max_dim=256, **kwargs):

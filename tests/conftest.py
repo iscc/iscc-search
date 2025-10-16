@@ -148,14 +148,14 @@ def similar_units():
     # type: () -> tuple[str, str, str]
     """Generate similar ISCC-UNITs for search testing."""
     # Create base vector
-    base_bytes = bytes([0xFF, 0xAA, 0x55, 0x00] * 4)  # 16 bytes / 128 bits
+    base_bytes = bytes([255, 170, 85, 0] * 4)  # 16 bytes / 128 bits
 
     # Create similar vector (1 bit different)
     similar_bytes = bytearray(base_bytes)
-    similar_bytes[0] = 0xFE  # Change 1 bit
+    similar_bytes[0] = 254  # Change 1 bit
 
     # Create dissimilar vector (many bits different)
-    dissimilar_bytes = bytes([0x00, 0x55, 0xAA, 0xFF] * 4)  # Inverted pattern
+    dissimilar_bytes = bytes([0, 85, 170, 255] * 4)  # Inverted pattern
 
     # Convert to ISCC-UNITs
     base_unit = f"ISCC:{ic.encode_component(ic.MT.META, ic.ST.NONE, ic.VS.V0, 128, base_bytes)}"
@@ -197,8 +197,8 @@ def large_dataset():
 def edge_case_units():
     # type: () -> dict[str, str]
     """Generate edge case ISCC-UNITs for testing."""
-    zeros_bytes = b"\x00" * 8
-    ones_bytes = b"\xff" * 8
+    zeros_bytes = bytes([0] * 8)
+    ones_bytes = bytes([255] * 8)
     return {
         "min_length": f"ISCC:{ic.Code.rnd(ic.MT.META, bits=64)}",  # Minimum 64 bits
         "max_length": f"ISCC:{ic.Code.rnd(ic.MT.META, bits=256)}",  # Maximum 256 bits

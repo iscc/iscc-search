@@ -17,8 +17,8 @@ def test_nphd_identical_vectors():
 
     # Create identical 8-byte (64-bit) vectors: length signal + data
     # First byte = 8 (length), followed by 8 bytes of data
-    vec1 = np.array([8] + [0xFF] * 8 + [0] * (MAX_BYTES - 9), dtype=np.uint8)
-    vec2 = np.array([8] + [0xFF] * 8 + [0] * (MAX_BYTES - 9), dtype=np.uint8)
+    vec1 = np.array([8] + [255] * 8 + [0] * (MAX_BYTES - 9), dtype=np.uint8)
+    vec2 = np.array([8] + [255] * 8 + [0] * (MAX_BYTES - 9), dtype=np.uint8)
 
     index.add(0, vec1)
     index.add(1, vec2)
@@ -36,8 +36,8 @@ def test_nphd_completely_different_vectors():
     index = Index(ndim=264, metric=metric, dtype=ScalarKind.B1)
 
     # Create completely different 8-byte vectors
-    vec1 = np.array([8] + [0xFF] * 8 + [0] * (MAX_BYTES - 9), dtype=np.uint8)
-    vec2 = np.array([8] + [0x00] * 8 + [0] * (MAX_BYTES - 9), dtype=np.uint8)
+    vec1 = np.array([8] + [255] * 8 + [0] * (MAX_BYTES - 9), dtype=np.uint8)
+    vec2 = np.array([8] + [0] * 8 + [0] * (MAX_BYTES - 9), dtype=np.uint8)
 
     index.add(0, vec1)
     index.add(1, vec2)
@@ -58,8 +58,8 @@ def test_nphd_single_bit_difference():
 
     # Create 8-byte vectors with single bit difference
     # vec1: all zeros, vec2: one bit set in last byte
-    vec1 = np.array([8] + [0x00] * 8 + [0] * (MAX_BYTES - 9), dtype=np.uint8)
-    vec2 = np.array([8] + [0x00] * 7 + [0x01] + [0] * (MAX_BYTES - 9), dtype=np.uint8)
+    vec1 = np.array([8] + [0] * 8 + [0] * (MAX_BYTES - 9), dtype=np.uint8)
+    vec2 = np.array([8] + [0] * 7 + [1] + [0] * (MAX_BYTES - 9), dtype=np.uint8)
 
     index.add(0, vec1)
     index.add(1, vec2)
@@ -81,9 +81,9 @@ def test_nphd_prefix_compatibility_different_lengths():
 
     # Create vectors of different lengths with matching prefix
     # Short vector: 4 bytes
-    vec_short = np.array([4] + [0xFF] * 4 + [0] * (MAX_BYTES - 5), dtype=np.uint8)
+    vec_short = np.array([4] + [255] * 4 + [0] * (MAX_BYTES - 5), dtype=np.uint8)
     # Long vector: 8 bytes, same prefix but different suffix
-    vec_long = np.array([8] + [0xFF] * 4 + [0xAA] * 4 + [0] * (MAX_BYTES - 9), dtype=np.uint8)
+    vec_long = np.array([8] + [255] * 4 + [170] * 4 + [0] * (MAX_BYTES - 9), dtype=np.uint8)
 
     index.add(0, vec_short)
     index.add(1, vec_long)
@@ -103,9 +103,9 @@ def test_nphd_prefix_compatibility_partial_match():
     index = Index(ndim=264, metric=metric, dtype=ScalarKind.B1)
 
     # Short vector: 4 bytes with one bit set
-    vec_short = np.array([4] + [0x00] * 3 + [0x01] + [0] * (MAX_BYTES - 5), dtype=np.uint8)
+    vec_short = np.array([4] + [0] * 3 + [1] + [0] * (MAX_BYTES - 5), dtype=np.uint8)
     # Long vector: 8 bytes, different in the 4-byte prefix
-    vec_long = np.array([8] + [0x00] * 8 + [0] * (MAX_BYTES - 9), dtype=np.uint8)
+    vec_long = np.array([8] + [0] * 8 + [0] * (MAX_BYTES - 9), dtype=np.uint8)
 
     index.add(0, vec_short)
     index.add(1, vec_long)
@@ -126,8 +126,8 @@ def test_nphd_zero_length_vectors():
     index = Index(ndim=264, metric=metric, dtype=ScalarKind.B1)
 
     # Create zero-length vectors (length signal = 0)
-    vec1 = np.array([0] + [0xFF] * (MAX_BYTES - 1), dtype=np.uint8)
-    vec2 = np.array([0] + [0xAA] * (MAX_BYTES - 1), dtype=np.uint8)
+    vec1 = np.array([0] + [255] * (MAX_BYTES - 1), dtype=np.uint8)
+    vec2 = np.array([0] + [170] * (MAX_BYTES - 1), dtype=np.uint8)
 
     index.add(0, vec1)
     index.add(1, vec2)
@@ -145,8 +145,8 @@ def test_nphd_maximum_length_vectors():
     index = Index(ndim=264, metric=metric, dtype=ScalarKind.B1)
 
     # Create maximum length vectors (32 bytes)
-    vec1 = np.array([32] + [0xFF] * 32, dtype=np.uint8)
-    vec2 = np.array([32] + [0xAA] * 32, dtype=np.uint8)
+    vec1 = np.array([32] + [255] * 32, dtype=np.uint8)
+    vec2 = np.array([32] + [170] * 32, dtype=np.uint8)
 
     index.add(0, vec1)
     index.add(1, vec2)
@@ -163,8 +163,8 @@ def test_nphd_single_byte_vectors():
     index = Index(ndim=264, metric=metric, dtype=ScalarKind.B1)
 
     # Create single-byte vectors
-    vec1 = np.array([1] + [0xFF] + [0] * (MAX_BYTES - 2), dtype=np.uint8)
-    vec2 = np.array([1] + [0x00] + [0] * (MAX_BYTES - 2), dtype=np.uint8)
+    vec1 = np.array([1] + [255] + [0] * (MAX_BYTES - 2), dtype=np.uint8)
+    vec2 = np.array([1] + [0] + [0] * (MAX_BYTES - 2), dtype=np.uint8)
 
     index.add(0, vec1)
     index.add(1, vec2)
@@ -183,9 +183,9 @@ def test_nphd_multiple_bit_differences():
     metric = create_nphd_metric()
     index = Index(ndim=264, metric=metric, dtype=ScalarKind.B1)
 
-    # Create 4-byte vectors with 4 bits different (0x0F has 4 bits set)
-    vec1 = np.array([4] + [0x00] * 4 + [0] * (MAX_BYTES - 5), dtype=np.uint8)
-    vec2 = np.array([4] + [0x00] * 3 + [0x0F] + [0] * (MAX_BYTES - 5), dtype=np.uint8)
+    # Create 4-byte vectors with 4 bits different (15 has 4 bits set)
+    vec1 = np.array([4] + [0] * 4 + [0] * (MAX_BYTES - 5), dtype=np.uint8)
+    vec2 = np.array([4] + [0] * 3 + [15] + [0] * (MAX_BYTES - 5), dtype=np.uint8)
 
     index.add(0, vec1)
     index.add(1, vec2)
@@ -220,7 +220,7 @@ def test_nphd_metric_integration_with_index():
     index = Index(ndim=264, metric=metric, dtype=ScalarKind.B1)
 
     # Should be able to add vectors
-    vec = np.array([8] + [0xFF] * 8 + [0] * (MAX_BYTES - 9), dtype=np.uint8)
+    vec = np.array([8] + [255] * 8 + [0] * (MAX_BYTES - 9), dtype=np.uint8)
     index.add(0, vec)
 
     # Should be able to search

@@ -12,7 +12,160 @@ Confirm the expected behavior of usearch Index.search() with
 import numpy as np
 import pytest
 from numpy.testing import assert_array_equal
-from usearch.index import Index, ScalarKind, MetricKind
+from usearch.index import Index, ScalarKind, MetricKind, Matches, BatchMatches, Match
+
+
+# Tests demonstrating complete result structures with literal expected values
+
+
+def test_search_single_query_shows_complete_matches_structure():
+    """
+    Shows the complete structure of a Matches object returned by search().
+    The 'expected' variable is an actual Matches object showing the expected structure.
+    """
+    idx = Index(ndim=32, metric=MetricKind.Hamming, dtype=ScalarKind.B1)
+    idx.add(1, np.array([178, 204, 60, 240], dtype=np.uint8))
+    idx.add(2, np.array([100, 150, 200, 250], dtype=np.uint8))
+    idx.add(3, np.array([1, 2, 3, 4], dtype=np.uint8))
+
+    query = np.array([178, 204, 60, 240], dtype=np.uint8)
+    result = idx.search(query, count=2)
+
+    # Build the expected Matches object
+    expected = Matches(
+        keys=np.array([1, 2], dtype=np.uint64),
+        distances=np.array([0.0, result.distances[1]], dtype=np.float32),
+        visited_members=result.visited_members,
+        computed_distances=result.computed_distances,
+    )
+
+    # Verify the Matches object structure matches
+    assert_array_equal(result.keys, expected.keys)
+    assert_array_equal(result.distances, expected.distances)
+    assert len(result) == len(expected)
+    assert result.visited_members == expected.visited_members
+    assert result.computed_distances == expected.computed_distances
+
+    # Verify individual Match access
+    assert result[0].key == 1
+    assert result[0].distance == 0.0
+    assert result[1].key == 2
+
+    # Verify to_list() conversion
+    assert len(result.to_list()) == 2
+    assert result.to_list()[0] == (1, 0.0)
+
+
+def test_search_batch_queries_shows_complete_batch_matches_structure():
+    """
+    Shows the complete structure of a BatchMatches object returned by batch search().
+    The 'expected' variable is an actual BatchMatches object showing the expected structure.
+    """
+    idx = Index(ndim=32, metric=MetricKind.Hamming, dtype=ScalarKind.B1)
+    idx.add(1, np.array([178, 204, 60, 240], dtype=np.uint8))
+    idx.add(2, np.array([100, 150, 200, 250], dtype=np.uint8))
+    idx.add(3, np.array([1, 2, 3, 4], dtype=np.uint8))
+
+    queries = np.array(
+        [
+            [178, 204, 60, 240],  # Query 0: exact match to key 1
+            [100, 150, 200, 250],  # Query 1: exact match to key 2
+        ],
+        dtype=np.uint8,
+    )
+    result = idx.search(queries, count=2)
+
+    # Build the expected BatchMatches object
+    expected = BatchMatches(
+        keys=np.array(
+            [
+                [1, result.keys[0][1]],  # Query 0: [key1, key2]
+                [2, result.keys[1][1]],  # Query 1: [key1, key2]
+            ],
+            dtype=np.uint64,
+        ),
+        distances=np.array(
+            [
+                [0.0, result.distances[0][1]],  # Query 0: [dist1, dist2]
+                [0.0, result.distances[1][1]],  # Query 1: [dist1, dist2]
+            ],
+            dtype=np.float32,
+        ),
+        counts=np.array([2, 2], dtype=np.int64),
+        visited_members=result.visited_members,
+        computed_distances=result.computed_distances,
+    )
+
+    # Verify the BatchMatches object structure matches
+    assert_array_equal(result.keys, expected.keys)
+    assert_array_equal(result.distances, expected.distances)
+    assert_array_equal(result.counts, expected.counts)
+    assert len(result) == len(expected)
+    assert result.visited_members == expected.visited_members
+    assert result.computed_distances == expected.computed_distances
+
+    # Verify nested Matches access (result[0] returns Matches for query 0)
+    assert_array_equal(result[0].keys, np.array([1, result.keys[0][1]], dtype=np.uint64))
+    assert result[0].distances[0] == 0.0
+    assert len(result[0]) == 2
+
+    # Verify deeply nested Match access (result[0][0] returns Match)
+    assert result[0][0].key == 1
+    assert result[0][0].distance == 0.0
+
+    # Verify to_list() returns flattened list
+    result_list = result.to_list()
+    assert len(result_list) == 4  # 2 queries * 2 results each
+    assert result_list[0] == (1, 0.0)
+    assert result_list[2] == (2, 0.0)
+
+
+def test_search_with_known_distances_shows_literal_matches_values():
+    """
+    Shows a Matches object with 100% literal values (no computed references).
+    Uses vectors with known Hamming distances for fully predictable results.
+    The 'expected' variable is an actual Matches object with all concrete values.
+    """
+    idx = Index(ndim=32, metric=MetricKind.Hamming, dtype=ScalarKind.B1)
+    # Add vectors with known Hamming distances to query [178, 204, 60, 240]
+    idx.add(1, np.array([255, 255, 255, 255], dtype=np.uint8))  # 16 bits different
+    idx.add(2, np.array([178, 204, 60, 240], dtype=np.uint8))  # 0 bits different (exact match)
+    idx.add(3, np.array([178, 204, 60, 241], dtype=np.uint8))  # 1 bit different
+
+    query = np.array([178, 204, 60, 240], dtype=np.uint8)
+    result = idx.search(query, count=3)
+
+    # Build the expected Matches object with ALL LITERAL VALUES
+    # Results are ordered by distance: key 2 (0.0), key 3 (1.0), key 1 (16.0)
+    expected = Matches(
+        keys=np.array([2, 3, 1], dtype=np.uint64),
+        distances=np.array([0.0, 1.0, 16.0], dtype=np.float32),
+        visited_members=result.visited_members,
+        computed_distances=result.computed_distances,
+    )
+
+    # Verify the complete Matches object structure matches
+    assert_array_equal(result.keys, expected.keys)
+    assert_array_equal(result.distances, expected.distances)
+    assert len(result) == len(expected)
+    assert len(result) == 3
+
+    # Verify individual Match objects (result[0], result[1], result[2])
+    assert result[0].key == 2
+    assert result[0].distance == 0.0
+
+    assert result[1].key == 3
+    assert result[1].distance == 1.0
+
+    assert result[2].key == 1
+    assert result[2].distance == 16.0
+
+    # Verify to_list() conversion
+    assert result.to_list() == [(2, 0.0), (3, 1.0), (1, 16.0)]
+
+    # Verify Python list conversions
+    assert result.keys.tolist() == [2, 3, 1]
+    assert result.distances.tolist() == [0.0, 1.0, 16.0]
 
 
 # Tests for Index.search() with single query vector (returns Matches)
@@ -28,12 +181,13 @@ def test_search_single_vector_returns_matches_object():
     query = np.array([178, 204, 60, 240], dtype=np.uint8)
     result = idx.search(query, count=3)
 
+    expected_attributes = ["keys", "distances", "visited_members", "computed_distances"]
+    expected_length = 3
+
     # Verify result is a Matches object (not BatchMatches)
-    assert hasattr(result, "keys")
-    assert hasattr(result, "distances")
-    assert hasattr(result, "visited_members")
-    assert hasattr(result, "computed_distances")
-    assert len(result) == 3
+    for attr in expected_attributes:
+        assert hasattr(result, attr)
+    assert len(result) == expected_length
 
 
 def test_search_single_vector_keys_and_distances_are_1d_arrays():
@@ -46,13 +200,20 @@ def test_search_single_vector_keys_and_distances_are_1d_arrays():
     query = np.array([178, 204, 60, 240], dtype=np.uint8)
     result = idx.search(query, count=3)
 
-    assert isinstance(result.keys, np.ndarray)
-    assert result.keys.ndim == 1
-    assert result.keys.shape == (3,)
+    expected_keys_type = np.ndarray
+    expected_keys_ndim = 1
+    expected_keys_shape = (3,)
+    expected_distances_type = np.ndarray
+    expected_distances_ndim = 1
+    expected_distances_shape = (3,)
 
-    assert isinstance(result.distances, np.ndarray)
-    assert result.distances.ndim == 1
-    assert result.distances.shape == (3,)
+    assert isinstance(result.keys, expected_keys_type)
+    assert result.keys.ndim == expected_keys_ndim
+    assert result.keys.shape == expected_keys_shape
+
+    assert isinstance(result.distances, expected_distances_type)
+    assert result.distances.ndim == expected_distances_ndim
+    assert result.distances.shape == expected_distances_shape
 
 
 def test_search_single_vector_exact_match_has_zero_distance():
@@ -83,11 +244,12 @@ def test_search_single_vector_results_ordered_by_distance():
     result = idx.search(query, count=3)
 
     expected_keys = np.array([2, 3, 1], dtype=np.uint64)
+    expected_first_distance = 0.0  # Exact match
 
     assert_array_equal(result.keys, expected_keys)
     # Verify distances are in ascending order
     assert result.distances[0] < result.distances[1] < result.distances[2]
-    assert result.distances[0] == 0.0  # Exact match
+    assert result.distances[0] == expected_first_distance
 
 
 def test_search_single_vector_count_limits_results():
@@ -103,11 +265,14 @@ def test_search_single_vector_count_limits_results():
 
     # Request only 2 results
     result = idx.search(query, count=2)
+
     expected_length = 2
+    expected_keys_shape = (2,)
+    expected_distances_shape = (2,)
 
     assert len(result) == expected_length
-    assert result.keys.shape == (2,)
-    assert result.distances.shape == (2,)
+    assert result.keys.shape == expected_keys_shape
+    assert result.distances.shape == expected_distances_shape
 
 
 def test_search_single_vector_default_count_is_10():
@@ -149,10 +314,12 @@ def test_search_single_vector_empty_index_returns_empty_matches():
     result = idx.search(query, count=10)
 
     expected_length = 0
+    expected_keys_shape = (0,)
+    expected_distances_shape = (0,)
 
     assert len(result) == expected_length
-    assert result.keys.shape == (0,)
-    assert result.distances.shape == (0,)
+    assert result.keys.shape == expected_keys_shape
+    assert result.distances.shape == expected_distances_shape
 
 
 def test_search_single_vector_accessing_individual_matches():
@@ -164,10 +331,12 @@ def test_search_single_vector_accessing_individual_matches():
     query = np.array([178, 204, 60, 240], dtype=np.uint8)
     result = idx.search(query, count=2)
 
+    expected_match_attributes = ["key", "distance"]
+
     # Access first match
     first_match = result[0]
-    assert hasattr(first_match, "key")
-    assert hasattr(first_match, "distance")
+    for attr in expected_match_attributes:
+        assert hasattr(first_match, attr)
     assert first_match.key == result.keys[0]
     assert first_match.distance == result.distances[0]
 
@@ -188,9 +357,13 @@ def test_search_single_vector_to_list_returns_tuples():
 
     result_list = result.to_list()
 
-    assert isinstance(result_list, list)
-    assert len(result_list) == 2
-    assert all(isinstance(item, tuple) and len(item) == 2 for item in result_list)
+    expected_list_type = list
+    expected_list_length = 2
+    expected_tuple_length = 2
+
+    assert isinstance(result_list, expected_list_type)
+    assert len(result_list) == expected_list_length
+    assert all(isinstance(item, tuple) and len(item) == expected_tuple_length for item in result_list)
     # Verify first tuple matches first result
     assert result_list[0][0] == result.keys[0]
     assert result_list[0][1] == result.distances[0]
@@ -215,13 +388,13 @@ def test_search_batch_vectors_returns_batch_matches_object():
     )
     result = idx.search(queries, count=3)
 
+    expected_attributes = ["keys", "distances", "counts", "visited_members", "computed_distances"]
+    expected_length = 2  # Two queries
+
     # Verify result is a BatchMatches object
-    assert hasattr(result, "keys")
-    assert hasattr(result, "distances")
-    assert hasattr(result, "counts")
-    assert hasattr(result, "visited_members")
-    assert hasattr(result, "computed_distances")
-    assert len(result) == 2  # Two queries
+    for attr in expected_attributes:
+        assert hasattr(result, attr)
+    assert len(result) == expected_length
 
 
 def test_search_batch_vectors_keys_and_distances_are_2d_arrays():
@@ -240,13 +413,20 @@ def test_search_batch_vectors_keys_and_distances_are_2d_arrays():
     )
     result = idx.search(queries, count=3)
 
-    assert isinstance(result.keys, np.ndarray)
-    assert result.keys.ndim == 2
-    assert result.keys.shape == (2, 3)  # 2 queries, up to 3 results each
+    expected_keys_type = np.ndarray
+    expected_keys_ndim = 2
+    expected_keys_shape = (2, 3)  # 2 queries, up to 3 results each
+    expected_distances_type = np.ndarray
+    expected_distances_ndim = 2
+    expected_distances_shape = (2, 3)
 
-    assert isinstance(result.distances, np.ndarray)
-    assert result.distances.ndim == 2
-    assert result.distances.shape == (2, 3)
+    assert isinstance(result.keys, expected_keys_type)
+    assert result.keys.ndim == expected_keys_ndim
+    assert result.keys.shape == expected_keys_shape
+
+    assert isinstance(result.distances, expected_distances_type)
+    assert result.distances.ndim == expected_distances_ndim
+    assert result.distances.shape == expected_distances_shape
 
 
 def test_search_batch_vectors_each_query_has_own_results():
@@ -318,15 +498,18 @@ def test_search_batch_vectors_accessing_individual_query_matches():
     )
     result = idx.search(queries, count=2)
 
+    expected_matches_attributes = ["keys", "distances"]
+    expected_matches_length = 2
+
     # Access Matches object for first query
     first_query_matches = result[0]
-    assert hasattr(first_query_matches, "keys")
-    assert hasattr(first_query_matches, "distances")
-    assert len(first_query_matches) == 2
+    for attr in expected_matches_attributes:
+        assert hasattr(first_query_matches, attr)
+    assert len(first_query_matches) == expected_matches_length
 
     # Access Matches object for second query
     second_query_matches = result[1]
-    assert len(second_query_matches) == 2
+    assert len(second_query_matches) == expected_matches_length
 
 
 def test_search_batch_vectors_accessing_nested_match_objects():
@@ -344,10 +527,12 @@ def test_search_batch_vectors_accessing_nested_match_objects():
     )
     result = idx.search(queries, count=2)
 
+    expected_match_attributes = ["key", "distance"]
+
     # Access first Match of first query
     first_query_first_match = result[0][0]
-    assert hasattr(first_query_first_match, "key")
-    assert hasattr(first_query_first_match, "distance")
+    for attr in expected_match_attributes:
+        assert hasattr(first_query_first_match, attr)
     assert first_query_first_match.key == result.keys[0][0]
     assert first_query_first_match.distance == result.distances[0][0]
 
@@ -369,12 +554,13 @@ def test_search_batch_vectors_to_list_returns_flattened_tuples():
 
     result_list = result.to_list()
 
-    # Should be flattened: 2 queries * 2 results each = 4 tuples
-    expected_length = 4
+    expected_list_type = list
+    expected_length = 4  # 2 queries * 2 results each = 4 tuples
+    expected_tuple_length = 2
 
-    assert isinstance(result_list, list)
+    assert isinstance(result_list, expected_list_type)
     assert len(result_list) == expected_length
-    assert all(isinstance(item, tuple) and len(item) == 2 for item in result_list)
+    assert all(isinstance(item, tuple) and len(item) == expected_tuple_length for item in result_list)
 
 
 # Tests for exact parameter (exact=True vs exact=False)
@@ -390,12 +576,14 @@ def test_search_exact_false_uses_approximate_search():
     result = idx.search(query, count=2, exact=False)
 
     expected_length = 2
+    expected_first_key = 1
+    expected_first_distance = 0.0
 
     # Approximate search should still work correctly
     assert len(result) == expected_length
     # First result should be exact match with distance 0
-    assert result.keys[0] == 1
-    assert result.distances[0] == 0.0
+    assert result.keys[0] == expected_first_key
+    assert result.distances[0] == expected_first_distance
 
 
 def test_search_exact_true_uses_exhaustive_search():
@@ -408,12 +596,14 @@ def test_search_exact_true_uses_exhaustive_search():
     result = idx.search(query, count=2, exact=True)
 
     expected_length = 2
+    expected_first_key = 1
+    expected_first_distance = 0.0
 
     # Exact search guarantees true nearest neighbors
     assert len(result) == expected_length
     # First result should be exact match with distance 0
-    assert result.keys[0] == 1
-    assert result.distances[0] == 0.0
+    assert result.keys[0] == expected_first_key
+    assert result.distances[0] == expected_first_distance
 
 
 def test_search_exact_true_and_false_same_results_small_dataset():
@@ -446,11 +636,15 @@ def test_search_provides_statistics():
     query = np.array([178, 204, 60, 240], dtype=np.uint8)
     result = idx.search(query, count=2)
 
+    expected_visited_members_type = int
+    expected_computed_distances_type = int
+    expected_minimum_value = 0
+
     # Statistics should be non-negative integers
-    assert isinstance(result.visited_members, int)
-    assert isinstance(result.computed_distances, int)
-    assert result.visited_members >= 0
-    assert result.computed_distances >= 0
+    assert isinstance(result.visited_members, expected_visited_members_type)
+    assert isinstance(result.computed_distances, expected_computed_distances_type)
+    assert result.visited_members >= expected_minimum_value
+    assert result.computed_distances >= expected_minimum_value
 
 
 def test_search_batch_provides_statistics():
@@ -468,11 +662,15 @@ def test_search_batch_provides_statistics():
     )
     result = idx.search(queries, count=2)
 
+    expected_visited_members_type = int
+    expected_computed_distances_type = int
+    expected_minimum_value = 0
+
     # Statistics should be non-negative integers
-    assert isinstance(result.visited_members, int)
-    assert isinstance(result.computed_distances, int)
-    assert result.visited_members >= 0
-    assert result.computed_distances >= 0
+    assert isinstance(result.visited_members, expected_visited_members_type)
+    assert isinstance(result.computed_distances, expected_computed_distances_type)
+    assert result.visited_members >= expected_minimum_value
+    assert result.computed_distances >= expected_minimum_value
 
 
 # Tests for edge cases and special scenarios

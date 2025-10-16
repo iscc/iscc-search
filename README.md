@@ -11,55 +11,162 @@
 >
 > The API and features are subject to significant changes. Use at your own risk.
 
-Embedded Vector Database for ISCC
+High-performance embedded vector database for variable-length binary [ISCC](https://iscc.codes) codes with fast
+approximate nearest neighbor search.
 
 - **Github repository**: <https://github.com/iscc/iscc-vdb/>
 - **Documentation** <https://vdb.iscc.codes/>
 
-#### Prerequisites
+## Features
+
+- Fast approximate nearest neighbor search (ANNS) for variable-length binary vectors
+- Custom NPHD (Normalized Prefix Hamming Distance) metric optimized for ISCC codes
+- Support for 64-256 bit vectors (8-32 bytes)
+- Built on [usearch](https://github.com/unum-cloud/usearch) with JIT-compiled Numba metrics
+- Cross-platform support (Linux, macOS, Windows)
+- Python 3.10-3.13 support
+
+## What is ISCC?
+
+The [International Standard Content Code (ISCC)](https://iscc.codes) is a similarity-preserving content
+identifier for digital media. ISCC codes are variable-length binary vectors that enable efficient similarity
+search across different media types. This library provides a specialized vector database for storing and
+querying ISCC codes at scale.
+
+## Installation
+
+```bash
+pip install iscc-vdb
+```
+
+For development installation:
+
+```bash
+git clone https://github.com/iscc/iscc-vdb.git
+cd iscc-vdb
+uv sync
+```
+
+## Quick Start
+
+```python
+from iscc_vdb import NphdIndex
+import numpy as np
+
+# Create index for up to 256-bit vectors
+index = NphdIndex(max_dim=256)
+
+# Add some binary vectors with integer keys
+vectors = [
+    np.array([18, 52, 86, 120], dtype=np.uint8),  # 32-bit vector
+    np.array([171, 205, 239], dtype=np.uint8),  # 24-bit vector
+    np.array([17, 34, 51, 68, 85], dtype=np.uint8),  # 40-bit vector
+]
+keys = [1, 2, 3]
+index.add(keys, vectors)
+
+# Search for similar vectors
+query = np.array([18, 52, 86, 121], dtype=np.uint8)
+matches = index.search(query, k=2)
+
+print(f"Found {len(matches.keys)} matches")
+print(f"Keys: {matches.keys}")
+print(f"Distances: {matches.distances}")
+```
+
+## API Overview
+
+### NphdIndex
+
+The main index class for ANNS with variable-length binary vectors.
+
+```python
+NphdIndex(max_dim=256, **kwargs)
+```
+
+- `max_dim`: Maximum vector dimension in bits (default: 256)
+- `**kwargs`: Additional arguments passed to usearch Index
+
+#### Methods
+
+- `add(keys, vectors)`: Add vectors with integer keys
+- `search(query, k)`: Search for k nearest neighbors
+- `get(keys)`: Retrieve vectors by keys
+- `remove(keys)`: Remove vectors by keys
+
+## Development
+
+This project uses [uv](https://docs.astral.sh/uv/) for package management and
+[poethepoet](https://github.com/nat-n/poethepoet) for task automation.
+
+### Prerequisites
 
 - Python 3.10 or higher
 - [uv](https://docs.astral.sh/uv/) package manager
 
-#### Installation
-
-Install the environment and the pre-commit hooks:
+### Available Commands
 
 ```bash
-uv run poe install
+uv run poe format-code      # Format Python code with ruff
+uv run poe format-markdown  # Format markdown files
+uv run poe format           # Format all files
+uv run poe test             # Run tests with coverage (requires 100%)
+uv run poe precommit        # Run pre-commit hooks
+uv run poe all              # Format and test
 ```
 
-#### Available Commands
-
-All development tasks can be run using `poe`:
+### Running Tests
 
 ```bash
-uv run poe --help  # Show all available tasks
-uv run poe install  # Install dependencies and pre-commit hooks
-uv run poe check    # Run all code quality checks
-uv run poe test     # Run tests
-uv run poe docs     # Serve documentation locally
-uv run poe build    # Build distribution packages
+# Run all tests with coverage
+uv run poe test
+
+# Run specific test
+uv run pytest tests/test_nphd.py::test_pad_vectors
+
+# Run tests in watch mode
+uv run pytest --watch
 ```
 
-The CI/CD pipeline will be triggered when you open a pull request, merge to main, or when you create a new
-release.
+## Technical Details
 
-To finalize the set-up for publishing to PyPI, see
-[here](https://fpgmaas.github.io/cookiecutter-uv/features/publishing/#set-up-for-pypi). For activating the
-automatic documentation with MkDocs, see
-[here](https://fpgmaas.github.io/cookiecutter-uv/features/mkdocs/#enabling-the-documentation-on-github). To
-enable the code coverage reports, see [here](https://fpgmaas.github.io/cookiecutter-uv/features/codecov/).
+### NPHD Metric
 
-## Releasing a new version
+The Normalized Prefix Hamming Distance (NPHD) is a valid metric specifically designed for variable-length
+prefix-compatible codes like ISCC. It normalizes the Hamming distance by the length of the common prefix,
+enabling meaningful similarity comparisons between vectors of different lengths.
 
-- Create an API Token on [PyPI](https://pypi.org/).
-- Add the API Token to your projects secrets with the name `PYPI_TOKEN` by visiting
-    [this page](https://github.com/iscc/iscc-vdb/settings/secrets/actions/new).
-- Create a [new release](https://github.com/iscc/iscc-vdb/releases/new) on Github.
-- Create a new tag in the form `*.*.*`.
+Unlike standard Hamming distance, NPHD:
 
-For more details, see [here](https://fpgmaas.github.io/cookiecutter-uv/features/cicd/#how-to-trigger-a-release).
+- Correctly handles variable-length comparisons
+- Normalizes over common prefix length
+- Satisfies all metric axioms (non-negativity, identity, symmetry, triangle inequality)
+
+### Binary Vector Format
+
+Vectors are stored as packed binary arrays (`np.uint8`) with an internal length prefix:
+
+- Each vector is prefixed with a length byte
+- Vectors are padded to uniform size for efficient indexing
+- `pad_vectors()` and `unpad_vectors()` handle conversions automatically
+
+### Custom usearch Build
+
+This project uses custom usearch 2.21.0 wheels with platform-specific builds hosted at iscc.github.io to ensure
+consistent behavior across platforms.
+
+## License
+
+MIT License - see [LICENSE](LICENSE) file for details.
+
+## Contributing
+
+Contributions are welcome! Please ensure:
+
+- All tests pass (`uv run poe test`)
+- Code is formatted (`uv run poe format`)
+- Coverage remains at 100%
+- Changes are documented
 
 ______________________________________________________________________
 

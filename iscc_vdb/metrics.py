@@ -5,8 +5,7 @@ This module provides custom distance metrics for binary vectors, specifically
 the Normalized Prefix Hamming Distance (NPHD) for variable-length ISCC codes.
 """
 
-import numpy as np
-from numba import carray, cfunc, types  # type: ignore[import-untyped]
+from numba import carray, cfunc, types
 from usearch.index import CompiledMetric, MetricKind, MetricSignature
 
 # Maximum supported vector size: 264 bits (33 bytes including length signal)
@@ -21,7 +20,7 @@ NPHD_SIGNATURE = types.float32(
 
 
 @cfunc(NPHD_SIGNATURE)
-def nphd_distance(a, b):  # type: ignore[no-any-unimported]  # pragma: no cover
+def nphd_distance(a, b):  # pragma: no cover
     # type: (types.CPointer[types.uint8], types.CPointer[types.uint8]) -> types.float32
     """
     Calculate NPHD between two variable-length binary vectors.
@@ -60,7 +59,7 @@ def nphd_distance(a, b):  # type: ignore[no-any-unimported]  # pragma: no cover
     return normalized_distance
 
 
-def create_nphd_metric():  # type: ignore[no-any-unimported]
+def create_nphd_metric():
     # type: () -> CompiledMetric
     """
     Create a Normalized Prefix Hamming Distance (NPHD) metric for variable-length binary vectors.
@@ -82,44 +81,3 @@ def create_nphd_metric():  # type: ignore[no-any-unimported]
         kind=MetricKind.Hamming,  # Use Hamming as base kind
         signature=MetricSignature.ArrayArray,
     )
-
-
-def pack_binary_vector(vector_bytes, max_bytes=32):
-    # type: (bytes | np.ndarray, int) -> np.ndarray
-    """
-    Pack a binary vector with a length signal.
-
-    :param vector_bytes: Binary data (1-255 bytes)
-    :param max_bytes: Maximum bytes for padding (default: 32)
-    :return: Packed vector with length signal as first byte
-    """
-    if isinstance(vector_bytes, bytes):
-        vector_bytes = np.frombuffer(vector_bytes, dtype=np.uint8)
-
-    length = len(vector_bytes)
-    if length < 1 or length > 255:
-        msg = f"Vector must be 1-255 bytes, got {length}"
-        raise ValueError(msg)
-
-    if length > max_bytes:
-        msg = f"Vector length {length} exceeds max_bytes {max_bytes}"
-        raise ValueError(msg)
-
-    # Create packed vector with length signal + padded data
-    packed = np.zeros(max_bytes + 1, dtype=np.uint8)
-    packed[0] = length  # Store actual length in first byte
-    packed[1 : length + 1] = vector_bytes
-
-    return packed
-
-
-def unpack_binary_vector(packed_vector):
-    # type: (np.ndarray) -> bytes
-    """
-    Unpack a binary vector to extract the original binary data.
-
-    :param packed_vector: Packed vector with length signal
-    :return: Original binary data as bytes
-    """
-    actual_bytes = int(packed_vector[0])  # Convert to Python int to avoid numpy overflow
-    return bytes(packed_vector[1 : actual_bytes + 1])

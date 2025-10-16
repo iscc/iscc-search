@@ -20,7 +20,25 @@ dependencies = [
     "iscc-core>=1.2.1",
     "numba>=0.60.0",
     "platformdirs>=4.3.8",
-    "usearch>=2.18.0",
+    # Python 3.10
+    "usearch @ https://iscc.github.io/usearch/usearch/usearch-2.21.0-cp310-cp310-macosx_10_9_x86_64.whl ; sys_platform == 'darwin' and python_version == '3.10'",
+    "usearch @ https://iscc.github.io/usearch/usearch/usearch-2.21.0-cp310-cp310-manylinux2014_x86_64.manylinux_2_17_x86_64.whl ; sys_platform == 'linux' and python_version == '3.10'",
+    "usearch @ https://iscc.github.io/usearch/usearch/usearch-2.21.0-cp310-cp310-win_amd64.whl ; sys_platform == 'win32' and python_version == '3.10'",
+
+    # Python 3.11
+    "usearch @ https://iscc.github.io/usearch/usearch/usearch-2.21.0-cp311-cp311-macosx_10_9_x86_64.whl ; sys_platform == 'darwin' and python_version == '3.11'",
+    "usearch @ https://iscc.github.io/usearch/usearch/usearch-2.21.0-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.whl ; sys_platform == 'linux' and python_version == '3.11'",
+    "usearch @ https://iscc.github.io/usearch/usearch/usearch-2.21.0-cp311-cp311-win_amd64.whl ; sys_platform == 'win32' and python_version == '3.11'",
+
+    # Python 3.12
+    "usearch @ https://iscc.github.io/usearch/usearch/usearch-2.21.0-cp312-cp312-macosx_10_13_x86_64.whl ; sys_platform == 'darwin' and python_version == '3.12'",
+    "usearch @ https://iscc.github.io/usearch/usearch/usearch-2.21.0-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl ; sys_platform == 'linux' and python_version == '3.12'",
+    "usearch @ https://iscc.github.io/usearch/usearch/usearch-2.21.0-cp312-cp312-win_amd64.whl ; sys_platform == 'win32' and python_version == '3.12'",
+
+    # Python 3.13
+    "usearch @ https://iscc.github.io/usearch/usearch/usearch-2.21.0-cp313-cp313-macosx_10_13_x86_64.whl ; sys_platform == 'darwin' and python_version == '3.13'",
+    "usearch @ https://iscc.github.io/usearch/usearch/usearch-2.21.0-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.whl ; sys_platform == 'linux' and python_version == '3.13'",
+    "usearch @ https://iscc.github.io/usearch/usearch/usearch-2.21.0-cp313-cp313-win_amd64.whl ; sys_platform == 'win32' and python_version == '3.13'",
 ]
 
 [project.urls]
@@ -31,10 +49,8 @@ Documentation = "https://vdb.iscc.codes"
 [dependency-groups]
 dev = [
     "pytest>=7.2.0",
-    "pre-commit>=2.20.0",
-    "poethepoet>=0.24.0",
-    "mypy>=0.991",
     "pytest-cov>=4.0.0",
+    "poethepoet>=0.24.0",
     "ruff>=0.11.5",
     "mkdocs>=1.4.2",
     "mkdocs-material>=8.5.10",
@@ -44,6 +60,7 @@ dev = [
     "mdformat-footnote>=0.1.1",
     "mdformat-tables>=1.0.0",
     "mdformat-gfm-alerts>=2.0.0",
+    "prek>=0.2.9",
 ]
 
 [build-system]
@@ -52,6 +69,9 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["iscc_vdb"]
+
+[tool.hatch.metadata]
+allow-direct-references = true
 
 [tool.mypy]
 files = ["iscc_vdb"]
@@ -71,52 +91,6 @@ target-version = "py310"
 line-length = 120
 fix = true
 
-[tool.ruff.lint]
-# Don't auto-fix F401 (unused imports) to prevent removal of imports used in type comments
-unfixable = ["F401"]
-select = [
-    # flake8-2020
-    "YTT",
-    # flake8-bandit
-    "S",
-    # flake8-bugbear
-    "B",
-    # flake8-builtins
-    "A",
-    # flake8-comprehensions
-    "C4",
-    # flake8-debugger
-    "T10",
-    # flake8-simplify
-    "SIM",
-    # isort
-    "I",
-    # mccabe
-    "C90",
-    # pycodestyle
-    "E", "W",
-    # pyflakes
-    "F",
-    # pygrep-hooks
-    "PGH",
-    # pyupgrade
-    "UP",
-    # ruff
-    "RUF",
-    # tryceratops
-    "TRY",
-]
-ignore = [
-    # LineTooLong
-    "E501",
-    # DoNotAssignLambda
-    "E731",
-    # UnusedImport - disabled due to imports used in type comments
-    "F401",
-]
-
-[tool.ruff.lint.per-file-ignores]
-"tests/*" = ["S101"]
 
 [tool.ruff.format]
 preview = true
@@ -131,25 +105,9 @@ source = ["iscc_vdb"]
 
 
 [tool.poe.tasks]
-install = { shell = "uv sync && uv run pre-commit install", help = "Install the virtual environment and install the pre-commit hooks" }
-check = { sequence = [
-    { shell = "echo Checking lock file consistency with 'pyproject.toml'" },
-    { shell = "uv lock --locked" },
-    { shell = "echo Formatting markdown: Running mdformat" },
-    { shell = "uv run mdformat --check --end-of-line lf --wrap 112 --number *.md docs" },
-    { shell = "echo Linting code: Running pre-commit" },
-    { shell = "uv run pre-commit run -a" },
-    { shell = "echo Static type checking: Running mypy" },
-    { shell = "uv run mypy" }
-], help = "Run code quality tools" }
-format-md = { shell = "uv run mdformat --end-of-line lf --wrap 112 --number *.md docs", help = "Format markdown files" }
 format-code = { shell = "uv run ruff format .", help = "Format code files" }
-format = { sequence = ["format-code", "format-md"], help = "Format all files" }
+format-markdown = { shell = "uv run mdformat --end-of-line lf --wrap 112 --number *.md docs", help = "Format markdown files" }
+precommit = { shell = "uv run prek run"}
+format = { sequence = ["format-code", "format-markdown",], help = "Format all files" }
 test = { shell = "uv run python -m pytest --cov --cov-config=pyproject.toml --cov-report=xml --cov-report=term-missing", help = "Test the code with pytest" }
-build = { sequence = ["clean-build", { shell = "uvx --from build pyproject-build --installer uv" }], help = "Build wheel file" }
-clean-build = { shell = "python -c \"import shutil; import os; shutil.rmtree('dist') if os.path.exists('dist') else None\"", interpreter = "python", help = "Clean build artifacts" }
-publish = { shell = "uvx twine upload --repository-url https://upload.pypi.org/legacy/ dist/*", help = "Publish a release to PyPI" }
-build-and-publish = { sequence = ["build", "publish"], help = "Build and publish" }
-docs-test = { shell = "uv run mkdocs build -s", help = "Test if documentation can be built without warnings or errors" }
-docs = { shell = "uv run mkdocs serve", help = "Build and serve the documentation" }
-all = { sequence = ["format", "check", "test", "docs-test"], help = "Run all pre-commit tasks: format, check, test, and docs-test" }
+all = { sequence = ["format", "test",], help = "Run all pre-commit tasks: format, check, test, and docs-test" }

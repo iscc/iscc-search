@@ -9,7 +9,7 @@ Confirm the expected behavior of usearch Index.get() with
 
 import numpy as np
 from numpy.testing import assert_array_equal
-from usearch.index import Index, ScalarKind, MetricKind
+from usearch.index import Index, MetricKind, ScalarKind
 
 
 def test_index_get_single_empty_returns_none():

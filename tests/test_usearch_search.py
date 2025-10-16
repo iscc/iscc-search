@@ -12,8 +12,7 @@ Confirm the expected behavior of usearch Index.search() with
 import numpy as np
 import pytest
 from numpy.testing import assert_array_equal
-from usearch.index import Index, ScalarKind, MetricKind, Matches, BatchMatches, Match
-
+from usearch.index import BatchMatches, Index, Matches, MetricKind, ScalarKind
 
 # Tests demonstrating complete result structures with literal expected values
 

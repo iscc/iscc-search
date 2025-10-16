@@ -4,9 +4,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**iscc-vdb** is an Embedded Vector Database for ISCC (International Standard Content Code). Currently in early
-development (v0.0.1), it will provide high-performance vector similarity search functionality as part of the
-ISCC ecosystem.
+**iscc-vdb** is an Embedded Vector Database for ISCC (International Standard Content Code). In active
+development (v0.0.1), it provides high-performance vector similarity search for variable-length binary ISCC
+vectors using the Normalized Prefix Hamming Distance (NPHD) metric. Built on top of usearch for fast approximate
+nearest neighbor search.
 
 ## Development Commands
 
@@ -14,40 +15,69 @@ This project uses `uv` (modern Python package manager) and `poe` (poethepoet tas
 be run with `uv run poe <command>`:
 
 ```bash
-# Initial setup
-uv run poe install      # Install dependencies and pre-commit hooks
+# Show all available tasks
+uv run poe --help
 
-# Code quality
-uv run poe check        # Run all checks (lock file, pre-commit, mypy)
+# Formatting
+uv run poe format-code      # Format Python code with ruff
+uv run poe format-markdown  # Format markdown files
+uv run poe format           # Format all files (code + markdown)
 
 # Testing
-uv run poe test         # Run tests with coverage
+uv run poe test             # Run tests with coverage (fails if coverage < 100%)
+uv run pytest tests/test_foo.py::test_function_name  # Run single test
 
-# Documentation
-uv run poe docs         # Serve documentation locally at http://localhost:8000
-uv run poe docs-test    # Test documentation build
+# Pre-commit checks
+uv run poe precommit        # Run pre-commit hooks
 
-# Building
-uv run poe build        # Build package wheel
+# All checks
+uv run poe all              # Format, test, and all checks
 ```
 
 ## Architecture
 
 The project structure follows standard Python packaging conventions:
 
-- `iscc_vdb/` - Main package directory (currently contains only placeholder code)
+- `iscc_vdb/` - Main package directory
+    - `nphd.py` - NphdIndex class for ANNS with variable-length binary vectors
+    - `metrics.py` - Custom NPHD metric implementation using Numba
 - `tests/` - Test files using pytest
+    - `conftest.py` - Shared fixtures for ISCC-IDs and ISCC-UNITs
+    - `test_nphd.py` - Tests for NphdIndex, pad/unpad functions
+    - `test_metrics.py` - Tests for NPHD metric calculation
+    - `test_usearch_*.py` - Low-level usearch API tests
 - `docs/` - MkDocs documentation with Material theme
-- `scripts/` - Project-related tools, benchmarks, and experiments (committed to repo)
 - `scratch/` - Local debugging and one-off scripts (not tracked in git)
-- Core dependency: `usearch>=2.18.0` - vector search library
+
+### Core Components
+
+**NphdIndex** (`iscc_vdb/nphd.py`): Main index class that wraps usearch Index with:
+
+- Automatic vector padding/unpadding for variable-length ISCC vectors
+- NPHD metric configuration (binary vectors with length signal byte)
+- Supports 64-256 bit vectors (configurable via `max_dim` parameter)
+
+**Custom NPHD Metric** (`iscc_vdb/metrics.py`):
+
+- Compiled Numba function for fast NPHD calculation
+- Handles variable-length vectors via length signal in first byte
+- Uses bit-packed binary representation (ScalarKind.B1)
+
+### Key Dependencies
+
+- `usearch==2.21.0` - Custom build from iscc.github.io (platform-specific wheels)
+- `iscc-core>=1.2.1` - ISCC code generation and manipulation
+- `numba>=0.60.0` - JIT compilation for custom metrics
+- `platformdirs>=4.3.8` - Cross-platform directory paths
 
 ## Binary Vector Handling
 
 - **ISCC vectors are binary**: 64, 128, 192, or 256 bits (8, 16, 24, or 32 bytes)
 - **Usearch configuration**: `ndim` specifies bits (not bytes), use `dtype=ScalarKind.B1`
 - **Storage calculations**: Always verify bit-to-byte conversions
-- **Length signalling approach**: 264-bit vectors = 33 bytes (1 byte signal + 32 bytes max ISCC)
+- **Length signaling approach**: Default 264-bit vectors = 33 bytes (1 byte signal + 32 bytes max ISCC)
+- **Vector padding**: Use `pad_vectors()` to add length prefix and pad to uniform size
+- **Vector unpadding**: Use `unpad_vectors()` to extract original variable-length vectors
 
 ## NPHD Metric Properties
 
@@ -60,27 +90,31 @@ The project structure follows standard Python packaging conventions:
 
 - **Python versions**: 3.10 to 3.13
 - **Line length**: 120 characters
-- **Type checking**: Strict mypy configuration - all functions must be typed
+- **Type checking**: Strict mypy configuration - all functions must use PEP 484 type comments
+- **Type comments**: Use `# type: (arg_types) -> return_type` format (see @~/.claude/docs/python.md)
 - **Linting**: Ruff with extensive rule sets for code quality, security, and style
-- **Testing**: pytest with coverage reporting
+- **Testing**: pytest with 100% coverage requirement (fail_under = 100)
 - **Pre-commit**: Automated checks run on commit
 
 @~/.claude/docs/python.md
 
 ## Development Notes
 
-1. This is a greenfield project - the actual vector database implementation hasn't been started yet
-2. All infrastructure is in place for a production-ready library
-3. When implementing features, maintain compatibility with Python 3.10+
-4. Use `usearch` library for vector operations
-5. Follow existing patterns from the ISCC ecosystem
+1. **Custom usearch build**: Project uses custom usearch wheels from iscc.github.io (not PyPI)
+2. **Test fixtures**: Use fixtures from `tests/conftest.py` for ISCC code generation
+3. **Numba JIT**: Functions decorated with `@njit` won't show in coverage - mark with `# pragma: no cover`
+4. **Type hints**: Always use PEP 484 type comments, not function annotations
+5. **Cross-platform**: Ensure all code works on Linux, macOS, and Windows
 
 ## Testing
 
 - Write tests in `tests/` directory following pytest conventions
+- Use shared fixtures from `tests/conftest.py` for ISCC code generation
 - Run single test: `uv run pytest tests/test_foo.py::test_function_name`
-- Run with coverage: `uv run poe test`
-- Ensure all tests pass before committing
+- Run all tests with coverage: `uv run poe test`
+- Coverage requirement is 100% - all code must be tested
+- Mark JIT-compiled code with `# pragma: no cover` as it's not traceable
+- Tests include: unit tests, integration tests, edge cases, and usearch API validation
 
 ## usearch Library Deep Dive
 
@@ -107,10 +141,14 @@ Common pitfalls to avoid:
 #### Core Library Information
 
 - Repository: `unum-cloud/usearch`
-- Current project dependency: `usearch>=2.18.0`
+- Current project dependency: `usearch==2.21.0` (custom build)
 - Primary use case: High-performance vector similarity search
 - Language: C++ with Python bindings
 
 #### Important Actionable Findings
 
-*(To be populated as I discover usearch-specific insights)*
+- **Custom wheels**: Project uses custom usearch 2.21.0 builds hosted at iscc.github.io
+- **Binary vectors**: Use `ScalarKind.B1` and set `ndim` to bit count (not bytes)
+- **Custom metrics**: Use `CompiledMetric` with Numba `@cfunc` for custom distance functions
+- **Length signaling**: First byte stores actual vector length for variable-length support
+- **Batch operations**: Index supports batch add/search with multiple vectors

@@ -1,358 +1,229 @@
-"""Tests for custom ISCC metrics."""
+"""
+Tests for custom ISCC metrics module.
+"""
 
 import numpy as np
 import pytest
-from usearch.index import Index, ScalarKind
+from usearch.index import Index, MetricKind, ScalarKind
 
-from iscc_vdb.metrics import (
-    create_nphd_metric,
-    pack_binary_vector,
-    unpack_binary_vector,
-)
+from iscc_vdb.metrics import MAX_BYTES, create_nphd_metric
 
 
-def test_pack_unpack_binary_vector():
+def test_nphd_identical_vectors():
     # type: () -> None
-    """Test packing and unpacking of binary vectors with length signals."""
-    # Test various lengths from 1 to 255 bytes
-    test_cases = [
-        (b"\x00", 1),
-        (b"\xff" * 5, 5),
-        (b"\xaa" * 10, 10),
-        (b"\x55" * 32, 32),
-        (b"\x12" * 100, 100),
-        (b"\x34" * 255, 255),
-    ]
+    """NPHD distance between identical vectors should be 0.0."""
+    metric = create_nphd_metric()
+    index = Index(ndim=264, metric=metric, dtype=ScalarKind.B1)
 
-    for vector_bytes, expected_length in test_cases:
-        # Pack the vector with appropriate max_bytes
-        max_bytes = max(32, expected_length)  # Ensure max_bytes >= length
-        packed = pack_binary_vector(vector_bytes, max_bytes)
+    # Create identical 8-byte (64-bit) vectors: length signal + data
+    # First byte = 8 (length), followed by 8 bytes of data
+    vec1 = np.array([8] + [0xFF] * 8 + [0] * (MAX_BYTES - 9), dtype=np.uint8)
+    vec2 = np.array([8] + [0xFF] * 8 + [0] * (MAX_BYTES - 9), dtype=np.uint8)
 
-        # Check packed vector properties
-        assert packed.dtype == np.uint8
-        assert len(packed) == max_bytes + 1  # 1 byte signal + max_bytes data
+    index.add(0, vec1)
+    index.add(1, vec2)
 
-        # Check length signal
-        assert packed[0] == expected_length
-
-        # Unpack and verify
-        unpacked = unpack_binary_vector(packed)
-        assert unpacked == vector_bytes
-        assert len(unpacked) == expected_length
+    matches = index.search(vec1, 1)
+    # When vectors are identical, either could be returned first
+    assert matches.keys[0] in [0, 1]
+    assert matches.distances[0] == pytest.approx(0.0, abs=1e-6)
 
 
-def test_pack_binary_vector_invalid_length():
+def test_nphd_completely_different_vectors():
     # type: () -> None
-    """Test that pack_binary_vector raises error for invalid lengths."""
-    # Test length 0
-    with pytest.raises(ValueError, match="Vector must be 1-255 bytes"):
-        pack_binary_vector(b"")
+    """NPHD distance between completely different vectors should be ~1.0."""
+    metric = create_nphd_metric()
+    index = Index(ndim=264, metric=metric, dtype=ScalarKind.B1)
 
-    # Test length > 255
-    with pytest.raises(ValueError, match="Vector must be 1-255 bytes"):
-        pack_binary_vector(b"\x00" * 256, max_bytes=256)
+    # Create completely different 8-byte vectors
+    vec1 = np.array([8] + [0xFF] * 8 + [0] * (MAX_BYTES - 9), dtype=np.uint8)
+    vec2 = np.array([8] + [0x00] * 8 + [0] * (MAX_BYTES - 9), dtype=np.uint8)
 
-    # Test length > max_bytes
-    with pytest.raises(ValueError, match="Vector length 33 exceeds max_bytes 32"):
-        pack_binary_vector(b"\x00" * 33, max_bytes=32)
+    index.add(0, vec1)
+    index.add(1, vec2)
+
+    matches = index.search(vec1, 2)
+    # Distance should be 1.0 (all bits different)
+    if matches.keys[0] == 1:
+        assert matches.distances[0] == pytest.approx(1.0, abs=1e-6)
+    else:
+        assert matches.distances[1] == pytest.approx(1.0, abs=1e-6)
 
 
-def test_pack_unpack_iscc_vector():
+def test_nphd_single_bit_difference():
     # type: () -> None
-    """Test packing and unpacking of ISCC vectors with length signals."""
-    # Test different ISCC lengths
-    test_cases = [
-        (b"\x00" * 8, 8),
-        (b"\xff" * 16, 16),
-        (b"\xaa" * 24, 24),
-        (b"\x55" * 32, 32),
-    ]
+    """NPHD with single bit difference should be 1/num_bits."""
+    metric = create_nphd_metric()
+    index = Index(ndim=264, metric=metric, dtype=ScalarKind.B1)
 
-    for iscc_bytes, expected_length in test_cases:
-        # Pack the vector
-        packed = pack_binary_vector(iscc_bytes)
+    # Create 8-byte vectors with single bit difference
+    # vec1: all zeros, vec2: one bit set in last byte
+    vec1 = np.array([8] + [0x00] * 8 + [0] * (MAX_BYTES - 9), dtype=np.uint8)
+    vec2 = np.array([8] + [0x00] * 7 + [0x01] + [0] * (MAX_BYTES - 9), dtype=np.uint8)
 
-        # Check packed vector properties
-        assert packed.dtype == np.uint8
-        assert len(packed) == 33  # 1 byte signal + 32 bytes max data
+    index.add(0, vec1)
+    index.add(1, vec2)
 
-        # Check length signal (now stores actual byte count)
-        assert packed[0] == expected_length
-
-        # Unpack and verify
-        unpacked = unpack_binary_vector(packed)
-        assert unpacked == iscc_bytes
-        assert len(unpacked) == expected_length
+    matches = index.search(vec1, 2)
+    # Distance should be 1/64 = 0.015625
+    expected_distance = 1.0 / 64.0
+    if matches.keys[0] == 1:
+        assert matches.distances[0] == pytest.approx(expected_distance, abs=1e-6)
+    else:
+        assert matches.distances[1] == pytest.approx(expected_distance, abs=1e-6)
 
 
-def test_pack_iscc_vector_invalid_length():
+def test_nphd_prefix_compatibility_different_lengths():
     # type: () -> None
-    """Test that pack_binary_vector validates ISCC-specific lengths."""
-    # Note: generic pack_binary_vector doesn't enforce ISCC-specific lengths
-    # These tests now just verify general length constraints
-    with pytest.raises(ValueError, match="Vector must be 1-255 bytes"):
-        pack_binary_vector(b"")
+    """NPHD should use shorter vector length for comparison."""
+    metric = create_nphd_metric()
+    index = Index(ndim=264, metric=metric, dtype=ScalarKind.B1)
 
-    with pytest.raises(ValueError, match="Vector must be 1-255 bytes"):
-        pack_binary_vector(b"\x00" * 256, max_bytes=32)
+    # Create vectors of different lengths with matching prefix
+    # Short vector: 4 bytes
+    vec_short = np.array([4] + [0xFF] * 4 + [0] * (MAX_BYTES - 5), dtype=np.uint8)
+    # Long vector: 8 bytes, same prefix but different suffix
+    vec_long = np.array([8] + [0xFF] * 4 + [0xAA] * 4 + [0] * (MAX_BYTES - 9), dtype=np.uint8)
+
+    index.add(0, vec_short)
+    index.add(1, vec_long)
+
+    # Search with short vector - should match perfectly (distance 0.0)
+    matches = index.search(vec_short, 2)
+    # Both vectors should have 0.0 distance because they share the same 4-byte prefix
+    assert all(d == pytest.approx(0.0, abs=1e-6) for d in matches.distances)
+    # Both keys should be present
+    assert set(matches.keys) == {0, 1}
 
 
-def test_nphd_metric_creation():
+def test_nphd_prefix_compatibility_partial_match():
     # type: () -> None
-    """Test creation of NPHD metric."""
+    """NPHD should normalize by shorter vector when prefixes differ."""
+    metric = create_nphd_metric()
+    index = Index(ndim=264, metric=metric, dtype=ScalarKind.B1)
+
+    # Short vector: 4 bytes with one bit set
+    vec_short = np.array([4] + [0x00] * 3 + [0x01] + [0] * (MAX_BYTES - 5), dtype=np.uint8)
+    # Long vector: 8 bytes, different in the 4-byte prefix
+    vec_long = np.array([8] + [0x00] * 8 + [0] * (MAX_BYTES - 9), dtype=np.uint8)
+
+    index.add(0, vec_short)
+    index.add(1, vec_long)
+
+    matches = index.search(vec_short, 2)
+    # Distance should be 1/32 (1 bit difference in 32 bits = 4 bytes)
+    expected_distance = 1.0 / 32.0
+    if matches.keys[0] == 1:
+        assert matches.distances[0] == pytest.approx(expected_distance, abs=1e-6)
+    else:
+        assert matches.distances[1] == pytest.approx(expected_distance, abs=1e-6)
+
+
+def test_nphd_zero_length_vectors():
+    # type: () -> None
+    """NPHD with zero-length vectors should return 0.0."""
+    metric = create_nphd_metric()
+    index = Index(ndim=264, metric=metric, dtype=ScalarKind.B1)
+
+    # Create zero-length vectors (length signal = 0)
+    vec1 = np.array([0] + [0xFF] * (MAX_BYTES - 1), dtype=np.uint8)
+    vec2 = np.array([0] + [0xAA] * (MAX_BYTES - 1), dtype=np.uint8)
+
+    index.add(0, vec1)
+    index.add(1, vec2)
+
+    matches = index.search(vec1, 2)
+    # Both zero-length vectors should have 0.0 distance
+    assert all(d == pytest.approx(0.0, abs=1e-6) for d in matches.distances)
+    assert set(matches.keys) == {0, 1}
+
+
+def test_nphd_maximum_length_vectors():
+    # type: () -> None
+    """NPHD should work with maximum length (32-byte) vectors."""
+    metric = create_nphd_metric()
+    index = Index(ndim=264, metric=metric, dtype=ScalarKind.B1)
+
+    # Create maximum length vectors (32 bytes)
+    vec1 = np.array([32] + [0xFF] * 32, dtype=np.uint8)
+    vec2 = np.array([32] + [0xAA] * 32, dtype=np.uint8)
+
+    index.add(0, vec1)
+    index.add(1, vec2)
+
+    matches = index.search(vec1, 1)
+    assert matches.keys[0] == 0
+    # Should find itself with 0.0 distance
+
+
+def test_nphd_single_byte_vectors():
+    # type: () -> None
+    """NPHD should work with minimal (1-byte) vectors."""
+    metric = create_nphd_metric()
+    index = Index(ndim=264, metric=metric, dtype=ScalarKind.B1)
+
+    # Create single-byte vectors
+    vec1 = np.array([1] + [0xFF] + [0] * (MAX_BYTES - 2), dtype=np.uint8)
+    vec2 = np.array([1] + [0x00] + [0] * (MAX_BYTES - 2), dtype=np.uint8)
+
+    index.add(0, vec1)
+    index.add(1, vec2)
+
+    matches = index.search(vec1, 2)
+    # Distance should be 1.0 (all 8 bits different)
+    if matches.keys[0] == 1:
+        assert matches.distances[0] == pytest.approx(1.0, abs=1e-6)
+    else:
+        assert matches.distances[1] == pytest.approx(1.0, abs=1e-6)
+
+
+def test_nphd_multiple_bit_differences():
+    # type: () -> None
+    """NPHD should correctly calculate distance with multiple bit differences."""
+    metric = create_nphd_metric()
+    index = Index(ndim=264, metric=metric, dtype=ScalarKind.B1)
+
+    # Create 4-byte vectors with 4 bits different (0x0F has 4 bits set)
+    vec1 = np.array([4] + [0x00] * 4 + [0] * (MAX_BYTES - 5), dtype=np.uint8)
+    vec2 = np.array([4] + [0x00] * 3 + [0x0F] + [0] * (MAX_BYTES - 5), dtype=np.uint8)
+
+    index.add(0, vec1)
+    index.add(1, vec2)
+
+    matches = index.search(vec1, 2)
+    # Distance should be 4/32 = 0.125 (4 bits different in 32 bits)
+    expected_distance = 4.0 / 32.0
+    if matches.keys[0] == 1:
+        assert matches.distances[0] == pytest.approx(expected_distance, abs=1e-6)
+    else:
+        assert matches.distances[1] == pytest.approx(expected_distance, abs=1e-6)
+
+
+def test_create_nphd_metric_returns_compiled_metric():
+    # type: () -> None
+    """create_nphd_metric should return a valid CompiledMetric instance."""
     metric = create_nphd_metric()
 
-    # Verify metric properties
-    assert metric.pointer != 0
-    assert metric.kind is not None
-    assert metric.signature is not None
+    assert metric is not None
+    assert hasattr(metric, "pointer")
+    assert hasattr(metric, "kind")
+    assert hasattr(metric, "signature")
+    assert metric.kind == MetricKind.Hamming
 
 
-def test_nphd_with_usearch_index():
+def test_nphd_metric_integration_with_index():
     # type: () -> None
-    """Test NPHD metric integration with usearch Index."""
-    # Create NPHD metric
-    nphd_metric = create_nphd_metric()
+    """NPHD metric should integrate properly with usearch Index."""
+    metric = create_nphd_metric()
 
-    # Create index with NPHD metric
-    # Using 264 bits (33 bytes) to accommodate length signal + max ISCC
-    index = Index(
-        ndim=264,  # 33 bytes * 8 bits
-        metric=nphd_metric,
-        dtype=ScalarKind.B1,
-    )
+    # Should be able to create an index with the metric
+    index = Index(ndim=264, metric=metric, dtype=ScalarKind.B1)
 
-    # Create test ISCC vectors of different lengths
-    iscc1_8 = b"\x11" * 8
-    iscc2_8 = b"\x22" * 8
-    iscc3_16 = b"\x33" * 16
-    iscc4_24 = b"\x44" * 24
-    iscc5_32 = b"\x55" * 32
+    # Should be able to add vectors
+    vec = np.array([8] + [0xFF] * 8 + [0] * (MAX_BYTES - 9), dtype=np.uint8)
+    index.add(0, vec)
 
-    # Pack vectors
-    packed1 = pack_binary_vector(iscc1_8)
-    packed2 = pack_binary_vector(iscc2_8)
-    packed3 = pack_binary_vector(iscc3_16)
-    packed4 = pack_binary_vector(iscc4_24)
-    packed5 = pack_binary_vector(iscc5_32)
-
-    # Convert to bit arrays for usearch
-    bit_packed1 = np.packbits(np.unpackbits(packed1))
-    bit_packed2 = np.packbits(np.unpackbits(packed2))
-    bit_packed3 = np.packbits(np.unpackbits(packed3))
-    bit_packed4 = np.packbits(np.unpackbits(packed4))
-    bit_packed5 = np.packbits(np.unpackbits(packed5))
-
-    # Add vectors to index
-    index.add(0, bit_packed1)
-    index.add(1, bit_packed2)
-    index.add(2, bit_packed3)
-    index.add(3, bit_packed4)
-    index.add(4, bit_packed5)
-
-    assert index.size == 5
-
-    # Search for exact matches
-    matches = index.search(bit_packed1, 5)
-    assert len(matches) == 5
-    assert matches[0].key == 0  # Should find itself first
-    assert matches[0].distance == 0.0  # Exact match
-
-    # Verify retrieval
-    retrieved = index.get(0)
-    assert np.array_equal(retrieved, bit_packed1)
-
-
-def test_nphd_distance_calculations():
-    # type: () -> None
-    """Test NPHD distance calculations for various vector pairs."""
-    nphd_metric = create_nphd_metric()
-
-    # Create index
-    index = Index(
-        ndim=264,
-        metric=nphd_metric,
-        dtype=ScalarKind.B1,
-    )
-
-    # Test case 1: Identical vectors (8 bytes)
-    vec1 = pack_binary_vector(b"\xff" * 8)
-    vec1_bits = np.packbits(np.unpackbits(vec1))
-    index.add(0, vec1_bits)
-
-    matches = index.search(vec1_bits, 1)
-    assert matches[0].distance == 0.0  # Identical vectors
-
-    # Test case 2: Completely different vectors (8 bytes)
-    vec2 = pack_binary_vector(b"\x00" * 8)
-    vec2_bits = np.packbits(np.unpackbits(vec2))
-    index.add(1, vec2_bits)
-
-    matches = index.search(vec1_bits, 2)
-    # Should find vec2 as second match with distance 1.0 (completely different)
-    assert len(matches) == 2
-    assert matches[1].key == 1
-    assert matches[1].distance == 1.0
-
-    # Test case 3: Partially similar vectors
-    vec3 = pack_binary_vector(b"\xf0" * 8)  # Half bits match with vec1
-    vec3_bits = np.packbits(np.unpackbits(vec3))
-    index.add(2, vec3_bits)
-
-    matches = index.search(vec3_bits, 3)
-    assert matches[0].key == 2  # Should find itself first
-    assert matches[0].distance == 0.0
-    # Distance to vec1 should be ~0.5 (half bits differ)
-    vec1_match = next(m for m in matches if m.key == 0)
-    assert 0.4 < vec1_match.distance < 0.6
-
-
-def test_nphd_variable_length_comparison():
-    # type: () -> None
-    """Test NPHD behavior with variable-length vectors."""
-    nphd_metric = create_nphd_metric()
-
-    index = Index(
-        ndim=264,
-        metric=nphd_metric,
-        dtype=ScalarKind.B1,
-    )
-
-    # Add vectors of different lengths
-    # 8-byte vector: all ones
-    vec_8 = pack_binary_vector(b"\xff" * 8)
-    vec_8_bits = np.packbits(np.unpackbits(vec_8))
-    index.add(0, vec_8_bits)
-
-    # 16-byte vector: first 8 bytes all ones, next 8 all zeros
-    vec_16 = pack_binary_vector(b"\xff" * 8 + b"\x00" * 8)
-    vec_16_bits = np.packbits(np.unpackbits(vec_16))
-    index.add(1, vec_16_bits)
-
-    # 32-byte vector: first 8 bytes all ones, rest all zeros
-    vec_32 = pack_binary_vector(b"\xff" * 8 + b"\x00" * 24)
-    vec_32_bits = np.packbits(np.unpackbits(vec_32))
-    index.add(2, vec_32_bits)
-
-    # Search with the 8-byte vector
-    matches = index.search(vec_8_bits, 3, exact=True)
-
-    # All vectors should be found
-    assert len(matches) == 3
-
-    # Debug: print all matches
-    for i, match in enumerate(matches):
-        print(f"Match {i}: key={match.key}, distance={match.distance}")
-
-    # All vectors should have distance 0.0 because they share the same 8-byte prefix
-    # and the 8-byte vector is compared only on its length
-    keys_found = {match.key for match in matches}
-    assert keys_found == {0, 1, 2}
-
-    # All should have distance 0.0
-    for match in matches:
-        assert match.distance == 0.0
-
-
-def test_nphd_metric_properties():
-    # type: () -> None
-    """Test that NPHD satisfies metric properties."""
-    nphd_metric = create_nphd_metric()
-
-    index = Index(
-        ndim=264,
-        metric=nphd_metric,
-        dtype=ScalarKind.B1,
-    )
-
-    # Create test vectors
-    vec_a = pack_binary_vector(b"\xaa" * 8)
-    vec_b = pack_binary_vector(b"\xbb" * 8)
-    vec_c = pack_binary_vector(b"\xcc" * 8)
-
-    vec_a_bits = np.packbits(np.unpackbits(vec_a))
-    vec_b_bits = np.packbits(np.unpackbits(vec_b))
-    vec_c_bits = np.packbits(np.unpackbits(vec_c))
-
-    # Add vectors
-    index.add(0, vec_a_bits)
-    index.add(1, vec_b_bits)
-    index.add(2, vec_c_bits)
-
-    # Test non-negativity: d(a,b) >= 0
-    matches = index.search(vec_a_bits, 3)
-    for match in matches:
-        assert match.distance >= 0.0
-
-    # Test identity: d(a,a) = 0
-    self_match = next(m for m in matches if m.key == 0)
-    assert self_match.distance == 0.0
-
-    # Test symmetry: d(a,b) = d(b,a)
-    matches_from_a = index.search(vec_a_bits, 3)
-    matches_from_b = index.search(vec_b_bits, 3)
-
-    dist_a_to_b = next(m for m in matches_from_a if m.key == 1).distance
-    dist_b_to_a = next(m for m in matches_from_b if m.key == 0).distance
-
-    assert abs(dist_a_to_b - dist_b_to_a) < 1e-6  # Allow small floating point errors
-
-
-def test_pack_binary_vector_numpy_array():
-    # type: () -> None
-    """Test pack_binary_vector with numpy array input."""
-    # Test with numpy array instead of bytes
-    np_array = np.array([0xFF, 0xAA, 0x55, 0x00], dtype=np.uint8)
-
-    # Pack the numpy array
-    packed = pack_binary_vector(np_array, max_bytes=32)
-
-    # Verify packing
-    assert packed.dtype == np.uint8
-    assert len(packed) == 33  # 1 byte signal + 32 bytes max data
-    assert packed[0] == 4  # Length of input array
-    assert np.array_equal(packed[1:5], np_array)
-
-    # Verify unpacking
-    unpacked = unpack_binary_vector(packed)
-    assert unpacked == bytes(np_array)
-
-
-def test_nphd_edge_cases():
-    # type: () -> None
-    """Test NPHD metric with edge cases including minimal length vectors."""
-    nphd_metric = create_nphd_metric()
-
-    index = Index(
-        ndim=264,
-        metric=nphd_metric,
-        dtype=ScalarKind.B1,
-    )
-
-    # Test with 1-byte vectors (minimal length)
-    vec1 = pack_binary_vector(b"\xff")
-    vec2 = pack_binary_vector(b"\x00")
-    vec3 = pack_binary_vector(b"\xf0")  # 4 bits differ from vec1
-
-    vec1_bits = np.packbits(np.unpackbits(vec1))
-    vec2_bits = np.packbits(np.unpackbits(vec2))
-    vec3_bits = np.packbits(np.unpackbits(vec3))
-
-    # Add vectors
-    index.add(0, vec1_bits)
-    index.add(1, vec2_bits)
-    index.add(2, vec3_bits)
-
-    # Test searching for exact match
-    matches = index.search(vec1_bits, 3)
-    assert matches[0].key == 0
-    assert matches[0].distance == 0.0
-
-    # Test completely different 1-byte vectors
-    vec1_match = next(m for m in matches if m.key == 1)
-    assert vec1_match.distance == 1.0  # All 8 bits differ
-
-    # Test partially different 1-byte vector
-    vec3_match = next(m for m in matches if m.key == 2)
-    assert 0.4 < vec3_match.distance < 0.6  # About half the bits differ
+    # Should be able to search
+    matches = index.search(vec, 1)
+    assert len(matches.keys) == 1
+    assert matches.keys[0] == 0

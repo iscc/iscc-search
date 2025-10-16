@@ -10,8 +10,7 @@ Confirm the expected behavior of usearch Index.add() with
 import numpy as np
 import pytest
 from numpy.testing import assert_array_equal
-from usearch.index import Index, ScalarKind, MetricKind
-
+from usearch.index import Index, MetricKind, ScalarKind
 
 # Tests for Index.add() with multi=False (single vector per key)
 
@@ -187,6 +186,7 @@ def test_add_multiple_vectors_same_key_returns_same_key():
     assert_array_equal(result3, expected3)
 
     # Verify all vectors were stored
+    # Note: usearch does not guarantee order when multi=True (uses hash-based storage)
     stored = idx.get(1)
     expected_stored = np.array(
         [
@@ -198,7 +198,10 @@ def test_add_multiple_vectors_same_key_returns_same_key():
     )
 
     assert stored.shape == (3, 4)
-    assert_array_equal(stored, expected_stored)
+    # Sort both arrays before comparison since order is not guaranteed
+    stored_sorted = stored[stored[:, 0].argsort()]
+    expected_sorted = expected_stored[expected_stored[:, 0].argsort()]
+    assert_array_equal(stored_sorted, expected_sorted)
 
 
 def test_add_with_key_none_multi_generates_key():
@@ -308,6 +311,7 @@ def test_add_batch_with_duplicate_keys_multi_stores_all_vectors():
     assert_array_equal(result, expected)
 
     # Verify all three vectors are stored for key 1
+    # Note: usearch does not guarantee order when multi=True (uses hash-based storage)
     stored = idx.get(1)
     expected_stored = np.array(
         [
@@ -319,7 +323,10 @@ def test_add_batch_with_duplicate_keys_multi_stores_all_vectors():
     )
 
     assert stored.shape == (3, 4)
-    assert_array_equal(stored, expected_stored)
+    # Sort both arrays before comparison since order is not guaranteed
+    stored_sorted = stored[stored[:, 0].argsort()]
+    expected_sorted = expected_stored[expected_stored[:, 0].argsort()]
+    assert_array_equal(stored_sorted, expected_sorted)
 
 
 # Tests for auto-key generation behavior

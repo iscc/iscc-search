@@ -110,3 +110,27 @@ class NphdIndex(Index):
 
         # Call parent add with padded vectors
         return super().add(keys, padded, **kwargs)
+
+    def get(self, keys, dtype=None):
+        # type: (int | Sequence[int], Any) -> Vector | list | None
+        """
+        Retrieve unpadded variable-length vectors by key(s).
+
+        :param keys: Integer key(s) to lookup
+        :param dtype: Optional data type (defaults to index dtype)
+        :return: Unpadded vector(s) or None for missing keys
+        """
+        results = super().get(keys, dtype=dtype)
+
+        if results is None:
+            return None
+
+        if isinstance(results, np.ndarray):
+            if results.ndim == 1:
+                return unpad_vectors(results.reshape(1, -1))[0]
+            return unpad_vectors(results)
+
+        return [
+            None if r is None else unpad_vectors(r.reshape(1, -1))[0] if r.ndim == 1 else unpad_vectors(r)
+            for r in results
+        ]

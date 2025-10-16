@@ -3,6 +3,7 @@ Scalable ANNS search for variable-length ISCC-UNITs.
 """
 
 from collections.abc import Sequence
+from dataclasses import dataclass
 from functools import cached_property
 from typing import Any
 
@@ -12,6 +13,138 @@ from numpy.typing import NDArray
 from usearch.index import BatchMatches, Matches
 
 from iscc_vdb.nphd import NphdIndex
+
+
+@dataclass
+class UnitMatch:
+    """Single search result with ISCC-ID key and distance."""
+
+    key: str
+    distance: float
+
+    def to_tuple(self):
+        # type: () -> tuple
+        """Convert to (key, distance) tuple."""
+        return self.key, self.distance
+
+
+class UnitMatches:
+    """Search results for a single ISCC-UNIT query with ISCC-ID string keys.
+
+    Wraps usearch Matches object to provide ISCC-ID strings as keys instead of integers.
+    """
+
+    def __init__(self, keys, distances, visited_members, computed_distances):
+        # type: (NDArray, NDArray, int, int) -> None
+        """Create UnitMatches from search results.
+
+        :param keys: NumPy array of ISCC-ID strings
+        :param distances: NumPy array of distances
+        :param visited_members: Number of graph nodes visited
+        :param computed_distances: Number of distance computations
+        """
+        self.keys = keys
+        self.distances = distances
+        self.visited_members = visited_members
+        self.computed_distances = computed_distances
+
+    def __len__(self):
+        # type: () -> int
+        """Return number of matches."""
+        return len(self.keys)
+
+    def __getitem__(self, index):
+        # type: (int) -> UnitMatch
+        """Get single match by index."""
+        if isinstance(index, int) and index < len(self):
+            return UnitMatch(
+                key=self.keys[index],
+                distance=float(self.distances[index]),
+            )
+        else:
+            raise IndexError(f"`index` must be an integer under {len(self)}")
+
+    def to_list(self):
+        # type: () -> list[tuple]
+        """Convert to list of (key, distance) tuples."""
+        return [(key, float(distance)) for key, distance in zip(self.keys, self.distances)]
+
+    def __repr__(self):
+        # type: () -> str
+        """Return string representation."""
+        return f"UnitMatches({len(self)})"
+
+
+class UnitBatchMatches(Sequence):
+    """Search results for multiple ISCC-UNIT queries with ISCC-ID string keys.
+
+    Wraps usearch BatchMatches object to provide ISCC-ID strings as keys instead of integers.
+    """
+
+    def __init__(self, keys, distances, counts, visited_members, computed_distances):
+        # type: (NDArray, NDArray, NDArray, int, int) -> None
+        """Create UnitBatchMatches from search results.
+
+        :param keys: 2D NumPy array of ISCC-ID strings (n_queries, k)
+        :param distances: 2D NumPy array of distances (n_queries, k)
+        :param counts: 1D NumPy array with actual matches per query
+        :param visited_members: Total graph nodes visited
+        :param computed_distances: Total distance computations
+        """
+        self.keys = keys
+        self.distances = distances
+        self.counts = counts
+        self.visited_members = visited_members
+        self.computed_distances = computed_distances
+
+    def __len__(self):
+        # type: () -> int
+        """Return number of queries."""
+        return len(self.counts)
+
+    def __getitem__(self, index):
+        # type: (int) -> UnitMatches
+        """Get UnitMatches for a single query by index."""
+        if isinstance(index, int) and index < len(self):
+            return UnitMatches(
+                keys=self.keys[index, : self.counts[index]],
+                distances=self.distances[index, : self.counts[index]],
+                visited_members=self.visited_members // len(self),
+                computed_distances=self.computed_distances // len(self),
+            )
+        else:
+            raise IndexError(f"`index` must be an integer under {len(self)}")
+
+    def to_list(self):
+        # type: () -> list[list[tuple]]
+        """Convert to list of lists of (key, distance) tuples."""
+        list_of_matches = [self.__getitem__(row) for row in range(self.__len__())]
+        return [match.to_tuple() for matches in list_of_matches for match in matches]
+
+    def mean_recall(self, expected, count=None):
+        # type: (NDArray, int | None) -> float
+        """Measure recall [0, 1] of matches containing expected ISCC-IDs."""
+        return self.count_matches(expected, count=count) / len(expected)
+
+    def count_matches(self, expected, count=None):
+        # type: (NDArray, int | None) -> int
+        """Count how many queries found their expected ISCC-ID."""
+        assert len(expected) == len(self)
+        recall = 0
+        if count is None:
+            count = self.keys.shape[1]
+
+        if count == 1:
+            recall = np.sum(self.keys[:, 0] == expected)
+        else:
+            for i in range(len(self)):
+                recall += expected[i] in self.keys[i, :count]
+        return recall
+
+    def __repr__(self):
+        # type: () -> str
+        """Return string representation."""
+        return f"UnitBatchMatches({np.sum(self.counts)} across {len(self)} queries)"
 
 
 class UnitIndex(NphdIndex):
@@ -102,14 +235,14 @@ class UnitIndex(NphdIndex):
         return iscc_units
 
     def search(self, vectors, count=10, **kwargs):
-        # type: (str | Sequence[str], int, Any) -> Matches | BatchMatches
+        # type: (str | Sequence[str], int, Any) -> UnitMatches | UnitBatchMatches
         """
         Search for nearest neighbors of ISCC-UNIT query vector(s).
 
         :param vectors: ISCC-UNIT string(s) to query
         :param count: Maximum number of nearest neighbors to return per query
         :param kwargs: Additional arguments passed to parent Index.search()
-        :return: Matches for single query or BatchMatches for batch queries with ISCC-ID keys
+        :return: UnitMatches for single query or UnitBatchMatches for batch queries with ISCC-ID keys
         """
         # Normalize input and convert ISCC-UNITs to binary vectors
         iscc_units = [vectors] if isinstance(vectors, str) else list(vectors)
@@ -120,19 +253,19 @@ class UnitIndex(NphdIndex):
 
         # Convert integer keys to ISCC-IDs
         if result.keys.ndim == 1:
-            # Matches object (single query)
+            # Single query - return UnitMatches
             iscc_ids = np.array(self._to_iscc_ids(result.keys))
-            return Matches(
+            return UnitMatches(
                 keys=iscc_ids,
                 distances=result.distances,
                 visited_members=result.visited_members,
                 computed_distances=result.computed_distances,
             )
 
-        # BatchMatches object (multiple queries)
+        # Batch queries - return UnitBatchMatches
         iscc_ids_list = [self._to_iscc_ids(row) for row in result.keys]
         iscc_ids_array = np.array(iscc_ids_list)
-        return BatchMatches(
+        return UnitBatchMatches(
             keys=iscc_ids_array,
             distances=result.distances,
             counts=result.counts,

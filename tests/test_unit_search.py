@@ -238,3 +238,228 @@ def test_search_count_exceeds_index_size(sample_iscc_ids, sample_meta_units):
 
     # Should return only 2 results (all vectors in index)
     assert len(result.keys) == 2
+
+
+# Tests for UnitMatches wrapper class methods
+
+
+def test_unit_matches_to_list_works_with_string_keys(sample_iscc_ids, sample_meta_units):
+    """UnitMatches.to_list() works with ISCC-ID string keys."""
+    idx = UnitIndex()
+    idx.add(sample_iscc_ids[:4], sample_meta_units)
+
+    result = idx.search(sample_meta_units[0], count=2)
+
+    # Should return list of tuples with string keys
+    result_list = result.to_list()
+    assert isinstance(result_list, list)
+    assert len(result_list) == 2
+    assert isinstance(result_list[0], tuple)
+    assert len(result_list[0]) == 2
+    assert isinstance(result_list[0][0], str)
+    assert result_list[0][0].startswith("ISCC:")
+    assert isinstance(result_list[0][1], float)
+
+
+def test_unit_matches_getitem_returns_unit_match(sample_iscc_ids, sample_meta_units):
+    """UnitMatches[i] returns UnitMatch with string key."""
+    idx = UnitIndex()
+    idx.add(sample_iscc_ids[:4], sample_meta_units)
+
+    result = idx.search(sample_meta_units[0], count=2)
+
+    # Access individual match
+    match = result[0]
+    assert hasattr(match, "key")
+    assert hasattr(match, "distance")
+    assert isinstance(match.key, str)
+    assert match.key.startswith("ISCC:")
+    assert isinstance(match.distance, float)
+
+
+def test_unit_match_to_tuple_works(sample_iscc_ids, sample_meta_units):
+    """UnitMatch.to_tuple() returns (key, distance) tuple."""
+    idx = UnitIndex()
+    idx.add(sample_iscc_ids[:4], sample_meta_units)
+
+    result = idx.search(sample_meta_units[0], count=1)
+    match = result[0]
+
+    # Convert to tuple
+    match_tuple = match.to_tuple()
+    assert isinstance(match_tuple, tuple)
+    assert len(match_tuple) == 2
+    assert match_tuple[0] == match.key
+    assert match_tuple[1] == match.distance
+
+
+def test_unit_matches_len_returns_match_count(sample_iscc_ids, sample_meta_units):
+    """len(UnitMatches) returns number of matches."""
+    idx = UnitIndex()
+    idx.add(sample_iscc_ids[:4], sample_meta_units)
+
+    result = idx.search(sample_meta_units[0], count=3)
+
+    assert len(result) == 3
+
+
+def test_unit_matches_repr(sample_iscc_ids, sample_meta_units):
+    """UnitMatches.__repr__() returns informative string."""
+    idx = UnitIndex()
+    idx.add(sample_iscc_ids[:4], sample_meta_units)
+
+    result = idx.search(sample_meta_units[0], count=2)
+
+    repr_str = repr(result)
+    assert "UnitMatches" in repr_str
+    assert "2" in repr_str
+
+
+# Tests for UnitBatchMatches wrapper class methods
+
+
+def test_unit_batch_matches_to_list_works_with_string_keys(sample_iscc_ids, sample_meta_units):
+    """UnitBatchMatches.to_list() works with ISCC-ID string keys."""
+    idx = UnitIndex()
+    idx.add(sample_iscc_ids[:4], sample_meta_units)
+
+    result = idx.search(sample_meta_units[:2], count=2)
+
+    # Should return list of lists of tuples with string keys
+    result_list = result.to_list()
+    assert isinstance(result_list, list)
+    assert len(result_list) == 4  # 2 queries × 2 matches each
+    assert isinstance(result_list[0], tuple)
+    assert len(result_list[0]) == 2
+    assert isinstance(result_list[0][0], str)
+    assert result_list[0][0].startswith("ISCC:")
+    assert isinstance(result_list[0][1], float)
+
+
+def test_unit_batch_matches_getitem_returns_unit_matches(sample_iscc_ids, sample_meta_units):
+    """UnitBatchMatches[i] returns UnitMatches object."""
+    idx = UnitIndex()
+    idx.add(sample_iscc_ids[:4], sample_meta_units)
+
+    result = idx.search(sample_meta_units[:2], count=2)
+
+    # Access individual query results
+    first_query = result[0]
+    assert hasattr(first_query, "keys")
+    assert hasattr(first_query, "distances")
+    assert len(first_query) == 2
+    assert isinstance(first_query.keys[0], str)
+    assert first_query.keys[0].startswith("ISCC:")
+
+
+def test_unit_batch_matches_len_returns_query_count(sample_iscc_ids, sample_meta_units):
+    """len(UnitBatchMatches) returns number of queries."""
+    idx = UnitIndex()
+    idx.add(sample_iscc_ids[:4], sample_meta_units)
+
+    result = idx.search(sample_meta_units[:3], count=2)
+
+    assert len(result) == 3
+
+
+def test_unit_batch_matches_repr(sample_iscc_ids, sample_meta_units):
+    """UnitBatchMatches.__repr__() returns informative string."""
+    idx = UnitIndex()
+    idx.add(sample_iscc_ids[:4], sample_meta_units)
+
+    result = idx.search(sample_meta_units[:2], count=2)
+
+    repr_str = repr(result)
+    assert "UnitBatchMatches" in repr_str
+    assert "2" in repr_str  # number of queries
+
+
+def test_unit_batch_matches_mean_recall_works(sample_iscc_ids, sample_meta_units):
+    """UnitBatchMatches.mean_recall() works with ISCC-ID strings."""
+    idx = UnitIndex()
+    idx.add(sample_iscc_ids[:4], sample_meta_units)
+
+    # Search for first two units
+    result = idx.search(sample_meta_units[:2], count=1)
+
+    # Expected keys are the ISCC-IDs we added
+    expected = np.array([sample_iscc_ids[0], sample_iscc_ids[1]])
+
+    # Should find both exact matches
+    recall = result.mean_recall(expected, count=1)
+    assert recall == 1.0
+
+
+def test_unit_batch_matches_count_matches_works(sample_iscc_ids, sample_meta_units):
+    """UnitBatchMatches.count_matches() works with ISCC-ID strings."""
+    idx = UnitIndex()
+    idx.add(sample_iscc_ids[:4], sample_meta_units)
+
+    # Search for first two units
+    result = idx.search(sample_meta_units[:2], count=1)
+
+    # Expected keys are the ISCC-IDs we added
+    expected = np.array([sample_iscc_ids[0], sample_iscc_ids[1]])
+
+    # Should find both exact matches
+    count = result.count_matches(expected, count=1)
+    assert count == 2
+
+
+def test_unit_batch_matches_getitem_chaining(sample_iscc_ids, sample_meta_units):
+    """Can chain indexing: batch[i][j] returns UnitMatch."""
+    idx = UnitIndex()
+    idx.add(sample_iscc_ids[:4], sample_meta_units)
+
+    result = idx.search(sample_meta_units[:2], count=2)
+
+    # Access first match of first query
+    match = result[0][0]
+    assert hasattr(match, "key")
+    assert hasattr(match, "distance")
+    assert isinstance(match.key, str)
+    assert match.key.startswith("ISCC:")
+
+
+def test_unit_batch_matches_getitem_index_error(sample_iscc_ids, sample_meta_units):
+    """UnitBatchMatches[i] raises IndexError for invalid index."""
+    idx = UnitIndex()
+    idx.add(sample_iscc_ids[:4], sample_meta_units)
+
+    result = idx.search(sample_meta_units[:2], count=2)
+
+    # Try to access invalid index
+    with pytest.raises(IndexError):
+        _ = result[10]
+
+
+def test_unit_batch_matches_count_matches_with_none_count(sample_iscc_ids, sample_meta_units):
+    """UnitBatchMatches.count_matches() with count=None uses all results."""
+    idx = UnitIndex()
+    idx.add(sample_iscc_ids[:4], sample_meta_units)
+
+    # Search for first two units, get all results
+    result = idx.search(sample_meta_units[:2], count=4)
+
+    # Expected keys are the ISCC-IDs we added
+    expected = np.array([sample_iscc_ids[0], sample_iscc_ids[1]])
+
+    # Should find both exact matches using default count (all results)
+    count = result.count_matches(expected, count=None)
+    assert count == 2
+
+
+def test_unit_batch_matches_count_matches_with_count_greater_than_one(sample_iscc_ids, sample_meta_units):
+    """UnitBatchMatches.count_matches() works with count > 1."""
+    idx = UnitIndex()
+    idx.add(sample_iscc_ids[:4], sample_meta_units)
+
+    # Search for first two units, get top 3 results each
+    result = idx.search(sample_meta_units[:2], count=3)
+
+    # Expected keys are the ISCC-IDs we added
+    expected = np.array([sample_iscc_ids[0], sample_iscc_ids[1]])
+
+    # Should find both exact matches within top 3
+    count = result.count_matches(expected, count=3)
+    assert count == 2

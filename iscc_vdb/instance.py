@@ -67,13 +67,17 @@ class PInstanceIndex(Protocol):
 class InstanceIndex:
     """LMDB-backed index for Instance-Code prefix search with dupsort/dupfixed optimization."""
 
-    def __init__(self, path, realm_id=0, map_size=10 * 1024 * 1024 * 1024):
-        # type: (os.PathLike, int, int) -> None
+    def __init__(self, path, realm_id=0, map_size=10 * 1024 * 1024 * 1024, durable=False, readahead=False):
+        # type: (os.PathLike, int, int, bool, bool) -> None
         """Create or open LMDB instance index.
 
         :param path: Directory path for LMDB environment
         :param realm_id: ISCC realm ID for ISCC-ID reconstruction (default 0)
         :param map_size: Maximum size in bytes (default 10GB)
+        :param durable: If True, flush to disk on commit (slower, ACID compliant).
+                        If False, defer flushes for performance (default, maintains ACI).
+        :param readahead: If True, enable OS readahead (better for sequential access).
+                          If False, disable readahead (better for random access, default).
         """
         self.path = os.fspath(path)
         self.realm_id = realm_id
@@ -85,7 +89,9 @@ class InstanceIndex:
             max_dbs=1,
             writemap=True,
             metasync=False,
-            sync=True,
+            sync=durable,
+            readahead=readahead,
+            max_spare_txns=16,
         )
 
         # Open named database with dupsort/dupfixed for 8-byte ISCC-IDs

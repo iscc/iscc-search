@@ -112,15 +112,14 @@ class InstanceIndex:
         if len(id_list) != len(ic_list):
             raise ValueError("Number of ISCC-IDs must match Instance-Codes")
 
-        count = 0
         with self.env.begin(write=True) as txn:
             cursor = txn.cursor(self.db)
-            for iscc_id, instance_code in zip(id_list, ic_list):
-                # dupdata=False prevents duplicates, returns False if exists
-                if cursor.put(instance_code, iscc_id, dupdata=False):
-                    count += 1
+            # Build (key, value) tuples: (instance_code, iscc_id)
+            items = list(zip(ic_list, id_list))
+            # putmulti returns (consumed, added) - dupdata=False prevents duplicates
+            _, added = cursor.putmulti(items, dupdata=False)
 
-        return count
+        return added
 
     def get(self, instance_codes):
         # type: (InstanceCodes) -> list[str]

@@ -68,7 +68,7 @@ def benchmark_add(index, iscc_ids, instance_codes):
     elapsed = time.perf_counter() - start
 
     throughput = count / elapsed
-    print(f"\nResults:")
+    print("\nResults:")
     print(f"  Entries added: {count:,}")
     print(f"  Time: {elapsed:.2f}s")
     print(f"  Throughput: {throughput:,.0f} entries/sec")
@@ -90,20 +90,20 @@ def benchmark_get(index, instance_codes, sample_size=1000):
     # Overall benchmark
     start = time.perf_counter()
     for ic_code in sample:
-        results = index.get(ic_code)
+        index.get(ic_code)
     elapsed = time.perf_counter() - start
 
     avg_time_ms = (elapsed / sample_size) * 1000
     throughput = sample_size / elapsed
 
-    print(f"\nResults:")
+    print("\nResults:")
     print(f"  Queries: {sample_size:,}")
     print(f"  Total time: {elapsed:.2f}s")
     print(f"  Avg query time: {avg_time_ms:.3f}ms")
     print(f"  Throughput: {throughput:,.0f} queries/sec")
 
     # Per-length breakdown
-    print(f"\nPer-length breakdown:")
+    print("\nPer-length breakdown:")
     length_times = {}  # type: dict[int, float]
     for bit_length in [64, 128, 192, 256]:
         # Filter samples by length
@@ -116,7 +116,7 @@ def benchmark_get(index, instance_codes, sample_size=1000):
         if length_samples:
             start = time.perf_counter()
             for ic_code in length_samples:
-                results = index.get(ic_code)
+                index.get(ic_code)
             elapsed_len = time.perf_counter() - start
             avg_ms = (elapsed_len / len(length_samples)) * 1000
             length_times[bit_length] = avg_ms
@@ -148,7 +148,7 @@ def benchmark_search(index, instance_codes, sample_size=1000):
     avg_matches = total_matches / sample_size
     throughput = sample_size / elapsed
 
-    print(f"\nResults:")
+    print("\nResults:")
     print(f"  Searches: {sample_size:,}")
     print(f"  Total time: {elapsed:.2f}s")
     print(f"  Avg search time: {avg_time_ms:.3f}ms")
@@ -156,7 +156,7 @@ def benchmark_search(index, instance_codes, sample_size=1000):
     print(f"  Throughput: {throughput:,.0f} searches/sec")
 
     # Per-length breakdown
-    print(f"\nPer-length breakdown:")
+    print("\nPer-length breakdown:")
     length_times = {}  # type: dict[int, float]
     for bit_length in [64, 128, 192, 256]:
         # Filter samples by length
@@ -200,7 +200,7 @@ def benchmark_search_unidirectional(index, instance_codes, sample_size=1000):
     avg_matches = total_matches / sample_size
     throughput = sample_size / elapsed
 
-    print(f"\nResults:")
+    print("\nResults:")
     print(f"  Searches: {sample_size:,}")
     print(f"  Total time: {elapsed:.2f}s")
     print(f"  Avg search time: {avg_time_ms:.3f}ms")
@@ -227,10 +227,13 @@ def main():
 
         # Initialize index
         print(f"\nInitializing InstanceIndex at {db_path}")
+        print("Configuration: durable=False (optimized for speed)")
         index = InstanceIndex(
             db_path,
             realm_id=0,
             map_size=20 * 1024 * 1024 * 1024,  # 20GB
+            durable=False,  # Optimize for speed (benchmark mode)
+            readahead=False,  # Better for random access
         )
 
         # Generate test data
@@ -247,7 +250,7 @@ def main():
         print("Summary")
         print(f"{'=' * 70}")
         print(f"Database size: {len(index):,} entries")
-        print(f"\nOperation Performance:")
+        print("\nOperation Performance:")
         print(
             f"  Add:             {(add_time / num_entries) * 1000:.4f}ms avg  ({num_entries / add_time:,.0f} ops/sec)"
         )

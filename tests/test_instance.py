@@ -276,6 +276,32 @@ def test_search_no_matches(temp_instance_path, sample_iscc_ids, sample_instance_
     idx.close()
 
 
+def test_search_multiple_ids_same_instance(temp_instance_path, sample_iscc_ids):
+    # type: (typing.Any, list[str]) -> None
+    """Test prefix search with multiple ISCC-IDs mapped to same Instance-Code."""
+    idx = InstanceIndex(temp_instance_path)
+
+    # Create Instance-Code with common prefix
+    ic_bytes = bytes([1, 2, 3, 4, 5, 6, 7, 8])
+    instance_code = "ISCC:" + ic.encode_base32(
+        ic.encode_header(ic.MT.INSTANCE, ic.ST.NONE, ic.VS.V0, len(ic_bytes) * 8) + ic_bytes
+    )
+
+    # Add multiple ISCC-IDs to same Instance-Code
+    idx.add([sample_iscc_ids[0], sample_iscc_ids[1]], [instance_code, instance_code])
+
+    # Search with prefix - should find one Instance-Code with both ISCC-IDs
+    prefix = bytes([1, 2, 3, 4])
+    results = idx.search(prefix)
+
+    assert len(results) == 1
+    assert instance_code in results
+    assert len(results[instance_code]) == 2
+    assert sample_iscc_ids[0] in results[instance_code]
+    assert sample_iscc_ids[1] in results[instance_code]
+    idx.close()
+
+
 def test_remove_by_iscc_id_single(temp_instance_path, sample_iscc_ids, sample_instance_codes):
     # type: (typing.Any, list[str], list[str]) -> None
     """Test removing by single ISCC-ID."""

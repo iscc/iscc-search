@@ -192,7 +192,7 @@ def test_get_multiple_ids_for_one_instance(temp_instance_path, sample_iscc_ids, 
 
 def test_search_prefix_single(temp_instance_path, sample_iscc_ids):
     # type: (typing.Any, list[str]) -> None
-    """Test prefix search with single prefix."""
+    """Test prefix search with single prefix - returns ISCC-ID -> [Instance-Codes] mapping."""
     idx = InstanceIndex(temp_instance_path)
 
     # Create Instance-Codes with common prefix
@@ -215,19 +215,21 @@ def test_search_prefix_single(temp_instance_path, sample_iscc_ids):
     # Add entries
     idx.add([sample_iscc_ids[0], sample_iscc_ids[1], sample_iscc_ids[2]], [ic1, ic2, ic3])
 
-    # Search with prefix (first 8 bytes)
-    results = idx.search(base_bytes)
+    # Search with prefix (first 8 bytes) - should match ic1 and ic2 (forward search only)
+    results = idx.search(base_bytes, bidirectional=False)
 
-    assert len(results) == 2  # Should match ic1 and ic2
-    assert ic1 in results
-    assert ic2 in results
-    assert ic3 not in results
+    # Results should be ISCC-ID -> [Instance-Codes]
+    assert len(results) == 2  # Should have 2 ISCC-IDs
+    assert sample_iscc_ids[0] in results
+    assert sample_iscc_ids[1] in results
+    assert ic1 in results[sample_iscc_ids[0]]
+    assert ic2 in results[sample_iscc_ids[1]]
     idx.close()
 
 
 def test_search_prefix_batch(temp_instance_path, sample_iscc_ids):
     # type: (typing.Any, list[str]) -> None
-    """Test prefix search with multiple prefixes."""
+    """Test prefix search with multiple prefixes - returns ISCC-ID -> [Instance-Codes] mapping."""
     idx = InstanceIndex(temp_instance_path)
 
     # Create Instance-Codes with different prefixes
@@ -253,12 +255,16 @@ def test_search_prefix_batch(temp_instance_path, sample_iscc_ids):
     idx.add([sample_iscc_ids[0], sample_iscc_ids[1], sample_iscc_ids[2]], [ic1, ic2, ic3])
 
     # Search with both prefixes
-    results = idx.search([prefix1, prefix2])
+    results = idx.search([prefix1, prefix2], bidirectional=False)
 
-    assert len(results) == 3  # Should match all 3
-    assert ic1 in results
-    assert ic2 in results
-    assert ic3 in results
+    # Results should be ISCC-ID -> [Instance-Codes]
+    assert len(results) == 3  # Should have 3 ISCC-IDs
+    assert sample_iscc_ids[0] in results
+    assert sample_iscc_ids[1] in results
+    assert sample_iscc_ids[2] in results
+    assert ic1 in results[sample_iscc_ids[0]]
+    assert ic2 in results[sample_iscc_ids[1]]
+    assert ic3 in results[sample_iscc_ids[2]]
     idx.close()
 
 
@@ -290,15 +296,16 @@ def test_search_multiple_ids_same_instance(temp_instance_path, sample_iscc_ids):
     # Add multiple ISCC-IDs to same Instance-Code
     idx.add([sample_iscc_ids[0], sample_iscc_ids[1]], [instance_code, instance_code])
 
-    # Search with prefix - should find one Instance-Code with both ISCC-IDs
+    # Search with prefix - should find both ISCC-IDs, each mapping to same Instance-Code
     prefix = bytes([1, 2, 3, 4])
-    results = idx.search(prefix)
+    results = idx.search(prefix, bidirectional=False)
 
-    assert len(results) == 1
-    assert instance_code in results
-    assert len(results[instance_code]) == 2
-    assert sample_iscc_ids[0] in results[instance_code]
-    assert sample_iscc_ids[1] in results[instance_code]
+    # Results should be ISCC-ID -> [Instance-Codes]
+    assert len(results) == 2  # Two ISCC-IDs
+    assert sample_iscc_ids[0] in results
+    assert sample_iscc_ids[1] in results
+    assert instance_code in results[sample_iscc_ids[0]]
+    assert instance_code in results[sample_iscc_ids[1]]
     idx.close()
 
 
@@ -533,9 +540,149 @@ def test_search_string_prefix(temp_instance_path, sample_iscc_ids):
     prefix_ic = "ISCC:" + ic.encode_base32(
         ic.encode_header(ic.MT.INSTANCE, ic.ST.NONE, ic.VS.V0, len(base_bytes) * 8) + base_bytes
     )
-    results = idx.search(prefix_ic)
+    results = idx.search(prefix_ic, bidirectional=False)
 
+    # Results should be ISCC-ID -> [Instance-Codes]
     assert len(results) > 0
+    assert sample_iscc_ids[0] in results
+    idx.close()
+
+
+def test_search_bidirectional_128bit(temp_instance_path, sample_iscc_ids):
+    # type: (typing.Any, list[str]) -> None
+    """Test bidirectional search with 128-bit code finds 64-bit prefix."""
+    idx = InstanceIndex(temp_instance_path)
+
+    # Create 64-bit Instance-Code (stored)
+    ic_64_bytes = bytes([1, 2, 3, 4, 5, 6, 7, 8])
+    ic_64 = "ISCC:" + ic.encode_base32(ic.encode_header(ic.MT.INSTANCE, ic.ST.NONE, ic.VS.V0, 64) + ic_64_bytes)
+
+    # Add ISCC-ID with 64-bit Instance-Code
+    idx.add(sample_iscc_ids[0], ic_64)
+
+    # Search with 128-bit code that has 64-bit as prefix
+    ic_128_bytes = ic_64_bytes + bytes([10, 11, 12, 13, 14, 15, 16, 17])
+    ic_128 = "ISCC:" + ic.encode_base32(ic.encode_header(ic.MT.INSTANCE, ic.ST.NONE, ic.VS.V0, 128) + ic_128_bytes)
+
+    # Bidirectional search should find the 64-bit match
+    results = idx.search(ic_128, bidirectional=True)
+
+    assert len(results) == 1
+    assert sample_iscc_ids[0] in results
+    assert ic_64 in results[sample_iscc_ids[0]]
+    idx.close()
+
+
+def test_search_bidirectional_256bit(temp_instance_path, sample_iscc_ids):
+    # type: (typing.Any, list[str]) -> None
+    """Test bidirectional search with 256-bit code finds 64-bit and 128-bit prefixes."""
+    idx = InstanceIndex(temp_instance_path)
+
+    # Create 64-bit and 128-bit Instance-Codes (stored)
+    ic_64_bytes = bytes([1, 2, 3, 4, 5, 6, 7, 8])
+    ic_64 = "ISCC:" + ic.encode_base32(ic.encode_header(ic.MT.INSTANCE, ic.ST.NONE, ic.VS.V0, 64) + ic_64_bytes)
+
+    ic_128_bytes = ic_64_bytes + bytes([10, 11, 12, 13, 14, 15, 16, 17])
+    ic_128 = "ISCC:" + ic.encode_base32(ic.encode_header(ic.MT.INSTANCE, ic.ST.NONE, ic.VS.V0, 128) + ic_128_bytes)
+
+    # Add different ISCC-IDs with 64-bit and 128-bit Instance-Codes
+    idx.add(sample_iscc_ids[0], ic_64)
+    idx.add(sample_iscc_ids[1], ic_128)
+
+    # Search with 256-bit code that has both as prefixes
+    ic_256_bytes = ic_128_bytes + bytes([20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35])
+    ic_256 = "ISCC:" + ic.encode_base32(ic.encode_header(ic.MT.INSTANCE, ic.ST.NONE, ic.VS.V0, 256) + ic_256_bytes)
+
+    # Bidirectional search should find both matches
+    results = idx.search(ic_256, bidirectional=True)
+
+    assert len(results) == 2
+    assert sample_iscc_ids[0] in results
+    assert sample_iscc_ids[1] in results
+    assert ic_64 in results[sample_iscc_ids[0]]
+    assert ic_128 in results[sample_iscc_ids[1]]
+    idx.close()
+
+
+def test_search_bidirectional_disabled(temp_instance_path, sample_iscc_ids):
+    # type: (typing.Any, list[str]) -> None
+    """Test that bidirectional=False only finds forward matches."""
+    idx = InstanceIndex(temp_instance_path)
+
+    # Create 64-bit Instance-Code (stored)
+    ic_64_bytes = bytes([1, 2, 3, 4, 5, 6, 7, 8])
+    ic_64 = "ISCC:" + ic.encode_base32(ic.encode_header(ic.MT.INSTANCE, ic.ST.NONE, ic.VS.V0, 64) + ic_64_bytes)
+
+    # Add ISCC-ID with 64-bit Instance-Code
+    idx.add(sample_iscc_ids[0], ic_64)
+
+    # Search with 128-bit code (longer than stored)
+    ic_128_bytes = ic_64_bytes + bytes([10, 11, 12, 13, 14, 15, 16, 17])
+    ic_128 = "ISCC:" + ic.encode_base32(ic.encode_header(ic.MT.INSTANCE, ic.ST.NONE, ic.VS.V0, 128) + ic_128_bytes)
+
+    # With bidirectional=False, should NOT find the 64-bit match
+    results = idx.search(ic_128, bidirectional=False)
+
+    assert len(results) == 0  # No forward matches
+    idx.close()
+
+
+def test_search_sorting_by_match_length(temp_instance_path, sample_iscc_ids):
+    # type: (typing.Any, list[str]) -> None
+    """Test that Instance-Codes are sorted by length (longest first) for each ISCC-ID."""
+    idx = InstanceIndex(temp_instance_path)
+
+    # Create Instance-Codes with same prefix but different lengths
+    prefix_64 = bytes([1, 2, 3, 4, 5, 6, 7, 8])
+    prefix_128 = prefix_64 + bytes([10, 11, 12, 13, 14, 15, 16, 17])
+    prefix_256 = prefix_128 + bytes([20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35])
+
+    ic_64 = "ISCC:" + ic.encode_base32(ic.encode_header(ic.MT.INSTANCE, ic.ST.NONE, ic.VS.V0, 64) + prefix_64)
+    ic_128 = "ISCC:" + ic.encode_base32(ic.encode_header(ic.MT.INSTANCE, ic.ST.NONE, ic.VS.V0, 128) + prefix_128)
+    ic_256 = "ISCC:" + ic.encode_base32(ic.encode_header(ic.MT.INSTANCE, ic.ST.NONE, ic.VS.V0, 256) + prefix_256)
+
+    # Add same ISCC-ID to all three Instance-Codes
+    idx.add([sample_iscc_ids[0], sample_iscc_ids[0], sample_iscc_ids[0]], [ic_64, ic_128, ic_256])
+
+    # Search with 256-bit code - should find all three
+    results = idx.search(ic_256, bidirectional=True)
+
+    assert len(results) == 1
+    assert sample_iscc_ids[0] in results
+    instance_codes = results[sample_iscc_ids[0]]
+    assert len(instance_codes) == 3
+
+    # Verify sorting: 256-bit first, then 128-bit, then 64-bit
+    assert instance_codes[0] == ic_256  # Longest match first
+    assert instance_codes[1] == ic_128
+    assert instance_codes[2] == ic_64
+    idx.close()
+
+
+def test_search_sorting_iscc_ids_by_match_quality(temp_instance_path, sample_iscc_ids):
+    # type: (typing.Any, list[str]) -> None
+    """Test that ISCC-IDs are ordered by their longest match length."""
+    idx = InstanceIndex(temp_instance_path)
+
+    # Create Instance-Codes with different lengths
+    prefix = bytes([1, 2, 3, 4, 5, 6, 7, 8])
+
+    ic_64 = "ISCC:" + ic.encode_base32(ic.encode_header(ic.MT.INSTANCE, ic.ST.NONE, ic.VS.V0, 64) + prefix)
+    ic_128 = "ISCC:" + ic.encode_base32(
+        ic.encode_header(ic.MT.INSTANCE, ic.ST.NONE, ic.VS.V0, 128) + prefix + bytes([10, 11, 12, 13, 14, 15, 16, 17])
+    )
+
+    # Add different ISCC-IDs: one with 64-bit match, one with 128-bit match
+    idx.add(sample_iscc_ids[0], ic_64)  # 64-bit match
+    idx.add(sample_iscc_ids[1], ic_128)  # 128-bit match (better)
+
+    # Search with 128-bit code
+    results = idx.search(ic_128, bidirectional=True)
+
+    # Verify dict ordering: ISCC-ID with 128-bit match should come first
+    result_keys = list(results.keys())
+    assert result_keys[0] == sample_iscc_ids[1]  # 128-bit match first
+    assert result_keys[1] == sample_iscc_ids[0]  # 64-bit match second
     idx.close()
 
 

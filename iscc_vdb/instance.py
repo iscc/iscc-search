@@ -57,10 +57,10 @@ class PInstanceIndex(Protocol):
     def search(self, instance_codes):
         # type: (InstanceCodes) -> dict[str, list[str]]
         """
-        Return all ISCC-IDS for all instance_codes with a matching prefix.
+        Return ISCC-IDs mapped to their matching Instance-Codes.
 
         :param instance_codes: Instance-Code string or digest or list of Instance-Code strings or digests
-        :return: Dict with ISCC-IDs as keys and sets of matched ISCC-CODEs.
+        :return: Dict with ISCC-IDs as keys and lists of matched Instance-Codes as values.
         """
 
 
@@ -140,33 +140,54 @@ class InstanceIndex:
 
         return [self._bytes_to_iscc_id(iid) for iid in sorted(result_ids)]
 
-    def search(self, instance_codes):
-        # type: (InstanceCodes) -> dict[str, list[str]]
-        """Return all ISCC-IDs for instance codes with matching prefix(es).
+    def search(self, instance_codes, bidirectional=True):
+        # type: (InstanceCodes, bool) -> dict[str, list[str]]
+        """Return ISCC-IDs mapped to their matching Instance-Codes.
+
+        ISCC-IDs with longer matches appear first in the dict.
+        For each ISCC-ID, Instance-Codes are sorted by length (longest first).
 
         :param instance_codes: Instance-Code prefix(es) to search
-        :return: Dict mapping Instance-Code to list of ISCC-IDs
+        :param bidirectional: If True, also match shorter stored codes (default: True)
+        :return: Dict mapping ISCC-ID to list of matching Instance-Codes
         """
         ic_list = self._normalize_to_bytes_list(instance_codes)
-
-        results = {}  # type: dict[str, list[str]]
+        temp_results = {}  # type: dict[str, set[str]]  # IC -> ISCC-IDs
 
         with self.env.begin() as txn:
             cursor = txn.cursor(self.db)
 
-            for prefix in ic_list:
-                if not cursor.set_range(prefix):
-                    continue
+            for search_code in ic_list:
+                search_len = len(search_code)
 
-                # With dupsort, iteration yields each duplicate separately
-                for key, value in cursor:
-                    if not key.startswith(prefix):
-                        break
+                # Search with full length (forward search + exact match)
+                self._search_prefix(cursor, search_code, temp_results)
 
-                    ic_str = self._bytes_to_instance_code(key)
-                    if ic_str not in results:
-                        results[ic_str] = []
-                    results[ic_str].append(self._bytes_to_iscc_id(value))
+                if bidirectional:
+                    # Then check shorter prefixes (128-bit, then 64-bit)
+                    if search_len == 32:  # 256-bit search
+                        self._search_prefix(cursor, search_code[:16], temp_results)
+
+                    if search_len >= 16:  # 128-bit or 256-bit search
+                        self._search_prefix(cursor, search_code[:8], temp_results)
+
+        # Invert: ISCC-ID -> [(length, Instance-Code), ...]
+        inverted = {}  # type: dict[str, list[tuple[int, str]]]
+        for ic_str, iscc_ids in temp_results.items():
+            ic_bytes_len = len(self._to_bytes(ic_str))
+            for iscc_id in iscc_ids:
+                if iscc_id not in inverted:
+                    inverted[iscc_id] = []
+                inverted[iscc_id].append((ic_bytes_len, ic_str))
+
+        # Sort each ISCC-ID's matches by length (longest first)
+        for iscc_id in inverted:
+            inverted[iscc_id].sort(reverse=True)
+
+        # Build final dict ordered by longest match length
+        results = {}  # type: dict[str, list[str]]
+        for iscc_id in sorted(inverted.keys(), key=lambda x: inverted[x][0][0], reverse=True):
+            results[iscc_id] = [ic for _, ic in inverted[iscc_id]]
 
         return results
 
@@ -280,3 +301,24 @@ class InstanceIndex:
         bit_length = len(digest) * 8
         header = ic.encode_header(ic.MT.INSTANCE, ic.ST.NONE, ic.VS.V0, bit_length)
         return "ISCC:" + ic.encode_base32(header + digest)
+
+    def _search_prefix(self, cursor, prefix, results):
+        # type: (lmdb.Cursor, bytes, dict[str, set[str]]) -> None
+        """Search for all entries with matching prefix and accumulate results.
+
+        :param cursor: LMDB cursor for iteration
+        :param prefix: Prefix bytes to search for
+        :param results: Dict to accumulate Instance-Code -> set of ISCC-IDs
+        """
+        if not cursor.set_range(prefix):
+            return
+
+        # With dupsort, iteration yields each duplicate separately
+        for key, value in cursor:
+            if not key.startswith(prefix):
+                break
+
+            ic_str = self._bytes_to_instance_code(key)
+            if ic_str not in results:
+                results[ic_str] = set()
+            results[ic_str].add(self._bytes_to_iscc_id(value))

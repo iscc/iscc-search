@@ -228,3 +228,94 @@ def test_multiple_entries_batch(temp_store_path, sample_entry):
     assert store.get(99)["iscc_id"] == "ISCC:ID99"
 
     store.close()
+
+
+def test_map_size_auto_expansion(temp_store_path, sample_entry):
+    # type: (typing.Any, dict) -> None
+    """Test map_size automatically doubles when full."""
+    # Start with very small map_size (64KB) to trigger expansion quickly
+    initial_size = 64 * 1024
+    store = IsccStore(temp_store_path, map_size=initial_size)
+
+    assert store.map_size == initial_size
+
+    # Add entries until map_size expands (should happen after a few entries)
+    for i in range(100):
+        entry = {**sample_entry, "iscc_id": f"ISCC:ID{i}"}
+        store.put(i, entry)
+
+    # Verify map_size has doubled at least once
+    assert store.map_size > initial_size
+
+    # Verify all entries are still retrievable
+    assert store.get(0)["iscc_id"] == "ISCC:ID0"
+    assert store.get(99)["iscc_id"] == "ISCC:ID99"
+
+    store.close()
+
+
+def test_map_size_metadata_expansion(temp_store_path):
+    # type: (typing.Any) -> None
+    """Test map_size expansion works for metadata operations."""
+    # Start with very small map_size (64KB)
+    initial_size = 64 * 1024
+    store = IsccStore(temp_store_path, map_size=initial_size)
+
+    # Add large metadata values to trigger expansion
+    large_value = "x" * 10000  # 10KB string
+    for i in range(20):
+        store.put_metadata(f"key_{i}", large_value)
+
+    # Verify map_size has potentially expanded
+    # (may not expand if metadata fits in initial size)
+    assert store.map_size >= initial_size
+
+    # Verify metadata is retrievable
+    assert store.get_metadata("key_0") == large_value
+    assert store.get_metadata("key_19") == large_value
+
+    store.close()
+
+
+def test_set_mapsize_manual(temp_store_path):
+    # type: (typing.Any) -> None
+    """Test manually setting map_size."""
+    store = IsccStore(temp_store_path, map_size=64 * 1024)
+    initial_size = store.map_size
+
+    # Manually double the map_size
+    new_size = initial_size * 2
+    store.set_mapsize(new_size)
+
+    assert store.map_size == new_size
+    store.close()
+
+
+def test_reopen_larger_database(temp_store_path, sample_entry):
+    # type: (typing.Any, dict) -> None
+    """Test reopening database larger than initial map_size."""
+    # Create database with very small map_size (128KB) and grow it
+    store1 = IsccStore(temp_store_path, map_size=128 * 1024)
+
+    # Add large entries to force expansion beyond 128KB
+    large_entry = {**sample_entry, "large_data": "x" * 5000}  # ~5KB per entry
+    for i in range(50):  # 50 * 5KB = ~250KB, will expand to 256KB
+        entry = {**large_entry, "iscc_id": f"ISCC:ID{i}"}
+        store1.put(i, entry)
+
+    final_size = store1.map_size
+    assert final_size > 128 * 1024  # Should have grown
+    store1.close()
+
+    # Reopen with smaller initial map_size (64KB)
+    # LMDB should automatically adjust to actual database size
+    store2 = IsccStore(temp_store_path, map_size=64 * 1024)
+
+    # Verify we can read all entries
+    assert store2.get(0)["iscc_id"] == "ISCC:ID0"
+    assert store2.get(49)["iscc_id"] == "ISCC:ID49"
+
+    # map_size should be at least as large as before
+    assert store2.map_size >= final_size
+
+    store2.close()

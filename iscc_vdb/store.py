@@ -21,16 +21,23 @@ class IsccStore:
     Time ordering is preserved as LMDB sorts integer keys by value.
     """
 
-    def __init__(self, path, realm_id=0, durable=True):
-        # type: (str | os.PathLike, int, bool) -> None
+    def __init__(self, path, realm_id=0, durable=True, map_size=None):
+        # type: (str | os.PathLike, int, bool, int | None) -> None
         """Initialize IsccStore with LMDB environment and named databases.
 
         :param path: Directory path for LMDB storage
         :param realm_id: ISCC realm ID (0-1) for ISCC-ID reconstruction (default: 0)
         :param durable: If True, full persistence; if False, reduced durability for testing
+        :param map_size: Initial maximum size database may grow to (default: 256MB, auto-doubles when full)
         """
-        map_size = 10 * 1024 * 1024 * 1024  # 10GB
+        if map_size is None:
+            map_size = 256 * 1024 * 1024  # 256MB
         self.env = lmdb.open(str(path), map_size=map_size, max_dbs=2, sync=durable, metasync=durable, lock=durable)
+
+        # Adopt actual database size if reopening existing database
+        # Calling with 0 tells LMDB to use the actual on-disk size
+        self.env.set_mapsize(0)
+
         self.entries_db = self.env.open_db(b"entries", integerkey=True)
         self.metadata_db = self.env.open_db(b"metadata")
 
@@ -48,11 +55,19 @@ class IsccStore:
 
         :param iscc_id: 64-bit integer ISCC-ID
         :param entry: Entry dict with iscc_id, iscc_code, units keys
+
+        Note: Automatically doubles map_size if full and retries operation.
         """
         key = struct.pack("Q", iscc_id)
         value = simdjson.dumps(entry).encode("utf-8")
-        with self.env.begin(write=True, db=self.entries_db) as txn:
-            txn.put(key, value)
+        try:
+            with self.env.begin(write=True, db=self.entries_db) as txn:
+                txn.put(key, value)
+        except lmdb.MapFullError:
+            new_size = self.map_size * 2
+            self.env.set_mapsize(new_size)
+            with self.env.begin(write=True, db=self.entries_db) as txn:
+                txn.put(key, value)
 
     def get(self, iscc_id):
         # type: (int) -> dict | None
@@ -112,11 +127,37 @@ class IsccStore:
 
         :param key: Metadata key string
         :param value: Metadata value (must be JSON-serializable)
+
+        Note: Automatically doubles map_size if full and retries operation.
         """
         key_bytes = key.encode("utf-8")
         value_bytes = simdjson.dumps(value).encode("utf-8")
-        with self.env.begin(write=True, db=self.metadata_db) as txn:
-            txn.put(key_bytes, value_bytes)
+        try:
+            with self.env.begin(write=True, db=self.metadata_db) as txn:
+                txn.put(key_bytes, value_bytes)
+        except lmdb.MapFullError:
+            new_size = self.map_size * 2
+            self.env.set_mapsize(new_size)
+            with self.env.begin(write=True, db=self.metadata_db) as txn:
+                txn.put(key_bytes, value_bytes)
+
+    @property
+    def map_size(self):
+        # type: () -> int
+        """Get current map_size from LMDB environment."""
+        return self.env.info()["map_size"]
+
+    def set_mapsize(self, new_size):
+        # type: (int) -> None
+        """Increase the maximum size the database may grow to.
+
+        :param new_size: New maximum size in bytes (must be larger than current size)
+        :raises lmdb.Error: If active transactions exist in current process
+        :raises ValueError: If new_size would shrink the database
+
+        Note: Must be called when no transactions are active. Only increases persist.
+        """
+        self.env.set_mapsize(new_size)
 
     def close(self):
         # type: () -> None

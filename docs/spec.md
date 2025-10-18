@@ -1,4 +1,4 @@
-# ISCC-VDB Spec
+# ISCC-VDB Spec - Draft
 
 A Nearest Neighbor Search Index for ISCCs
 
@@ -76,80 +76,179 @@ Index Entry:
 - units - List of ISCC-UNITS
 - features
 
+## Architecture
+
+### Storage Structure
+
+```
+{path}/
+  primary.lmdb/          # IsccStore - primary entry storage (source of truth)
+  instance/              # InstanceIndex - exact/prefix matching
+  content-text-v0/       # UnitIndex - similarity search
+  semantic-text-v0/      # UnitIndex - similarity search
+  meta-none-v0/          # UnitIndex - similarity search
+  ...
+```
+
+### IsccStore Class
+
+**Module:** `iscc_vdb/store.py`
+
+The `IsccStore` class provides durable LMDB-backed storage for ISCC entries and metadata. It serves as the
+primary source of truth, with UnitIndex and InstanceIndex acting as derived indexes for search.
+
+**LMDB Schema:**
+
+- **Environment**: max_dbs=2, map_size=10GB
+- **Entries database** (name: b'entries', integerkey=True):
+    - Keys: 64-bit unsigned integers (ISCC-ID as native byte order)
+    - Values: JSON-serialized dict with `{"iscc_id": str, "iscc_code": str, "units": list[str]}`
+    - Entries may include other digital asset metadata that we store and retrieve transparently
+- **Metadata database** (name: b'metadata'):
+    - Keys: UTF-8 encoded strings (`__realm_id__`, `__max_dim__`)
+    - Values: JSON-serialized values
+- **Custom metadata**: Users can optionally store additional key-value pairs in metadata database
+
+**Time Ordering:**
+
+ISCC-ID integers are stored with integerkey=True, which preserves chronological order as LMDB sorts by integer
+value (not byte representation). Iteration yields entries in ascending timestamp order.
+
+**Key Features:**
+
+- Atomic writes via LMDB transactions
+- Efficient single-lookup retrieval by ISCC-ID
+- Persistent storage of index metadata (realm_id, max_dim)
+- Support for index rebuild from primary storage
+- Optional extended metadata storage
+- Configurable durability: full persistence (production) or reduced durability (testing)
+
+**Constructor:**
+
+```python
+IsccStore(path, realm_id=0, durable=True)
+```
+
+**Parameters:**
+
+- `path` (str | os.PathLike): Directory path for LMDB storage
+- `realm_id` (int): ISCC realm ID (0-1) for ISCC-ID reconstruction (default: 0)
+- `durable` (bool): If True, enables full LMDB persistence; if False, uses sync=False, metasync=False,
+    lock=False for testing (default: True)
+
+**Methods:**
+
+```python
+store.put(iscc_id: int, entry: dict) -> None
+store.get(iscc_id: int) -> dict | None
+store.delete(iscc_id: int) -> bool
+store.iter_entries() -> Iterator[tuple[int, dict]]
+store.get_metadata(key: str) -> Any
+store.put_metadata(key: str, value: Any) -> None
+store.close() -> None
+```
+
 ## High-Level Core API (PYTHON, CLI, REST)
 
 ### IsccIndex Class
 
-The IsccIndex manages multiple internal indexes:
+The IsccIndex manages multiple internal components:
 
-- One UnitIndex per ISCC-UNIT-TYPE (META-NONE-V0, CONTENT-TEXT-V0, etc.)
-- One InstanceIndex for exact/prefix matching
+- **IsccStore**: Primary LMDB storage (source of truth)
+- **UnitIndex** instances: One per ISCC-UNIT-TYPE (META-NONE-V0, CONTENT-TEXT-V0, etc.)
+- **InstanceIndex**: Exact/prefix matching for INSTANCE units
 
 ### Constructor
 
 ```python
-IsccIndex(path, realm_id=0, max_dim=256, **kwargs)
+IsccIndex(path=None, realm_id=0, max_dim=256, **kwargs)
 ```
 
 **Parameters:**
 
-- `path` (str | os.PathLike): Directory path for index storage
+- `path` (str | os.PathLike | None): Directory path for index storage (optional, creates in-memory index if
+    None)
 - `realm_id` (int): ISCC realm ID (0-1) for ISCC-ID reconstruction (default: 0)
 - `max_dim` (int): Maximum vector dimension in bits for UNIT indexes (default: 256)
 - `**kwargs`: Additional arguments passed to underlying UnitIndex instances
 
+**Behavior:**
+
+- When `path` is provided: Creates durable index with full LMDB persistence
+- When `path=None`: Creates in-memory index in temporary directory with reduced durability (sync=False,
+    metasync=False, lock=False)
+- In-memory indexes automatically cleaned up on `close()`
+- In-memory mode is ideal for testing scenarios where durability is not required
+
 **Returns:** IsccIndex instance
+
+**Examples:**
+
+```python
+# Durable production index
+idx = IsccIndex(path="./my_index")
+
+# In-memory testing index (auto-cleanup on close)
+idx = IsccIndex()
+# ... use for tests ...
+idx.close()  # Temp files automatically removed
+```
 
 ### add() - Add ISCC entries to index
 
 ```python
-add(iscc_ids=None, iscc_codes=None, units=None) -> list[str]
+add(entries) -> list[str]
 ```
 
 **Parameters:**
 
-- `iscc_ids` (str | list[str] | None): ISCC-ID string(s) or None for auto-generation
-- `iscc_codes` (str | list[str] | None): ISCC-CODE string(s) to decompose and index
-- `units` (list[str] | list\[list[str]\] | None): Pre-decomposed ISCC-UNIT string(s)
+- `entries` (dict | list[dict]): Single entry dict or list of entry dicts with optional fields:
+    - `iscc_id` (str): ISCC-ID string (optional, auto-generated if omitted)
+    - `iscc_code` (str): ISCC-CODE string to decompose and index
+    - `units` (list[str]): Pre-decomposed ISCC-UNIT strings
 
 **Behavior:**
 
-- Either `iscc_codes` or `units` must be provided (not both)
-- If `units` is provided, `iscc_codes` is ignored
-- If `iscc_ids` is None, auto-generates sequential ISCC-IDs starting from 0
-- Single string inputs are normalized to lists internally
-- Decomposes ISCC-CODEs into units automatically
+- Single dict input normalized to list internally
+- Each entry must provide at least one of `iscc_code` or `units`
+- If `units` is present and not empty, `iscc_code` is ignored
+- If `iscc_id` is omitted, auto-generates sequential ISCC-IDs starting from 0
+- Decomposes ISCC-CODEs into units automatically (when `units` not provided)
+- Writes entry to IsccStore first (atomic, source of truth)
 - Routes each unit to appropriate UnitIndex based on ISCC-UNIT-TYPE
 - Stores INSTANCE units in InstanceIndex for exact matching
 - All units for same entry share the same ISCC-ID
+- Symmetric with `get()`: can add what `get()` returns
 
 **Returns:** List of ISCC-ID strings (one per entry added)
 
 **Raises:**
 
-- `ValueError`: If neither iscc_codes nor units provided
-- `ValueError`: If number of iscc_ids doesn't match number of entries
+- `ValueError`: If entry has neither `iscc_code` nor `units`
+- `ValueError`: If entry has `units` as empty list and no `iscc_code`
 
 **Examples:**
 
 ```python
-# Auto-generate ISCC-IDs
-idx.add(iscc_codes="ISCC:KACYPXW445FTYNJ3CYSXHAFJMA2HUWULUNRFE3BLHRSCXYH2M5AEGQY")
+# Single entry, auto-generate ISCC-ID
+idx.add({"iscc_code": "ISCC:KACYPXW445FTYNJ3CYSXHAFJMA2HUWULUNRFE3BLHRSCXYH2M5AEGQY"})
 # Returns: ["ISCC:IAACBFKZG52UU"]
 
-# Explicit ISCC-IDs
-idx.add(
-    iscc_ids=["ISCC:IAACBFKZG52UU", "ISCC:IAACBFKZG52UV"],
-    iscc_codes=["ISCC:KAC...", "ISCC:KEC..."]
-)
+# Batch with explicit ISCC-IDs
+idx.add([
+    {"iscc_id": "ISCC:IAACBFKZG52UU", "iscc_code": "ISCC:KAC..."},
+    {"iscc_id": "ISCC:IAACBFKZG52UV", "iscc_code": "ISCC:KEC..."}
+])
 
 # Pre-decomposed units (batch)
-idx.add(
-    units=[
-        ["ISCC:GAA...", "ISCC:EAA...", "ISCC:IAA..."],
-        ["ISCC:GAB...", "ISCC:EAB...", "ISCC:IAB..."]
-    ]
-)
+idx.add([
+    {"units": ["ISCC:GAA...", "ISCC:EAA...", "ISCC:IAA..."]},
+    {"units": ["ISCC:GAB...", "ISCC:EAB...", "ISCC:IAB..."]}
+])
+
+# Copy from get() result
+entry = idx.get("ISCC:IAACBFKZG52UU")
+idx2.add(entry)  # Add to another index
 ```
 
 ### get() - Retrieve entries by ISCC-ID
@@ -166,8 +265,7 @@ get(iscc_ids) -> list[dict] | dict | None
 
 - Single ISCC-ID: returns dict or None
 - Multiple ISCC-IDs: returns list of dicts (with None for missing)
-- Retrieves units from all UnitIndex instances
-- Retrieves instance codes from InstanceIndex
+- Retrieves entry directly from IsccStore (single lookup, fast)
 
 **Returns:**
 
@@ -290,6 +388,7 @@ remove(iscc_ids) -> int
 
 **Behavior:**
 
+- Removes entries from IsccStore
 - Removes entries from all UnitIndex instances
 - Removes entries from InstanceIndex
 - Single string input normalized to list internally
@@ -307,6 +406,31 @@ print(count)  # 3 (removed from META, CONTENT, INSTANCE indexes)
 count = idx.remove(["ISCC:IAACBFKZG52UU", "ISCC:IAACBFKZG52UV"])
 ```
 
+### rebuild() - Rebuild derived indexes from primary storage
+
+```python
+rebuild() -> None
+```
+
+**Behavior:**
+
+- Clears all UnitIndex instances
+- Clears InstanceIndex
+- Iterates through all entries in IsccStore
+- Re-indexes all units and instance codes from primary storage
+- Useful for index corruption recovery, parameter changes, or format upgrades
+
+**Returns:** None
+
+**Examples:**
+
+```python
+# Rebuild after corruption or to apply new parameters
+idx = IsccIndex.restore(path)
+idx.rebuild()
+idx.save()
+```
+
 ### save() - Persist index to disk
 
 ```python
@@ -315,9 +439,9 @@ save() -> None
 
 **Behavior:**
 
+- IsccStore persists automatically (LMDB transactions)
 - Saves all UnitIndex instances to separate files
-- Saves InstanceIndex LMDB environment
-- Saves index metadata (realm_id, max_dim, unit types)
+- InstanceIndex persists automatically (LMDB)
 
 **Returns:** None
 
@@ -329,9 +453,9 @@ load() -> None
 
 **Behavior:**
 
+- Opens IsccStore (restores metadata: realm_id, max_dim)
 - Loads all UnitIndex instances from files
 - Opens InstanceIndex LMDB environment
-- Restores index metadata
 
 **Returns:** None
 
@@ -343,9 +467,9 @@ view() -> None
 
 **Behavior:**
 
+- Opens IsccStore (restores metadata: realm_id, max_dim)
 - Memory-maps UnitIndex instances (read-only)
-- Opens InstanceIndex LMDB environment
-- Restores index metadata
+- Opens InstanceIndex LMDB environment (read-only)
 
 **Returns:** None
 
@@ -365,6 +489,7 @@ close() -> None
 
 **Behavior:**
 
+- Closes IsccStore LMDB environment
 - Closes all UnitIndex instances
 - Closes InstanceIndex LMDB environment
 
@@ -407,9 +532,17 @@ def unit_types() -> list[str]
 All Python API methods exposed as CLI commands:
 
 ```bash
-# Add entries
-iscc-vdb add --iscc-code "ISCC:KAC..." [--iscc-id "ISCC:IAA..."]
+# Add single entry with auto-generated ISCC-ID
+iscc-vdb add --iscc-code "ISCC:KAC..."
+
+# Add entry with explicit ISCC-ID
+iscc-vdb add --iscc-id "ISCC:IAA..." --iscc-code "ISCC:KAC..."
+
+# Add entry with pre-decomposed units
 iscc-vdb add --units "ISCC:GAA..." "ISCC:EAA..." "ISCC:IAA..."
+
+# Add from JSON file (batch)
+iscc-vdb add --file entries.json
 
 # Get entry
 iscc-vdb get "ISCC:IAACBFKZG52UU"
@@ -423,6 +556,7 @@ iscc-vdb remove "ISCC:IAACBFKZG52UU"
 
 # Index management
 iscc-vdb save
+iscc-vdb rebuild  # Rebuild indexes from primary storage
 iscc-vdb info  # Show index stats (size, unit_types, etc.)
 ```
 
@@ -431,12 +565,13 @@ iscc-vdb info  # Show index stats (size, unit_types, etc.)
 RESTful endpoints mapping to Python API:
 
 ```
-POST   /add        - Add entries (body: {iscc_ids, iscc_codes, units})
+POST   /add        - Add entries (body: {entries: dict | list[dict]})
 GET    /get/{id}   - Get single entry
-POST   /get        - Get multiple entries (body: {iscc_ids})
+POST   /get        - Get multiple entries (body: {iscc_ids: list[str]})
 POST   /search     - Search index (body: {iscc_codes, units, count, exact})
 DELETE /remove/{id} - Remove single entry
-POST   /remove     - Remove multiple entries (body: {iscc_ids})
+POST   /remove     - Remove multiple entries (body: {iscc_ids: list[str]})
+POST   /rebuild    - Rebuild indexes from primary storage
 GET    /info       - Get index info (size, unit_types, etc.)
 POST   /save       - Persist index
 ```
@@ -448,5 +583,24 @@ POST   /save       - Persist index
   "status": "success",
   "data": { ... },
   "error": null
+}
+```
+
+**POST /add Examples:**
+
+```json
+// Single entry
+{
+  "entries": {
+    "iscc_code": "ISCC:KACYPXW445FTYNJ3CYSXHAFJMA2HUWULUNRFE3BLHRSCXYH2M5AEGQY"
+  }
+}
+
+// Batch with mixed formats
+{
+  "entries": [
+    {"iscc_id": "ISCC:IAA...", "iscc_code": "ISCC:KAC..."},
+    {"units": ["ISCC:GAA...", "ISCC:EAA...", "ISCC:IAA..."]}
+  ]
 }
 ```

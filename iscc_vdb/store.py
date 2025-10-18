@@ -213,12 +213,16 @@ class IsccStore:
         """
         current_size = self.map_size
         if new_size < current_size:
-            raise ValueError(
-                f"Cannot shrink database: new_size ({new_size:,}) < current map_size ({current_size:,})"
-            )
+            raise ValueError(f"Cannot shrink database: new_size ({new_size:,}) < current map_size ({current_size:,})")
         self.env.set_mapsize(new_size)
 
     def close(self):
         # type: () -> None
         """Close LMDB environment and release resources."""
         self.env.close()
+
+    def __del__(self):
+        # type: () -> None
+        """Ensure environment is closed on object deletion."""
+        if hasattr(self, "env"):
+            self.env.close()

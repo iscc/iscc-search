@@ -17,6 +17,7 @@ import os
 from typing import Any, Protocol
 import lmdb
 import iscc_core as ic
+from loguru import logger
 
 
 IsccIds = str | list[str] | bytes | list[bytes]
@@ -139,7 +140,9 @@ class InstanceIndex:
                 # putmulti returns (consumed, added) - dupdata=False prevents duplicates
                 _, added = cursor.putmulti(items, dupdata=False)
         except lmdb.MapFullError:
-            new_size = self.map_size * 2
+            old_size = self.map_size
+            new_size = old_size * 2
+            logger.info(f"InstanceIndex map_size increased from {old_size:,} to {new_size:,} bytes")
             self.env.set_mapsize(new_size)
             with self.env.begin(write=True) as txn:
                 cursor = txn.cursor(self.db)

@@ -12,6 +12,7 @@ from typing import Any, Iterator
 
 import lmdb
 import simdjson
+from loguru import logger
 
 
 class IsccStore:
@@ -91,7 +92,9 @@ class IsccStore:
                 cursor = txn.cursor(self.entries_db)
                 _, added = cursor.putmulti(items, dupdata=False)
         except lmdb.MapFullError:
-            new_size = self.map_size * 2
+            old_size = self.map_size
+            new_size = old_size * 2
+            logger.info(f"IsccStore map_size increased from {old_size:,} to {new_size:,} bytes")
             self.env.set_mapsize(new_size)
             with self.env.begin(write=True, db=self.entries_db) as txn:
                 cursor = txn.cursor(self.entries_db)
@@ -166,7 +169,9 @@ class IsccStore:
             with self.env.begin(write=True, db=self.metadata_db) as txn:
                 txn.put(key_bytes, value_bytes)
         except lmdb.MapFullError:
-            new_size = self.map_size * 2
+            old_size = self.map_size
+            new_size = old_size * 2
+            logger.info(f"IsccStore metadata map_size increased from {old_size:,} to {new_size:,} bytes")
             self.env.set_mapsize(new_size)
             with self.env.begin(write=True, db=self.metadata_db) as txn:
                 txn.put(key_bytes, value_bytes)

@@ -39,6 +39,7 @@ dependencies = [
     "usearch @ https://iscc.github.io/usearch/usearch/usearch-2.21.0-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.whl ; sys_platform == 'linux' and python_version == '3.13'",
     "usearch @ https://iscc.github.io/usearch/usearch/usearch-2.21.0-cp313-cp313-win_amd64.whl ; sys_platform == 'win32' and python_version == '3.13'",
     "pysimdjson (>=7.0.2,<8.0.0)",
+    "loguru>=0.7.3",
 ]
 
 [project.urls]

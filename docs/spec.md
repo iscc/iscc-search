@@ -7,18 +7,19 @@ A Nearest Neighbor Search Index for ISCCs
 ### Terms and Definitions
 
 - **ISCC** - Any ISCC-CODE, ISCC-UNIT, or ISCC-ID
-- **ISCC-HEADER** - Self describing 3-byte header section of all ISCCs designating MainType, SubType, Version, Length
+- **ISCC-HEADER** - Self describing 3-byte header section of all ISCCs designating MainType, SubType, Version,
+    Length
 - **ISCC-BODY** - Actual payload of an ISCC, similarity preserving compact binary code, hash or timestamp
 - **ISCC-UNIT** - ISCC-HEADER + ISCC-BODY where the ISCC-BODY is calculated from a single algorithm
 - **ISCC-CODE** - ISCC-HEADER + ISCC-BODY where the ISCC-BODY is a sequence of multiple ISCC-UNIT BODYs
-  - DATA and INSTANCE are the minimum required mandatory ISCC-UNITS for a valid ISCC-CODE
+    - DATA and INSTANCE are the minimum required mandatory ISCC-UNITS for a valid ISCC-CODE
 - **ISCC-ID** - Globally unique digital asset idendifier (ISCC-HEADER + 52-bit timestamp + 12-bit server-id)
 - **SIMPRINT** - Headerless base64 encoded similarity hash that describes a content segment (granular feature)
 - ISCC-UNIT-TYPE: Identifier for UNIT-TYPES that can be indexed together with meaningful similarity search
-  - All ISCCs of the same type are stored in the same index regardless of length
-  - The type is identified by the composite of MainType, SubType, Version
-  - The typs is encoded in the first 12 bits of the ISCC-HEADER
-  - String representation example: CONTENT-TEXT-V0 (identified by the first 12 bits of an ISCC-UNIT)
+    - All ISCCs of the same type are stored in the same index regardless of length
+    - The type is identified by the composite of MainType, SubType, Version
+    - The typs is encoded in the first 12 bits of the ISCC-HEADER
+    - String representation example: CONTENT-TEXT-V0 (identified by the first 12 bits of an ISCC-UNIT)
 
 ### ISCC Framework & Resources
 
@@ -38,6 +39,7 @@ The ISCC Framework consist of a collection of python libraries and applications 
 **Helpful Note**: These repositories are all available on deepwiki
 
 ## ISCC-VDB Features
+
 - ISCC-CODEs or extended ISCC-UNITs as bit-vectors for fast similarity search
 - Distance Metric: Normalized Prefix Hamming Distance (NPHD)
 - Highlevel API for indexing ISCCs
@@ -50,9 +52,9 @@ Overview of the different ISCC-UNITs that can be indexed for similarity search:
 
 - **META** ISCC-UNIT encodes syntactic/lexical **metadata** similarity
 - **SEMANTIC** ISCC-UNITs encode semantic/conceptual **content** similarity
-  - SubTypes: TEXT, IMAGE
+    - SubTypes: TEXT, IMAGE
 - **CONTENT** ISCC-UNITs encode perceptual/syntactic/structural **content** similarity
-  - SubTypes: TEXT, IMAGE, AUDIO, VIDEO, MIXED
+    - SubTypes: TEXT, IMAGE, AUDIO, VIDEO, MIXED
 - **DATA** ISCC-UNIT encode raw **data** similarity
 
 ISCC-UNIT for exact (prefix) match indexing:
@@ -60,6 +62,7 @@ ISCC-UNIT for exact (prefix) match indexing:
 - **INSTANCE** ISCC-UNIT identifies **data** like a checksum or cryptographic hash (depending on length)
 
 ## Interfaces
+
 - python library
 - command line tool
 - REST API service
@@ -67,6 +70,7 @@ ISCC-UNIT for exact (prefix) match indexing:
 ## Data Model
 
 Index Entry:
+
 - iscc_id - Unique Digital (Optional)
 - iscc_code - ISCC-CODE
 - units - List of ISCC-UNITS
@@ -77,6 +81,7 @@ Index Entry:
 ### IsccIndex Class
 
 The IsccIndex manages multiple internal indexes:
+
 - One UnitIndex per ISCC-UNIT-TYPE (META-NONE-V0, CONTENT-TEXT-V0, etc.)
 - One InstanceIndex for exact/prefix matching
 
@@ -87,6 +92,7 @@ IsccIndex(path, realm_id=0, max_dim=256, **kwargs)
 ```
 
 **Parameters:**
+
 - `path` (str | os.PathLike): Directory path for index storage
 - `realm_id` (int): ISCC realm ID (0-1) for ISCC-ID reconstruction (default: 0)
 - `max_dim` (int): Maximum vector dimension in bits for UNIT indexes (default: 256)
@@ -101,11 +107,13 @@ add(iscc_ids=None, iscc_codes=None, units=None) -> list[str]
 ```
 
 **Parameters:**
+
 - `iscc_ids` (str | list[str] | None): ISCC-ID string(s) or None for auto-generation
 - `iscc_codes` (str | list[str] | None): ISCC-CODE string(s) to decompose and index
-- `units` (list[str] | list[list[str]] | None): Pre-decomposed ISCC-UNIT string(s)
+- `units` (list[str] | list\[list[str]\] | None): Pre-decomposed ISCC-UNIT string(s)
 
 **Behavior:**
+
 - Either `iscc_codes` or `units` must be provided (not both)
 - If `units` is provided, `iscc_codes` is ignored
 - If `iscc_ids` is None, auto-generates sequential ISCC-IDs starting from 0
@@ -118,10 +126,12 @@ add(iscc_ids=None, iscc_codes=None, units=None) -> list[str]
 **Returns:** List of ISCC-ID strings (one per entry added)
 
 **Raises:**
+
 - `ValueError`: If neither iscc_codes nor units provided
 - `ValueError`: If number of iscc_ids doesn't match number of entries
 
 **Examples:**
+
 ```python
 # Auto-generate ISCC-IDs
 idx.add(iscc_codes="ISCC:KACYPXW445FTYNJ3CYSXHAFJMA2HUWULUNRFE3BLHRSCXYH2M5AEGQY")
@@ -149,19 +159,23 @@ get(iscc_ids) -> list[dict] | dict | None
 ```
 
 **Parameters:**
+
 - `iscc_ids` (str | list[str]): ISCC-ID string(s) to lookup
 
 **Behavior:**
+
 - Single ISCC-ID: returns dict or None
 - Multiple ISCC-IDs: returns list of dicts (with None for missing)
 - Retrieves units from all UnitIndex instances
 - Retrieves instance codes from InstanceIndex
 
 **Returns:**
+
 - Single query: `dict | None` with keys: `iscc_id`, `iscc_code`, `units`
 - Multiple queries: `list[dict | None]`
 
 **Examples:**
+
 ```python
 # Single lookup
 result = idx.get("ISCC:IAACBFKZG52UU")
@@ -186,12 +200,14 @@ search(iscc_codes=None, units=None, count=10, exact=False) -> IsccMatches | Iscc
 ```
 
 **Parameters:**
+
 - `iscc_codes` (str | list[str] | None): ISCC-CODE string(s) to decompose and search
-- `units` (list[str] | list[list[str]] | None): Pre-decomposed extended length ISCC-UNIT string(s) to search
+- `units` (list[str] | list\[list[str]\] | None): Pre-decomposed extended length ISCC-UNIT string(s) to search
 - `count` (int): Maximum number of results per query (default: 10)
 - `exact` (bool): Use exhaustive search instead of approximate (default: False)
 
 **Behavior:**
+
 - Either `iscc_codes` or `units` must be provided
 - If `units` is provided, `iscc_codes` is ignored
 - Decomposes ISCC-CODEs into units automatically
@@ -201,10 +217,12 @@ search(iscc_codes=None, units=None, count=10, exact=False) -> IsccMatches | Iscc
 - Results ranked by combined distance (weighted average across unit types)
 
 **Returns:**
+
 - Single query: `IsccMatches` object
 - Multiple queries: `IsccBatchMatches` object
 
 **IsccMatches attributes:**
+
 - `keys` (ndarray[str]): Array of ISCC-ID strings
 - `distances` (ndarray[float]): Array of combined distances
 - `unit_matches` (dict): Per-unit-type UnitMatches objects
@@ -213,26 +231,30 @@ search(iscc_codes=None, units=None, count=10, exact=False) -> IsccMatches | Iscc
 - `computed_distances` (int): Total distance computations
 
 **IsccMatches methods:**
+
 - `__len__()`: Number of matches
 - `__getitem__(index)`: Get IsccMatch object at index
 - `to_list()`: Convert to list of (key, distance) tuples
 
 **IsccBatchMatches attributes:**
+
 - `keys` (ndarray[str, str]): 2D array of ISCC-ID strings (n_queries, k)
 - `distances` (ndarray[float, float]): 2D array of distances
 - `counts` (ndarray[int]): Number of valid results per query
 - `unit_matches` (dict): Per-unit-type UnitBatchMatches objects
-- `instance_matches` (list[list[str]]): Exact instance matches per query
+- `instance_matches` (list\[list[str]\]): Exact instance matches per query
 - `visited_members` (int): Total graph nodes visited
 - `computed_distances` (int): Total distance computations
 
 **IsccBatchMatches methods:**
+
 - `__len__()`: Number of queries
 - `__getitem__(index)`: Get IsccMatches for query at index
 - `to_list()`: Convert to list of lists of tuples
 - `mean_recall(expected, count=None)`: Measure recall against expected results
 
 **Examples:**
+
 ```python
 # Single search
 matches = idx.search(iscc_codes="ISCC:KACYPXW445FTYNJ...", count=5)
@@ -263,9 +285,11 @@ remove(iscc_ids) -> int
 ```
 
 **Parameters:**
+
 - `iscc_ids` (str | list[str]): ISCC-ID string(s) to remove
 
 **Behavior:**
+
 - Removes entries from all UnitIndex instances
 - Removes entries from InstanceIndex
 - Single string input normalized to list internally
@@ -273,6 +297,7 @@ remove(iscc_ids) -> int
 **Returns:** Total number of mappings removed across all indexes
 
 **Examples:**
+
 ```python
 # Remove single entry
 count = idx.remove("ISCC:IAACBFKZG52UU")
@@ -289,6 +314,7 @@ save() -> None
 ```
 
 **Behavior:**
+
 - Saves all UnitIndex instances to separate files
 - Saves InstanceIndex LMDB environment
 - Saves index metadata (realm_id, max_dim, unit types)
@@ -302,6 +328,7 @@ load() -> None
 ```
 
 **Behavior:**
+
 - Loads all UnitIndex instances from files
 - Opens InstanceIndex LMDB environment
 - Restores index metadata
@@ -315,6 +342,7 @@ view() -> None
 ```
 
 **Behavior:**
+
 - Memory-maps UnitIndex instances (read-only)
 - Opens InstanceIndex LMDB environment
 - Restores index metadata
@@ -336,6 +364,7 @@ close() -> None
 ```
 
 **Behavior:**
+
 - Closes all UnitIndex instances
 - Closes InstanceIndex LMDB environment
 
@@ -350,6 +379,7 @@ IsccIndex.restore(path, view=False, **kwargs) -> IsccIndex | None
 ```
 
 **Parameters:**
+
 - `path` (str | os.PathLike): Directory path to restore from
 - `view` (bool): If True, memory-map instead of loading (default: False)
 - `**kwargs`: Additional arguments passed to IsccIndex constructor
@@ -362,12 +392,14 @@ IsccIndex.restore(path, view=False, **kwargs) -> IsccIndex | None
 @property
 def size() -> int
 ```
+
 **Returns:** Total number of unique ISCC-IDs in index
 
 ```python
 @property
 def unit_types() -> list[str]
 ```
+
 **Returns:** List of indexed ISCC-UNIT-TYPEs (e.g., ["META-NONE-V0", "CONTENT-TEXT-V0"])
 
 ## CLI Interface
@@ -410,6 +442,7 @@ POST   /save       - Persist index
 ```
 
 **Response Format:**
+
 ```json
 {
   "status": "success",
@@ -417,4 +450,3 @@ POST   /save       - Persist index
   "error": null
 }
 ```
-

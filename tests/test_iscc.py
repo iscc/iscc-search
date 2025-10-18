@@ -14,13 +14,14 @@ def temp_index():
     """Create temporary IsccIndex for testing."""
     with tempfile.TemporaryDirectory() as tmpdir:
         path = os.path.join(tmpdir, "test_index")
-        idx = IsccIndex(path)
+        idx = IsccIndex(path=path)
         yield idx
-        idx.instance_index.close()
+        if idx.instance_index is not None:
+            idx.instance_index.close()
 
 
 def test_init_creates_directory(temp_index):
-    """Constructor creates index directory."""
+    """Constructor creates index directory when path is provided."""
     assert os.path.exists(temp_index.path)
     assert os.path.isdir(temp_index.path)
 
@@ -36,7 +37,7 @@ def test_init_custom_parameters():
     """Constructor accepts custom parameters."""
     with tempfile.TemporaryDirectory() as tmpdir:
         path = os.path.join(tmpdir, "test_index")
-        idx = IsccIndex(path, realm_id=1, max_dim=128, connectivity=16)
+        idx = IsccIndex(path=path, realm_id=1, max_dim=128, connectivity=16)
 
         assert idx.path == path
         assert idx.realm_id == 1
@@ -47,7 +48,7 @@ def test_init_custom_parameters():
 
 
 def test_init_creates_instance_index(temp_index):
-    """Constructor creates InstanceIndex."""
+    """Constructor creates InstanceIndex when path is provided."""
     assert hasattr(temp_index, "instance_index")
     assert isinstance(temp_index.instance_index, InstanceIndex)
 
@@ -63,7 +64,7 @@ def test_init_creates_empty_unit_indexes_dict(temp_index):
 
 
 def test_init_instance_index_has_correct_realm_id(temp_index):
-    """InstanceIndex is initialized with correct realm_id."""
+    """InstanceIndex is initialized with correct realm_id when path is provided."""
     assert temp_index.instance_index.realm_id == temp_index.realm_id
 
 
@@ -73,9 +74,32 @@ def test_init_with_pathlike_object():
 
     with tempfile.TemporaryDirectory() as tmpdir:
         path = Path(tmpdir) / "test_index"
-        idx = IsccIndex(path)
+        idx = IsccIndex(path=path)
 
         assert idx.path == os.fspath(path)
         assert os.path.exists(idx.path)
 
         idx.instance_index.close()
+
+
+def test_init_without_path():
+    """Constructor works without path parameter."""
+    idx = IsccIndex()
+
+    assert idx.path is None
+    assert idx.realm_id == 0
+    assert idx.max_dim == 256
+    assert idx.unit_index_kwargs == {}
+    assert isinstance(idx.unit_indexes, dict)
+    assert len(idx.unit_indexes) == 0
+    assert idx.instance_index is None
+
+
+def test_init_path_none_explicit():
+    """Constructor handles explicit path=None."""
+    idx = IsccIndex(path=None, realm_id=1, max_dim=128)
+
+    assert idx.path is None
+    assert idx.realm_id == 1
+    assert idx.max_dim == 128
+    assert idx.instance_index is None

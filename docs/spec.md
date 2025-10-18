@@ -99,54 +99,140 @@ primary source of truth, with UnitIndex and InstanceIndex acting as derived inde
 
 **LMDB Schema:**
 
-- **Environment**: max_dbs=2, map_size=10GB
-- **Entries database** (name: b'entries', integerkey=True):
-    - Keys: 64-bit unsigned integers (ISCC-ID as native byte order)
+- **Environment**: max_dbs=2, configurable map_size (auto-expands when full)
+- **Entries database** (name: b'entries', integerkey=False):
+    - Keys: 8-byte big-endian representation of 64-bit ISCC-IDs
     - Values: JSON-serialized dict with `{"iscc_id": str, "iscc_code": str, "units": list[str]}`
     - Entries may include other digital asset metadata that we store and retrieve transparently
 - **Metadata database** (name: b'metadata'):
-    - Keys: UTF-8 encoded strings (`__realm_id__`, `__max_dim__`)
+    - Keys: UTF-8 encoded strings (`__realm_id__`)
     - Values: JSON-serialized values
 - **Custom metadata**: Users can optionally store additional key-value pairs in metadata database
 
 **Time Ordering:**
 
-ISCC-ID integers are stored with integerkey=True, which preserves chronological order as LMDB sorts by integer
-value (not byte representation). Iteration yields entries in ascending timestamp order.
+ISCC-ID keys are stored as big-endian bytes. LMDB's lexicographic sorting of big-endian byte sequences preserves
+chronological order (ISCC-IDs contain timestamps). Iteration yields entries in ascending timestamp order.
+
+**Automatic Storage Management:**
+
+The store automatically doubles `map_size` when LMDB reports the database is full, ensuring writes never fail
+due to capacity limits.
 
 **Key Features:**
 
 - Atomic writes via LMDB transactions
 - Efficient single-lookup retrieval by ISCC-ID
-- Persistent storage of index metadata (realm_id, max_dim)
+- Persistent storage of realm_id metadata
 - Support for index rebuild from primary storage
 - Optional extended metadata storage
-- Configurable durability: full persistence (production) or reduced durability (testing)
+- Automatic map_size expansion on capacity limits
+- Batch operation support for add operations
+- Flexible LMDB configuration via options dict
 
 **Constructor:**
 
 ```python
-IsccStore(path, realm_id=0, durable=True)
+IsccStore(path, realm_id=0, lmdb_options=None)
 ```
 
 **Parameters:**
 
 - `path` (str | os.PathLike): Directory path for LMDB storage
 - `realm_id` (int): ISCC realm ID (0-1) for ISCC-ID reconstruction (default: 0)
-- `durable` (bool): If True, enables full LMDB persistence; if False, uses sync=False, metasync=False,
-    lock=False for testing (default: True)
+- `lmdb_options` (dict | None): Optional LMDB configuration dict merged with defaults (default: None)
 
 **Methods:**
 
 ```python
-store.put(iscc_id: int, entry: dict) -> None
-store.get(iscc_id: int) -> dict | None
-store.delete(iscc_id: int) -> bool
+store.add(iscc_ids, entries) -> int
+store.get(iscc_id) -> dict | None
+store.delete(iscc_id) -> bool
 store.iter_entries() -> Iterator[tuple[int, dict]]
 store.get_metadata(key: str) -> Any
 store.put_metadata(key: str, value: Any) -> None
+store.set_mapsize(new_size: int) -> None
 store.close() -> None
 ```
+
+**Properties:**
+
+```python
+store.map_size -> int
+```
+
+**Method Details:**
+
+### add() - Store ISCC entries
+
+```python
+add(iscc_ids, entries) -> int
+```
+
+**Parameters:**
+
+- `iscc_ids` (int | str | list[int | str]): ISCC-ID(s) as integer(s) or string(s)
+- `entries` (dict | list[dict]): Entry dict(s) to store
+
+**Behavior:**
+
+- Single values normalized to lists internally
+- Number of ISCC-IDs must match number of entries
+- Accepts ISCC-IDs as integers or strings (e.g., "ISCC:...")
+- Automatically doubles map_size if database is full and retries
+
+**Returns:** Number of entries successfully added
+
+**Raises:**
+
+- `ValueError`: If number of ISCC-IDs doesn't match number of entries
+
+### get() - Retrieve entry by ISCC-ID
+
+```python
+get(iscc_id) -> dict | None
+```
+
+**Parameters:**
+
+- `iscc_id` (int | str): ISCC-ID as integer or string
+
+**Returns:** Entry dict or None if not found
+
+### delete() - Remove entry by ISCC-ID
+
+```python
+delete(iscc_id) -> bool
+```
+
+**Parameters:**
+
+- `iscc_id` (int | str): ISCC-ID as integer or string
+
+**Returns:** True if deleted, False if not found
+
+### iter_entries() - Iterate all entries
+
+```python
+iter_entries() -> Iterator[tuple[int, dict]]
+```
+
+**Returns:** Iterator yielding (iscc_id_int, entry_dict) tuples in ascending timestamp order
+
+### set_mapsize() - Increase maximum database size
+
+```python
+set_mapsize(new_size) -> None
+```
+
+**Parameters:**
+
+- `new_size` (int): New maximum size in bytes (must be larger than current)
+
+**Raises:**
+
+- `lmdb.Error`: If active transactions exist
+- `ValueError`: If new_size would shrink database
 
 ## High-Level Core API (PYTHON, CLI, REST)
 

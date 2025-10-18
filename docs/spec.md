@@ -130,6 +130,20 @@ due to capacity limits.
 - Batch operation support for add operations
 - Flexible LMDB configuration via options dict
 
+**LMDB Configuration:**
+
+`IsccStore` uses durability-focused LMDB settings because it is the primary source of truth:
+
+- `metasync=True`: Full durability with metadata flush to disk
+- `sync=True`: Full ACID compliance with fsync on commit
+- `writemap=False`: Safer, prevents corruption from bad writes
+
+This differs from derived indexes like `InstanceIndex` and `UnitIndex`, which prioritize performance
+(`metasync=False`, `sync=False`, `writemap=True`) since they can be rebuilt from `IsccStore` if corrupted.
+
+Users can override these defaults via the `lmdb_options` parameter, but the durability settings are recommended
+for production use where data integrity is critical.
+
 **Constructor:**
 
 ```python

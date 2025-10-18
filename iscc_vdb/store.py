@@ -7,9 +7,10 @@ IsccStore serves as the source of truth with two named databases:
 """
 
 import os
-import struct
+import sys
 from typing import Any, Iterator
 
+import iscc_core
 import lmdb
 import simdjson
 from loguru import logger
@@ -67,24 +68,40 @@ class IsccStore:
         else:
             self.realm_id = stored_realm_id
 
+    def _iscc_id_to_key(self, iscc_id):
+        # type: (int | str) -> bytes
+        """Convert ISCC-ID (string or int) to LMDB key bytes.
+
+        :param iscc_id: 64-bit integer ISCC-ID or ISCC-ID string (e.g., "ISCC:...")
+        :return: 8-byte key in native byte order for LMDB
+        """
+        if isinstance(iscc_id, int):
+            return iscc_id.to_bytes(8, sys.byteorder)
+        # Decode full ISCC-ID, extract body (skip 2-byte header), convert to native byte order
+        body_bytes = iscc_core.decode_base32(iscc_id.removeprefix("ISCC:"))[2:]
+        # ISCC bytes are big-endian, but LMDB integerkey needs native byte order
+        return int.from_bytes(body_bytes, "big").to_bytes(8, sys.byteorder)
+
     def add(self, iscc_ids, entries):
-        # type: (int | list[int], dict | list[dict]) -> int
+        # type: (int | str | list[int | str], dict | list[dict]) -> int
         """Store entries with ISCC-IDs as keys.
 
-        :param iscc_ids: 64-bit integer ISCC-ID or list of ISCC-IDs
+        :param iscc_ids: ISCC-ID (int/string) or list of ISCC-IDs
         :param entries: Entry dict or list of entry dicts
         :return: Number of entries added
 
         Note: Automatically doubles map_size if full and retries operation.
         """
-        id_list = [iscc_ids] if isinstance(iscc_ids, int) else list(iscc_ids)
+        id_list = [iscc_ids] if isinstance(iscc_ids, (int, str)) else list(iscc_ids)
         entry_list = [entries] if isinstance(entries, dict) else list(entries)
 
         if len(id_list) != len(entry_list):
             raise ValueError("Number of ISCC-IDs must match entries")
 
+        # Convert all ISCC-IDs to LMDB key bytes
         items = [
-            (struct.pack("Q", iid), simdjson.dumps(entry).encode("utf-8")) for iid, entry in zip(id_list, entry_list)
+            (self._iscc_id_to_key(iid), simdjson.dumps(entry).encode("utf-8"))
+            for iid, entry in zip(id_list, entry_list)
         ]
 
         try:
@@ -103,13 +120,13 @@ class IsccStore:
         return added
 
     def get(self, iscc_id):
-        # type: (int) -> dict | None
+        # type: (int | str) -> dict | None
         """Retrieve entry by ISCC-ID.
 
-        :param iscc_id: 64-bit integer ISCC-ID
+        :param iscc_id: ISCC-ID as integer or string (e.g., "ISCC:...")
         :return: Entry dict or None if not found
         """
-        key = struct.pack("Q", iscc_id)
+        key = self._iscc_id_to_key(iscc_id)
         with self.env.begin(db=self.entries_db) as txn:
             value = txn.get(key)
         if value is None:
@@ -117,13 +134,13 @@ class IsccStore:
         return simdjson.loads(value)
 
     def delete(self, iscc_id):
-        # type: (int) -> bool
+        # type: (int | str) -> bool
         """Delete entry by ISCC-ID.
 
-        :param iscc_id: 64-bit integer ISCC-ID
+        :param iscc_id: ISCC-ID as integer or string (e.g., "ISCC:...")
         :return: True if deleted, False if not found
         """
-        key = struct.pack("Q", iscc_id)
+        key = self._iscc_id_to_key(iscc_id)
         with self.env.begin(write=True, db=self.entries_db) as txn:
             return txn.delete(key)
 
@@ -136,7 +153,7 @@ class IsccStore:
         with self.env.begin(db=self.entries_db) as txn:
             cursor = txn.cursor()
             for key, value in cursor:
-                iscc_id = struct.unpack("Q", key)[0]
+                iscc_id = int.from_bytes(key, sys.byteorder)
                 entry = simdjson.loads(value)
                 yield iscc_id, entry
 

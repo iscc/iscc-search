@@ -1,6 +1,7 @@
 """Comprehensive tests for IsccStore with 100% coverage."""
 
 import pytest
+import iscc_core
 
 from iscc_vdb.store import IsccStore
 
@@ -501,5 +502,128 @@ def test_add_batch_triggers_map_expansion(temp_store_path, sample_entry):
     # Verify all entries are retrievable
     assert store.get(0)["iscc_id"] == "ISCC:ID0"
     assert store.get(299)["iscc_id"] == "ISCC:ID299"
+
+    store.close()
+
+
+def test_add_with_string_iscc_id(temp_store_path, sample_entry, iscc_id_key_pairs):
+    # type: (typing.Any, dict, list[tuple[str, int]]) -> None
+    """Test adding entry with string ISCC-ID."""
+    store = IsccStore(temp_store_path)
+    iscc_id_str, iscc_id_int = iscc_id_key_pairs[0]
+
+    # Add using string ISCC-ID
+    added = store.add(iscc_id_str, sample_entry)
+    assert added == 1
+
+    # Verify retrieval works with both string and int
+    assert store.get(iscc_id_str) == sample_entry
+    assert store.get(iscc_id_int) == sample_entry
+
+    store.close()
+
+
+def test_get_with_string_iscc_id(temp_store_path, sample_entry, iscc_id_key_pairs):
+    # type: (typing.Any, dict, list[tuple[str, int]]) -> None
+    """Test retrieving entry with string ISCC-ID."""
+    store = IsccStore(temp_store_path)
+    iscc_id_str, iscc_id_int = iscc_id_key_pairs[0]
+
+    # Add using integer
+    store.add(iscc_id_int, sample_entry)
+
+    # Retrieve using string
+    retrieved = store.get(iscc_id_str)
+    assert retrieved == sample_entry
+
+    store.close()
+
+
+def test_delete_with_string_iscc_id(temp_store_path, sample_entry, iscc_id_key_pairs):
+    # type: (typing.Any, dict, list[tuple[str, int]]) -> None
+    """Test deleting entry with string ISCC-ID."""
+    store = IsccStore(temp_store_path)
+    iscc_id_str, iscc_id_int = iscc_id_key_pairs[0]
+
+    # Add using integer
+    store.add(iscc_id_int, sample_entry)
+
+    # Delete using string
+    deleted = store.delete(iscc_id_str)
+    assert deleted is True
+
+    # Verify deletion
+    assert store.get(iscc_id_int) is None
+    assert store.get(iscc_id_str) is None
+
+    store.close()
+
+
+def test_add_batch_with_string_iscc_ids(temp_store_path, sample_entry, iscc_id_key_pairs):
+    # type: (typing.Any, dict, list[tuple[str, int]]) -> None
+    """Test batch add with string ISCC-IDs."""
+    store = IsccStore(temp_store_path)
+
+    # Extract string IDs
+    iscc_id_strs = [pair[0] for pair in iscc_id_key_pairs]
+    entries = [{**sample_entry, "index": i} for i in range(len(iscc_id_strs))]
+
+    # Batch add using strings
+    added = store.add(iscc_id_strs, entries)
+    assert added == len(iscc_id_strs)
+
+    # Verify all entries retrievable with both formats
+    for i, (iscc_id_str, iscc_id_int) in enumerate(iscc_id_key_pairs):
+        assert store.get(iscc_id_str)["index"] == i
+        assert store.get(iscc_id_int)["index"] == i
+
+    store.close()
+
+
+def test_add_batch_mixed_string_and_int_ids(temp_store_path, sample_entry, iscc_id_key_pairs):
+    # type: (typing.Any, dict, list[tuple[str, int]]) -> None
+    """Test batch add with mixed string and integer ISCC-IDs."""
+    store = IsccStore(temp_store_path)
+
+    # Mix strings and integers
+    mixed_ids = [
+        iscc_id_key_pairs[0][0],  # string
+        iscc_id_key_pairs[1][1],  # int
+        iscc_id_key_pairs[2][0],  # string
+        iscc_id_key_pairs[3][1],  # int
+        iscc_id_key_pairs[4][0],  # string
+    ]
+    entries = [{**sample_entry, "index": i} for i in range(len(mixed_ids))]
+
+    # Batch add with mixed types
+    added = store.add(mixed_ids, entries)
+    assert added == len(mixed_ids)
+
+    # Verify all entries retrievable
+    for i, pair in enumerate(iscc_id_key_pairs[:5]):
+        iscc_id_str, iscc_id_int = pair
+        assert store.get(iscc_id_str)["index"] == i
+        assert store.get(iscc_id_int)["index"] == i
+
+    store.close()
+
+
+def test_string_iscc_id_without_prefix(temp_store_path, sample_entry, iscc_id_key_pairs):
+    # type: (typing.Any, dict, list[tuple[str, int]]) -> None
+    """Test string ISCC-ID works without 'ISCC:' prefix."""
+    store = IsccStore(temp_store_path)
+    iscc_id_str, iscc_id_int = iscc_id_key_pairs[0]
+
+    # Remove prefix
+    iscc_id_no_prefix = iscc_id_str.removeprefix("ISCC:")
+
+    # Add using string without prefix
+    added = store.add(iscc_id_no_prefix, sample_entry)
+    assert added == 1
+
+    # Verify retrieval works with all formats
+    assert store.get(iscc_id_no_prefix) == sample_entry
+    assert store.get(iscc_id_str) == sample_entry
+    assert store.get(iscc_id_int) == sample_entry
 
     store.close()

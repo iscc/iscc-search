@@ -147,6 +147,7 @@ cython_debug/
 
 # Hot Shit AI stuff :)
 .claude
+GEMINI.md
 
 # Local scratch directory for debugging and one-off scripts
 scratch/

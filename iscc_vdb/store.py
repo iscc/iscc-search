@@ -21,22 +21,15 @@ class IsccStore:
     Time ordering is preserved as LMDB sorts integer keys by value.
     """
 
-    def __init__(self, path, realm_id=0, durable=True, map_size=None):
-        # type: (str | os.PathLike, int, bool, int | None) -> None
+    def __init__(self, path, realm_id=0, durable=True):
+        # type: (str | os.PathLike, int, bool) -> None
         """Initialize IsccStore with LMDB environment and named databases.
 
         :param path: Directory path for LMDB storage
         :param realm_id: ISCC realm ID (0-1) for ISCC-ID reconstruction (default: 0)
         :param durable: If True, full persistence; if False, reduced durability for testing
-        :param map_size: Initial maximum size database may grow to (default: 256MB, auto-doubles when full)
         """
-        if map_size is None:
-            map_size = 256 * 1024 * 1024  # 256MB
-        self.env = lmdb.open(str(path), map_size=map_size, max_dbs=2, sync=durable, metasync=durable, lock=durable)
-
-        # Adopt actual database size if reopening existing database
-        # Calling with 0 tells LMDB to use the actual on-disk size
-        self.env.set_mapsize(0)
+        self.env = lmdb.open(str(path), max_dbs=2, sync=durable, metasync=durable, lock=durable)
 
         self.entries_db = self.env.open_db(b"entries", integerkey=True)
         self.metadata_db = self.env.open_db(b"metadata")

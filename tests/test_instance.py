@@ -14,26 +14,6 @@ def temp_instance_path(tmp_path):
 
 
 @pytest.fixture
-def small_map_size():
-    # type: () -> int
-    """Provide a smaller map_size for testing."""
-    return 100 * 1024 * 1024  # 100MB
-
-
-# Override InstanceIndex default map_size for all tests
-_original_init = InstanceIndex.__init__
-
-
-def _test_init(self, path, realm_id=0, map_size=100 * 1024 * 1024):
-    # type: (InstanceIndex, typing.Any, int, int) -> None
-    """Test version with smaller default map_size."""
-    _original_init(self, path, realm_id, map_size)
-
-
-InstanceIndex.__init__ = _test_init
-
-
-@pytest.fixture
 def sample_instance_codes():
     # type: () -> list[str]
     """Generate sample Instance-Codes with various bit lengths."""
@@ -707,3 +687,105 @@ def test_destructor_no_env():
     # This should trigger the hasattr branch in __del__
     del idx
     # Should not raise any errors
+
+
+def test_map_size_auto_expansion(temp_instance_path, sample_iscc_ids):
+    # type: (typing.Any, list[str]) -> None
+    """Test map_size automatically doubles when full."""
+    idx = InstanceIndex(temp_instance_path)
+
+    # Manually set small map_size to test expansion quickly
+    small_size = 32 * 1024  # 32KB
+    idx.set_mapsize(small_size)
+    assert idx.map_size == small_size
+
+    # Create Instance-Codes and add entries until map_size expands
+    # Use many entries with 256-bit codes to trigger expansion
+    for i in range(2000):  # Should fill 32KB and trigger expansion
+        ic_code = ic.Code.rnd(ic.MT.INSTANCE, bits=256)
+        ic_str = f"ISCC:{ic_code}"
+        idx.add(sample_iscc_ids[i % len(sample_iscc_ids)], ic_str)
+
+    # Verify map_size has doubled at least once
+    assert idx.map_size > small_size
+
+    # Verify entries are retrievable
+    ic_code1 = ic.Code.rnd(ic.MT.INSTANCE, bits=256)
+    ic_str1 = f"ISCC:{ic_code1}"
+    idx.add(sample_iscc_ids[0], ic_str1)
+    results = idx.get(ic_str1)
+    assert sample_iscc_ids[0] in results
+
+    idx.close()
+
+
+def test_set_mapsize_manual(temp_instance_path):
+    # type: (typing.Any) -> None
+    """Test manually setting map_size."""
+    idx = InstanceIndex(temp_instance_path)
+    initial_size = idx.map_size
+
+    # Manually double the map_size
+    new_size = initial_size * 2
+    idx.set_mapsize(new_size)
+
+    assert idx.map_size == new_size
+    idx.close()
+
+
+def test_reopen_larger_database(temp_instance_path, sample_iscc_ids):
+    # type: (typing.Any, list[str]) -> None
+    """Test reopening database that has grown beyond initial map_size."""
+    idx1 = InstanceIndex(temp_instance_path)
+
+    # Set small map_size and add entries to force expansion
+    idx1.set_mapsize(32 * 1024)  # 32KB
+
+    # Add many entries to force expansion beyond 32KB
+    entries_added = []
+    for i in range(2000):
+        ic_code = ic.Code.rnd(ic.MT.INSTANCE, bits=256)
+        ic_str = f"ISCC:{ic_code}"
+        idx1.add(sample_iscc_ids[i % len(sample_iscc_ids)], ic_str)
+        entries_added.append((sample_iscc_ids[i % len(sample_iscc_ids)], ic_str))
+
+    final_size = idx1.map_size
+    assert final_size > 32 * 1024  # Should have grown
+    idx1.close()
+
+    # Reopen - LMDB uses actual database size
+    idx2 = InstanceIndex(temp_instance_path)
+
+    # Verify we can read entries
+    test_id, test_ic = entries_added[0]
+    results = idx2.get(test_ic)
+    assert test_id in results
+
+    # Database should be usable and contain all entries
+    assert len(idx2) == len(entries_added)
+
+    idx2.close()
+
+
+def test_map_size_expansion_on_remove(temp_instance_path, sample_iscc_ids):
+    # type: (typing.Any, list[str]) -> None
+    """Test that remove operations work correctly."""
+    idx = InstanceIndex(temp_instance_path)
+
+    # Add entries
+    ic_list = []
+    for i in range(50):
+        ic_code = ic.Code.rnd(ic.MT.INSTANCE, bits=256)
+        ic_str = f"ISCC:{ic_code}"
+        idx.add(sample_iscc_ids[i % len(sample_iscc_ids)], ic_str)
+        ic_list.append(ic_str)
+
+    # Remove some entries
+    count = idx.remove_by_iscc_id(sample_iscc_ids[0])
+    assert count >= 0
+
+    # Remove by instance code
+    count = idx.remove_by_instance_code(ic_list[0])
+    assert count >= 0
+
+    idx.close()

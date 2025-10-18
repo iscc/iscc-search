@@ -67,13 +67,12 @@ class PInstanceIndex(Protocol):
 class InstanceIndex:
     """LMDB-backed index for Instance-Code prefix search with dupsort/dupfixed optimization."""
 
-    def __init__(self, path, realm_id=0, map_size=10 * 1024 * 1024 * 1024, durable=False, readahead=False):
-        # type: (os.PathLike, int, int, bool, bool) -> None
+    def __init__(self, path, realm_id=0, durable=False, readahead=False):
+        # type: (os.PathLike, int, bool, bool) -> None
         """Create or open LMDB instance index.
 
         :param path: Directory path for LMDB environment
         :param realm_id: ISCC realm ID for ISCC-ID reconstruction (default 0)
-        :param map_size: Maximum size in bytes (default 10GB)
         :param durable: If True, flush to disk on commit (slower, ACID compliant).
                         If False, defer flushes for performance (default, maintains ACI).
         :param readahead: If True, enable OS readahead (better for sequential access).
@@ -85,7 +84,6 @@ class InstanceIndex:
 
         self.env = lmdb.open(
             self.path,
-            map_size=map_size,
             max_dbs=1,
             writemap=True,
             metasync=False,
@@ -111,6 +109,8 @@ class InstanceIndex:
         :param iscc_ids: ISCC-ID string/bytes or list
         :param instance_codes: Instance-Code string/bytes or list
         :return: Number of new mappings added
+
+        Note: Automatically doubles map_size if full and retries operation.
         """
         id_list = self._normalize_to_bytes_list(iscc_ids)
         ic_list = self._normalize_to_bytes_list(instance_codes)
@@ -118,12 +118,20 @@ class InstanceIndex:
         if len(id_list) != len(ic_list):
             raise ValueError("Number of ISCC-IDs must match Instance-Codes")
 
-        with self.env.begin(write=True) as txn:
-            cursor = txn.cursor(self.db)
-            # Build (key, value) tuples: (instance_code, iscc_id)
-            items = list(zip(ic_list, id_list))
-            # putmulti returns (consumed, added) - dupdata=False prevents duplicates
-            _, added = cursor.putmulti(items, dupdata=False)
+        try:
+            with self.env.begin(write=True) as txn:
+                cursor = txn.cursor(self.db)
+                # Build (key, value) tuples: (instance_code, iscc_id)
+                items = list(zip(ic_list, id_list))
+                # putmulti returns (consumed, added) - dupdata=False prevents duplicates
+                _, added = cursor.putmulti(items, dupdata=False)
+        except lmdb.MapFullError:
+            new_size = self.map_size * 2
+            self.env.set_mapsize(new_size)
+            with self.env.begin(write=True) as txn:
+                cursor = txn.cursor(self.db)
+                items = list(zip(ic_list, id_list))
+                _, added = cursor.putmulti(items, dupdata=False)
 
         return added
 
@@ -263,6 +271,24 @@ class InstanceIndex:
         # type: () -> None
         """Close LMDB environment."""
         self.env.close()
+
+    @property
+    def map_size(self):
+        # type: () -> int
+        """Get current map_size from LMDB environment."""
+        return self.env.info()["map_size"]
+
+    def set_mapsize(self, new_size):
+        # type: (int) -> None
+        """Increase the maximum size the database may grow to.
+
+        :param new_size: New maximum size in bytes (must be larger than current size)
+        :raises lmdb.Error: If active transactions exist in current process
+        :raises ValueError: If new_size would shrink the database
+
+        Note: Must be called when no transactions are active. Only increases persist.
+        """
+        self.env.set_mapsize(new_size)
 
     def __del__(self):
         # type: () -> None

@@ -175,22 +175,16 @@ def test_search_prefix_single(temp_instance_path, sample_iscc_ids):
     """Test prefix search with single prefix - returns ISCC-ID -> [Instance-Codes] mapping."""
     idx = InstanceIndex(temp_instance_path)
 
-    # Create Instance-Codes with common prefix
+    # Create Instance-Codes with common prefix (using valid 128-bit codes)
     base_bytes = bytes([1, 2, 3, 4, 5, 6, 7, 8])
-    ic1_bytes = base_bytes + bytes([10, 11])
-    ic2_bytes = base_bytes + bytes([20, 21])
-    ic3_bytes = bytes([9, 9, 9, 9, 5, 6, 7, 8])  # Different prefix
+    ic1_bytes = base_bytes + bytes([10, 11, 12, 13, 14, 15, 16, 17])  # 128-bit
+    ic2_bytes = base_bytes + bytes([20, 21, 22, 23, 24, 25, 26, 27])  # 128-bit
+    ic3_bytes = bytes([9, 9, 9, 9, 5, 6, 7, 8])  # 64-bit with different prefix
 
-    # Reconstruct as ISCC codes
-    ic1 = "ISCC:" + ic.encode_base32(
-        ic.encode_header(ic.MT.INSTANCE, ic.ST.NONE, ic.VS.V0, len(ic1_bytes) * 8) + ic1_bytes
-    )
-    ic2 = "ISCC:" + ic.encode_base32(
-        ic.encode_header(ic.MT.INSTANCE, ic.ST.NONE, ic.VS.V0, len(ic2_bytes) * 8) + ic2_bytes
-    )
-    ic3 = "ISCC:" + ic.encode_base32(
-        ic.encode_header(ic.MT.INSTANCE, ic.ST.NONE, ic.VS.V0, len(ic3_bytes) * 8) + ic3_bytes
-    )
+    # Reconstruct as ISCC codes using ic.encode_component (produces 2-byte headers)
+    ic1 = "ISCC:" + ic.encode_component(ic.MT.INSTANCE, ic.ST.NONE, ic.VS.V0, 128, ic1_bytes)
+    ic2 = "ISCC:" + ic.encode_component(ic.MT.INSTANCE, ic.ST.NONE, ic.VS.V0, 128, ic2_bytes)
+    ic3 = "ISCC:" + ic.encode_component(ic.MT.INSTANCE, ic.ST.NONE, ic.VS.V0, 64, ic3_bytes)
 
     # Add entries
     idx.add([sample_iscc_ids[0], sample_iscc_ids[1], sample_iscc_ids[2]], [ic1, ic2, ic3])
@@ -221,15 +215,9 @@ def test_search_prefix_batch(temp_instance_path, sample_iscc_ids):
     ic3_bytes = prefix2 + bytes([30, 31, 32, 33])
 
     # Reconstruct as ISCC codes
-    ic1 = "ISCC:" + ic.encode_base32(
-        ic.encode_header(ic.MT.INSTANCE, ic.ST.NONE, ic.VS.V0, len(ic1_bytes) * 8) + ic1_bytes
-    )
-    ic2 = "ISCC:" + ic.encode_base32(
-        ic.encode_header(ic.MT.INSTANCE, ic.ST.NONE, ic.VS.V0, len(ic2_bytes) * 8) + ic2_bytes
-    )
-    ic3 = "ISCC:" + ic.encode_base32(
-        ic.encode_header(ic.MT.INSTANCE, ic.ST.NONE, ic.VS.V0, len(ic3_bytes) * 8) + ic3_bytes
-    )
+    ic1 = "ISCC:" + ic.encode_component(ic.MT.INSTANCE, ic.ST.NONE, ic.VS.V0, len(ic1_bytes) * 8, ic1_bytes)
+    ic2 = "ISCC:" + ic.encode_component(ic.MT.INSTANCE, ic.ST.NONE, ic.VS.V0, len(ic2_bytes) * 8, ic2_bytes)
+    ic3 = "ISCC:" + ic.encode_component(ic.MT.INSTANCE, ic.ST.NONE, ic.VS.V0, len(ic3_bytes) * 8, ic3_bytes)
 
     # Add entries
     idx.add([sample_iscc_ids[0], sample_iscc_ids[1], sample_iscc_ids[2]], [ic1, ic2, ic3])
@@ -269,9 +257,7 @@ def test_search_multiple_ids_same_instance(temp_instance_path, sample_iscc_ids):
 
     # Create Instance-Code with common prefix
     ic_bytes = bytes([1, 2, 3, 4, 5, 6, 7, 8])
-    instance_code = "ISCC:" + ic.encode_base32(
-        ic.encode_header(ic.MT.INSTANCE, ic.ST.NONE, ic.VS.V0, len(ic_bytes) * 8) + ic_bytes
-    )
+    instance_code = "ISCC:" + ic.encode_component(ic.MT.INSTANCE, ic.ST.NONE, ic.VS.V0, len(ic_bytes) * 8, ic_bytes)
 
     # Add multiple ISCC-IDs to same Instance-Code
     idx.add([sample_iscc_ids[0], sample_iscc_ids[1]], [instance_code, instance_code])
@@ -504,22 +490,18 @@ def test_search_string_prefix(temp_instance_path, sample_iscc_ids):
     """Test search with string prefix."""
     idx = InstanceIndex(temp_instance_path)
 
-    # Create Instance-Codes with common prefix
+    # Create Instance-Codes with common prefix (using valid 128-bit code)
     base_bytes = bytes([1, 2, 3, 4, 5, 6, 7, 8])
-    ic1_bytes = base_bytes + bytes([10, 11])
+    ic1_bytes = base_bytes + bytes([10, 11, 12, 13, 14, 15, 16, 17])  # 128-bit
 
     # Reconstruct as ISCC code
-    ic1 = "ISCC:" + ic.encode_base32(
-        ic.encode_header(ic.MT.INSTANCE, ic.ST.NONE, ic.VS.V0, len(ic1_bytes) * 8) + ic1_bytes
-    )
+    ic1 = "ISCC:" + ic.encode_component(ic.MT.INSTANCE, ic.ST.NONE, ic.VS.V0, 128, ic1_bytes)
 
     # Add entry
     idx.add(sample_iscc_ids[0], ic1)
 
-    # Search with string prefix (reconstruct prefix as ISCC code)
-    prefix_ic = "ISCC:" + ic.encode_base32(
-        ic.encode_header(ic.MT.INSTANCE, ic.ST.NONE, ic.VS.V0, len(base_bytes) * 8) + base_bytes
-    )
+    # Search with string prefix (reconstruct prefix as 64-bit ISCC code)
+    prefix_ic = "ISCC:" + ic.encode_component(ic.MT.INSTANCE, ic.ST.NONE, ic.VS.V0, 64, base_bytes)
     results = idx.search(prefix_ic, bidirectional=False)
 
     # Results should be ISCC-ID -> [Instance-Codes]
@@ -535,14 +517,14 @@ def test_search_bidirectional_128bit(temp_instance_path, sample_iscc_ids):
 
     # Create 64-bit Instance-Code (stored)
     ic_64_bytes = bytes([1, 2, 3, 4, 5, 6, 7, 8])
-    ic_64 = "ISCC:" + ic.encode_base32(ic.encode_header(ic.MT.INSTANCE, ic.ST.NONE, ic.VS.V0, 64) + ic_64_bytes)
+    ic_64 = "ISCC:" + ic.encode_component(ic.MT.INSTANCE, ic.ST.NONE, ic.VS.V0, 64, ic_64_bytes)
 
     # Add ISCC-ID with 64-bit Instance-Code
     idx.add(sample_iscc_ids[0], ic_64)
 
     # Search with 128-bit code that has 64-bit as prefix
     ic_128_bytes = ic_64_bytes + bytes([10, 11, 12, 13, 14, 15, 16, 17])
-    ic_128 = "ISCC:" + ic.encode_base32(ic.encode_header(ic.MT.INSTANCE, ic.ST.NONE, ic.VS.V0, 128) + ic_128_bytes)
+    ic_128 = "ISCC:" + ic.encode_component(ic.MT.INSTANCE, ic.ST.NONE, ic.VS.V0, 128, ic_128_bytes)
 
     # Bidirectional search should find the 64-bit match
     results = idx.search(ic_128, bidirectional=True)
@@ -560,10 +542,10 @@ def test_search_bidirectional_256bit(temp_instance_path, sample_iscc_ids):
 
     # Create 64-bit and 128-bit Instance-Codes (stored)
     ic_64_bytes = bytes([1, 2, 3, 4, 5, 6, 7, 8])
-    ic_64 = "ISCC:" + ic.encode_base32(ic.encode_header(ic.MT.INSTANCE, ic.ST.NONE, ic.VS.V0, 64) + ic_64_bytes)
+    ic_64 = "ISCC:" + ic.encode_component(ic.MT.INSTANCE, ic.ST.NONE, ic.VS.V0, 64, ic_64_bytes)
 
     ic_128_bytes = ic_64_bytes + bytes([10, 11, 12, 13, 14, 15, 16, 17])
-    ic_128 = "ISCC:" + ic.encode_base32(ic.encode_header(ic.MT.INSTANCE, ic.ST.NONE, ic.VS.V0, 128) + ic_128_bytes)
+    ic_128 = "ISCC:" + ic.encode_component(ic.MT.INSTANCE, ic.ST.NONE, ic.VS.V0, 128, ic_128_bytes)
 
     # Add different ISCC-IDs with 64-bit and 128-bit Instance-Codes
     idx.add(sample_iscc_ids[0], ic_64)
@@ -571,7 +553,7 @@ def test_search_bidirectional_256bit(temp_instance_path, sample_iscc_ids):
 
     # Search with 256-bit code that has both as prefixes
     ic_256_bytes = ic_128_bytes + bytes([20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35])
-    ic_256 = "ISCC:" + ic.encode_base32(ic.encode_header(ic.MT.INSTANCE, ic.ST.NONE, ic.VS.V0, 256) + ic_256_bytes)
+    ic_256 = "ISCC:" + ic.encode_component(ic.MT.INSTANCE, ic.ST.NONE, ic.VS.V0, 256, ic_256_bytes)
 
     # Bidirectional search should find both matches
     results = idx.search(ic_256, bidirectional=True)
@@ -591,14 +573,14 @@ def test_search_bidirectional_disabled(temp_instance_path, sample_iscc_ids):
 
     # Create 64-bit Instance-Code (stored)
     ic_64_bytes = bytes([1, 2, 3, 4, 5, 6, 7, 8])
-    ic_64 = "ISCC:" + ic.encode_base32(ic.encode_header(ic.MT.INSTANCE, ic.ST.NONE, ic.VS.V0, 64) + ic_64_bytes)
+    ic_64 = "ISCC:" + ic.encode_component(ic.MT.INSTANCE, ic.ST.NONE, ic.VS.V0, 64, ic_64_bytes)
 
     # Add ISCC-ID with 64-bit Instance-Code
     idx.add(sample_iscc_ids[0], ic_64)
 
     # Search with 128-bit code (longer than stored)
     ic_128_bytes = ic_64_bytes + bytes([10, 11, 12, 13, 14, 15, 16, 17])
-    ic_128 = "ISCC:" + ic.encode_base32(ic.encode_header(ic.MT.INSTANCE, ic.ST.NONE, ic.VS.V0, 128) + ic_128_bytes)
+    ic_128 = "ISCC:" + ic.encode_component(ic.MT.INSTANCE, ic.ST.NONE, ic.VS.V0, 128, ic_128_bytes)
 
     # With bidirectional=False, should NOT find the 64-bit match
     results = idx.search(ic_128, bidirectional=False)
@@ -617,9 +599,9 @@ def test_search_sorting_by_match_length(temp_instance_path, sample_iscc_ids):
     prefix_128 = prefix_64 + bytes([10, 11, 12, 13, 14, 15, 16, 17])
     prefix_256 = prefix_128 + bytes([20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35])
 
-    ic_64 = "ISCC:" + ic.encode_base32(ic.encode_header(ic.MT.INSTANCE, ic.ST.NONE, ic.VS.V0, 64) + prefix_64)
-    ic_128 = "ISCC:" + ic.encode_base32(ic.encode_header(ic.MT.INSTANCE, ic.ST.NONE, ic.VS.V0, 128) + prefix_128)
-    ic_256 = "ISCC:" + ic.encode_base32(ic.encode_header(ic.MT.INSTANCE, ic.ST.NONE, ic.VS.V0, 256) + prefix_256)
+    ic_64 = "ISCC:" + ic.encode_component(ic.MT.INSTANCE, ic.ST.NONE, ic.VS.V0, 64, prefix_64)
+    ic_128 = "ISCC:" + ic.encode_component(ic.MT.INSTANCE, ic.ST.NONE, ic.VS.V0, 128, prefix_128)
+    ic_256 = "ISCC:" + ic.encode_component(ic.MT.INSTANCE, ic.ST.NONE, ic.VS.V0, 256, prefix_256)
 
     # Add same ISCC-ID to all three Instance-Codes
     idx.add([sample_iscc_ids[0], sample_iscc_ids[0], sample_iscc_ids[0]], [ic_64, ic_128, ic_256])
@@ -647,9 +629,9 @@ def test_search_sorting_iscc_ids_by_match_quality(temp_instance_path, sample_isc
     # Create Instance-Codes with different lengths
     prefix = bytes([1, 2, 3, 4, 5, 6, 7, 8])
 
-    ic_64 = "ISCC:" + ic.encode_base32(ic.encode_header(ic.MT.INSTANCE, ic.ST.NONE, ic.VS.V0, 64) + prefix)
-    ic_128 = "ISCC:" + ic.encode_base32(
-        ic.encode_header(ic.MT.INSTANCE, ic.ST.NONE, ic.VS.V0, 128) + prefix + bytes([10, 11, 12, 13, 14, 15, 16, 17])
+    ic_64 = "ISCC:" + ic.encode_component(ic.MT.INSTANCE, ic.ST.NONE, ic.VS.V0, 64, prefix)
+    ic_128 = "ISCC:" + ic.encode_component(
+        ic.MT.INSTANCE, ic.ST.NONE, ic.VS.V0, 128, prefix + bytes([10, 11, 12, 13, 14, 15, 16, 17])
     )
 
     # Add different ISCC-IDs: one with 64-bit match, one with 128-bit match

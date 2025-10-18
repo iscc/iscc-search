@@ -317,11 +317,13 @@ class InstanceIndex:
     @staticmethod
     def _to_bytes(code):
         # type: (str | bytes) -> bytes
-        """Convert ISCC code to bytes digest."""
+        """Convert ISCC code to bytes digest (body only, without 2-byte header).
+
+        All valid ISCC codes have 2-byte headers, so simple [2:] slicing works correctly.
+        """
         if isinstance(code, bytes):
             return code
-        decoded = ic.decode_base32(code.removeprefix("ISCC:"))
-        return ic.decode_header(decoded)[4]
+        return ic.decode_base32(code.removeprefix("ISCC:"))[2:]
 
     @staticmethod
     def _normalize_to_bytes_list(codes):
@@ -346,8 +348,7 @@ class InstanceIndex:
         # type: (bytes) -> str
         """Convert Instance-Code digest back to string."""
         bit_length = len(digest) * 8
-        header = ic.encode_header(ic.MT.INSTANCE, ic.ST.NONE, ic.VS.V0, bit_length)
-        return "ISCC:" + ic.encode_base32(header + digest)
+        return "ISCC:" + ic.encode_component(ic.MT.INSTANCE, ic.ST.NONE, ic.VS.V0, bit_length, digest)
 
     def _search_prefix(self, cursor, prefix, results):
         # type: (lmdb.Cursor, bytes, dict[str, set[str]]) -> None

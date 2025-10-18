@@ -14,7 +14,7 @@ LMDB configuration:
 """
 
 import os
-from typing import Protocol
+from typing import Any, Protocol
 import lmdb
 import iscc_core as ic
 
@@ -67,30 +67,43 @@ class PInstanceIndex(Protocol):
 class InstanceIndex:
     """LMDB-backed index for Instance-Code prefix search with dupsort/dupfixed optimization."""
 
-    def __init__(self, path, realm_id=0, durable=False, readahead=False):
-        # type: (os.PathLike, int, bool, bool) -> None
+    DEFAULT_LMDB_OPTIONS = {
+        "readonly": False,
+        "metasync": False,  # Performance over durability (can rebuild)
+        "sync": False,  # Performance over durability (can rebuild)
+        "mode": 0o644,  # Standard file permissions
+        "create": True,  # Create directory if missing
+        "readahead": False,  # Better for random writes + prefix scans
+        "writemap": True,  # Performance optimization, safe since rebuildable
+        "meminit": True,  # Security: zero-initialize buffers
+        "map_async": False,  # Safer to sync on commit even with writemap
+        "max_readers": 126,  # LMDB default for concurrent reads
+        "max_spare_txns": 16,  # Good for batch operations
+        "lock": True,  # Enable locking for concurrent access
+    }
+
+    def __init__(self, path, realm_id=0, lmdb_options=None):
+        # type: (os.PathLike, int, dict[str, Any] | None) -> None
         """Create or open LMDB instance index.
 
         :param path: Directory path for LMDB environment
         :param realm_id: ISCC realm ID for ISCC-ID reconstruction (default 0)
-        :param durable: If True, flush to disk on commit (slower, ACID compliant).
-                        If False, defer flushes for performance (default, maintains ACI).
-        :param readahead: If True, enable OS readahead (better for sequential access).
-                          If False, disable readahead (better for random access, default).
+        :param lmdb_options: Optional LMDB environment options. Merged with DEFAULT_LMDB_OPTIONS.
+                             Note: max_dbs and subdir are always set internally and cannot be overridden.
         """
         self.path = os.fspath(path)
         self.realm_id = realm_id
-        os.makedirs(self.path, exist_ok=True)
 
-        self.env = lmdb.open(
-            self.path,
-            max_dbs=1,
-            writemap=True,
-            metasync=False,
-            sync=durable,
-            readahead=readahead,
-            max_spare_txns=16,
-        )
+        # Merge user options with defaults
+        options = self.DEFAULT_LMDB_OPTIONS.copy()
+        if lmdb_options:
+            options.update(lmdb_options)
+
+        # Force internal parameters (not exposed to users)
+        options["max_dbs"] = 1  # We have one named database
+        options["subdir"] = False  # As requested by Titusz
+
+        self.env = lmdb.open(self.path, **options)
 
         # Open named database with dupsort/dupfixed for 8-byte ISCC-IDs
         with self.env.begin(write=True) as txn:

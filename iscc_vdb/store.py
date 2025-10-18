@@ -21,15 +21,39 @@ class IsccStore:
     Time ordering is preserved as LMDB sorts integer keys by value.
     """
 
-    def __init__(self, path, realm_id=0, durable=True):
-        # type: (str | os.PathLike, int, bool) -> None
+    DEFAULT_LMDB_OPTIONS = {
+        "readonly": False,
+        "metasync": True,  # Full durability with metadata flush
+        "sync": True,  # Full ACID compliance
+        "mode": 0o644,  # Standard file permissions
+        "create": True,  # Create directory if missing
+        "readahead": False,  # Better for random access pattern
+        "writemap": False,  # Safer, prevents corruption from bad writes
+        "meminit": True,  # Security: zero-initialize buffers
+        "map_async": False,  # Not applicable without writemap
+        "max_readers": 126,  # LMDB default for concurrent reads
+        "max_spare_txns": 1,  # Simple operations, minimal caching
+        "lock": True,  # Enable locking for concurrent access
+    }
+
+    def __init__(self, path, realm_id=0, lmdb_options=None):
+        # type: (str | os.PathLike, int, dict[str, Any] | None) -> None
         """Initialize IsccStore with LMDB environment and named databases.
 
         :param path: Directory path for LMDB storage
         :param realm_id: ISCC realm ID (0-1) for ISCC-ID reconstruction (default: 0)
-        :param durable: If True, full persistence; if False, reduced durability for testing
+        :param lmdb_options: Optional LMDB configuration dict (merged with defaults)
         """
-        self.env = lmdb.open(str(path), max_dbs=2, sync=durable, metasync=durable, lock=durable)
+        # Merge user options with defaults
+        options = self.DEFAULT_LMDB_OPTIONS.copy()
+        if lmdb_options:
+            options.update(lmdb_options)
+
+        # Force internal parameters that users cannot override
+        options["max_dbs"] = 2
+        options["subdir"] = False
+
+        self.env = lmdb.open(str(path), **options)
 
         self.entries_db = self.env.open_db(b"entries", integerkey=True)
         self.metadata_db = self.env.open_db(b"metadata")

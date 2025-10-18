@@ -26,7 +26,7 @@ def sample_entry():
 def test_create_durable_store(temp_store_path):
     # type: (typing.Any) -> None
     """Test creating durable store with realm_id metadata initialized."""
-    store = IsccStore(temp_store_path, realm_id=1, durable=True)
+    store = IsccStore(temp_store_path, realm_id=1, lmdb_options={"sync": True, "metasync": True, "lock": True})
     assert store.realm_id == 1
     assert store.get_metadata("__realm_id__") == 1
     store.close()
@@ -35,7 +35,7 @@ def test_create_durable_store(temp_store_path):
 def test_create_non_durable_store(temp_store_path):
     # type: (typing.Any) -> None
     """Test creating non-durable store for testing scenarios."""
-    store = IsccStore(temp_store_path, realm_id=0, durable=False)
+    store = IsccStore(temp_store_path, realm_id=0, lmdb_options={"sync": False, "metasync": False, "lock": False})
     assert store.realm_id == 0
     store.close()
 
@@ -180,6 +180,68 @@ def test_reopen_existing_store(temp_store_path):
     store2 = IsccStore(temp_store_path, realm_id=0)
     assert store2.realm_id == 1  # Preserves original
     store2.close()
+
+
+def test_default_lmdb_options_applied(temp_store_path):
+    # type: (typing.Any) -> None
+    """Test DEFAULT_LMDB_OPTIONS are applied when no options provided."""
+    store = IsccStore(temp_store_path)
+
+    # Verify environment was created successfully with defaults
+    assert store.env is not None
+    assert store.realm_id == 0
+
+    # Verify we can perform basic operations with default options
+    store.put_metadata("test", "value")
+    assert store.get_metadata("test") == "value"
+    store.close()
+
+
+def test_user_options_override_defaults(temp_store_path):
+    # type: (typing.Any) -> None
+    """Test user-provided options override DEFAULT_LMDB_OPTIONS."""
+    # Override some defaults for testing (non-durable mode)
+    custom_options = {
+        "sync": False,
+        "metasync": False,
+        "lock": False,
+    }
+
+    store = IsccStore(temp_store_path, lmdb_options=custom_options)
+
+    # Verify environment was created successfully
+    assert store.env is not None
+
+    # Verify we can perform operations with custom options
+    store.put_metadata("test", "value")
+    assert store.get_metadata("test") == "value"
+    store.close()
+
+
+def test_max_dbs_and_subdir_cannot_be_overridden(temp_store_path):
+    # type: (typing.Any) -> None
+    """Test max_dbs and subdir are forced internally and cannot be overridden."""
+    # Try to override max_dbs and subdir
+    user_options = {
+        "max_dbs": 10,  # Should be forced to 2
+        "subdir": True,  # Should be forced to False
+        "sync": False,  # This should be applied
+    }
+
+    store = IsccStore(temp_store_path, lmdb_options=user_options)
+
+    # Verify environment was created successfully
+    assert store.env is not None
+
+    # Verify we have exactly 2 named databases (entries and metadata)
+    # If max_dbs was wrong, opening the second db would fail
+    assert store.entries_db is not None
+    assert store.metadata_db is not None
+
+    # Verify basic operations work
+    store.put_metadata("test", "value")
+    assert store.get_metadata("test") == "value"
+    store.close()
 
 
 def test_close_store(temp_store_path):

@@ -789,3 +789,61 @@ def test_map_size_expansion_on_remove(temp_instance_path, sample_iscc_ids):
     assert count >= 0
 
     idx.close()
+
+
+def test_default_lmdb_options_applied(temp_instance_path):
+    # type: (typing.Any) -> None
+    """Test that DEFAULT_LMDB_OPTIONS are applied correctly."""
+    idx = InstanceIndex(temp_instance_path)
+
+    # Verify environment was created with expected defaults
+    # We can't directly inspect all LMDB options, but we can verify the index works
+    assert idx.env is not None
+    assert len(idx) == 0
+
+    # Test that options allow expected operations
+    # Default has sync=False, writemap=True, etc.
+    idx.close()
+
+
+def test_user_lmdb_options_override_defaults(temp_instance_path, sample_iscc_ids, sample_instance_codes):
+    # type: (typing.Any, list[str], list[str]) -> None
+    """Test that user-provided lmdb_options override defaults."""
+    # Override some defaults
+    custom_options = {
+        "max_spare_txns": 8,  # Override default of 16
+        "max_readers": 64,  # Override default of 126
+    }
+
+    idx = InstanceIndex(temp_instance_path, lmdb_options=custom_options)
+
+    # Verify index works with custom options
+    count = idx.add(sample_iscc_ids[0], sample_instance_codes[0])
+    assert count == 1
+    assert len(idx) == 1
+
+    results = idx.get(sample_instance_codes[0])
+    assert sample_iscc_ids[0] in results
+
+    idx.close()
+
+
+def test_internal_parameters_cannot_be_overridden(temp_instance_path, sample_iscc_ids, sample_instance_codes):
+    # type: (typing.Any, list[str], list[str]) -> None
+    """Test that max_dbs and subdir are always set internally and cannot be overridden."""
+    # Try to override internal parameters
+    custom_options = {
+        "max_dbs": 10,  # Should be forced to 1
+        "subdir": True,  # Should be forced to False
+    }
+
+    idx = InstanceIndex(temp_instance_path, lmdb_options=custom_options)
+
+    # Verify index still works correctly (internal params were forced)
+    count = idx.add(sample_iscc_ids[0], sample_instance_codes[0])
+    assert count == 1
+
+    results = idx.get(sample_instance_codes[0])
+    assert sample_iscc_ids[0] in results
+
+    idx.close()

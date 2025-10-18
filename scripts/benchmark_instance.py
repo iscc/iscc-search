@@ -227,13 +227,13 @@ def main():
 
         # Initialize index
         print(f"\nInitializing InstanceIndex at {db_path}")
-        print("Configuration: durable=False (optimized for speed)")
+        print("Configuration: Using default options with large map_size (optimized for speed)")
+        # Note: Default options already set sync=False, metasync=False, readahead=False
+        # which are optimal for benchmark mode. Set large initial map_size for 1M entries.
         index = InstanceIndex(
             db_path,
             realm_id=0,
-            map_size=20 * 1024 * 1024 * 1024,  # 20GB
-            durable=False,  # Optimize for speed (benchmark mode)
-            readahead=False,  # Better for random access
+            lmdb_options={"map_size": 20 * 1024 * 1024 * 1024},  # 20GB
         )
 
         # Generate test data

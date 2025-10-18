@@ -66,25 +66,38 @@ class IsccStore:
         else:
             self.realm_id = stored_realm_id
 
-    def put(self, iscc_id, entry):
-        # type: (int, dict) -> None
-        """Store entry with ISCC-ID as key.
+    def add(self, iscc_ids, entries):
+        # type: (int | list[int], dict | list[dict]) -> int
+        """Store entries with ISCC-IDs as keys.
 
-        :param iscc_id: 64-bit integer ISCC-ID
-        :param entry: Entry dict with iscc_id, iscc_code, units keys
+        :param iscc_ids: 64-bit integer ISCC-ID or list of ISCC-IDs
+        :param entries: Entry dict or list of entry dicts
+        :return: Number of entries added
 
         Note: Automatically doubles map_size if full and retries operation.
         """
-        key = struct.pack("Q", iscc_id)
-        value = simdjson.dumps(entry).encode("utf-8")
+        id_list = [iscc_ids] if isinstance(iscc_ids, int) else list(iscc_ids)
+        entry_list = [entries] if isinstance(entries, dict) else list(entries)
+
+        if len(id_list) != len(entry_list):
+            raise ValueError("Number of ISCC-IDs must match entries")
+
+        items = [
+            (struct.pack("Q", iid), simdjson.dumps(entry).encode("utf-8")) for iid, entry in zip(id_list, entry_list)
+        ]
+
         try:
             with self.env.begin(write=True, db=self.entries_db) as txn:
-                txn.put(key, value)
+                cursor = txn.cursor(self.entries_db)
+                _, added = cursor.putmulti(items, dupdata=False)
         except lmdb.MapFullError:
             new_size = self.map_size * 2
             self.env.set_mapsize(new_size)
             with self.env.begin(write=True, db=self.entries_db) as txn:
-                txn.put(key, value)
+                cursor = txn.cursor(self.entries_db)
+                _, added = cursor.putmulti(items, dupdata=False)
+
+        return added
 
     def get(self, iscc_id):
         # type: (int) -> dict | None

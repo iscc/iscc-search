@@ -46,7 +46,7 @@ def test_put_and_get_entry(temp_store_path, sample_entry):
     store = IsccStore(temp_store_path)
     iscc_id = 12345
 
-    store.put(iscc_id, sample_entry)
+    store.add(iscc_id, sample_entry)
     retrieved = store.get(iscc_id)
 
     assert retrieved == sample_entry
@@ -68,7 +68,7 @@ def test_delete_existing_entry(temp_store_path, sample_entry):
     store = IsccStore(temp_store_path)
     iscc_id = 12345
 
-    store.put(iscc_id, sample_entry)
+    store.add(iscc_id, sample_entry)
     deleted = store.delete(iscc_id)
 
     assert deleted is True
@@ -100,9 +100,9 @@ def test_iter_populated_store(temp_store_path, sample_entry):
     store = IsccStore(temp_store_path)
 
     # Add multiple entries
-    store.put(100, {**sample_entry, "iscc_id": "ISCC:ID100"})
-    store.put(200, {**sample_entry, "iscc_id": "ISCC:ID200"})
-    store.put(300, {**sample_entry, "iscc_id": "ISCC:ID300"})
+    store.add(100, {**sample_entry, "iscc_id": "ISCC:ID100"})
+    store.add(200, {**sample_entry, "iscc_id": "ISCC:ID200"})
+    store.add(300, {**sample_entry, "iscc_id": "ISCC:ID300"})
 
     entries = list(store.iter_entries())
 
@@ -121,7 +121,7 @@ def test_time_ordering_preserved(temp_store_path, sample_entry):
     # Insert in random order
     timestamps = [5000000, 1000000, 3000000, 4000000, 2000000]
     for ts in timestamps:
-        store.put(ts, {**sample_entry, "timestamp": ts})
+        store.add(ts, {**sample_entry, "timestamp": ts})
 
     # Retrieve in sorted order
     entries = list(store.iter_entries())
@@ -263,7 +263,7 @@ def test_large_entry(temp_store_path):
         "metadata": {"nested": {"deeply": {"structured": {"data": list(range(100))}}}},
     }
 
-    store.put(12345, large_entry)
+    store.add(12345, large_entry)
     retrieved = store.get(12345)
 
     assert retrieved == large_entry
@@ -278,7 +278,7 @@ def test_multiple_entries_batch(temp_store_path, sample_entry):
     # Add 100 entries
     for i in range(100):
         entry = {**sample_entry, "iscc_id": f"ISCC:ID{i}"}
-        store.put(i, entry)
+        store.add(i, entry)
 
     # Verify all entries retrieved
     entries = list(store.iter_entries())
@@ -304,7 +304,7 @@ def test_map_size_auto_expansion(temp_store_path, sample_entry):
     large_entry = {**sample_entry, "large_data": "x" * 50000}  # ~50KB per entry
     for i in range(300):  # 300 * 50KB = ~15MB, should trigger expansion
         entry = {**large_entry, "iscc_id": f"ISCC:ID{i}"}
-        store.put(i, entry)
+        store.add(i, entry)
 
     # Verify map_size has doubled at least once
     assert store.map_size > initial_size
@@ -361,7 +361,7 @@ def test_reopen_larger_database(temp_store_path, sample_entry):
     large_entry = {**sample_entry, "large_data": "x" * 50000}  # ~50KB per entry
     for i in range(300):  # 300 * 50KB = ~15MB
         entry = {**large_entry, "iscc_id": f"ISCC:ID{i}"}
-        store1.put(i, entry)
+        store1.add(i, entry)
 
     final_size = store1.map_size
     store1.close()
@@ -377,3 +377,129 @@ def test_reopen_larger_database(temp_store_path, sample_entry):
     assert len(list(store2.iter_entries())) == 300
 
     store2.close()
+
+
+def test_add_single_entry_returns_count(temp_store_path, sample_entry):
+    # type: (typing.Any, dict) -> None
+    """Test add returns count of 1 for single entry."""
+    store = IsccStore(temp_store_path)
+    added = store.add(12345, sample_entry)
+    assert added == 1
+    store.close()
+
+
+def test_add_batch_entries(temp_store_path, sample_entry):
+    # type: (typing.Any, dict) -> None
+    """Test batch add with multiple entries returns correct count."""
+    store = IsccStore(temp_store_path)
+
+    # Batch add 5 entries
+    iscc_ids = [100, 200, 300, 400, 500]
+    entries = [{**sample_entry, "iscc_id": f"ISCC:ID{i}"} for i in iscc_ids]
+
+    added = store.add(iscc_ids, entries)
+    assert added == 5
+
+    # Verify all entries were added
+    for iscc_id in iscc_ids:
+        assert store.get(iscc_id) is not None
+        assert store.get(iscc_id)["iscc_id"] == f"ISCC:ID{iscc_id}"
+
+    store.close()
+
+
+def test_add_batch_mismatched_lengths(temp_store_path, sample_entry):
+    # type: (typing.Any, dict) -> None
+    """Test batch add with mismatched lengths raises ValueError."""
+    store = IsccStore(temp_store_path)
+
+    iscc_ids = [100, 200, 300]
+    entries = [{**sample_entry}, {**sample_entry}]  # Only 2 entries
+
+    try:
+        store.add(iscc_ids, entries)
+        assert False, "Expected ValueError"
+    except ValueError as e:
+        assert "Number of ISCC-IDs must match entries" in str(e)
+
+    store.close()
+
+
+def test_add_batch_empty_lists(temp_store_path):
+    # type: (typing.Any) -> None
+    """Test batch add with empty lists returns 0."""
+    store = IsccStore(temp_store_path)
+    added = store.add([], [])
+    assert added == 0
+    store.close()
+
+
+def test_add_batch_duplicate_handling(temp_store_path, sample_entry):
+    # type: (typing.Any, dict) -> None
+    """Test batch add handles duplicates correctly (replaces existing)."""
+    store = IsccStore(temp_store_path)
+
+    # First add
+    added1 = store.add(12345, sample_entry)
+    assert added1 == 1
+
+    # Second add with same ID (should replace)
+    updated_entry = {**sample_entry, "iscc_id": "ISCC:UPDATED"}
+    added2 = store.add(12345, updated_entry)
+    assert added2 == 1  # putmulti counts overwrites as added
+
+    # Verify entry was updated (replaced, not duplicated)
+    retrieved = store.get(12345)
+    assert retrieved["iscc_id"] == "ISCC:UPDATED"
+
+    # Verify only one entry exists
+    assert len(list(store.iter_entries())) == 1
+
+    store.close()
+
+
+def test_add_batch_large_batch(temp_store_path, sample_entry):
+    # type: (typing.Any, dict) -> None
+    """Test batch add with large batch of entries."""
+    store = IsccStore(temp_store_path)
+
+    # Create 1000 entries at once
+    iscc_ids = list(range(1000))
+    entries = [{**sample_entry, "iscc_id": f"ISCC:ID{i}"} for i in iscc_ids]
+
+    added = store.add(iscc_ids, entries)
+    assert added == 1000
+
+    # Verify random samples
+    assert store.get(0)["iscc_id"] == "ISCC:ID0"
+    assert store.get(500)["iscc_id"] == "ISCC:ID500"
+    assert store.get(999)["iscc_id"] == "ISCC:ID999"
+
+    # Verify total count
+    assert len(list(store.iter_entries())) == 1000
+
+    store.close()
+
+
+def test_add_batch_triggers_map_expansion(temp_store_path, sample_entry):
+    # type: (typing.Any, dict) -> None
+    """Test batch add that triggers map_size expansion."""
+    store = IsccStore(temp_store_path)
+    initial_size = store.map_size
+
+    # Create large batch that will trigger expansion
+    large_entry = {**sample_entry, "large_data": "x" * 50000}  # ~50KB per entry
+    iscc_ids = list(range(300))
+    entries = [{**large_entry, "iscc_id": f"ISCC:ID{i}"} for i in iscc_ids]
+
+    added = store.add(iscc_ids, entries)
+    assert added == 300
+
+    # Verify map_size has expanded
+    assert store.map_size > initial_size
+
+    # Verify all entries are retrievable
+    assert store.get(0)["iscc_id"] == "ISCC:ID0"
+    assert store.get(299)["iscc_id"] == "ISCC:ID299"
+
+    store.close()

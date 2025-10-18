@@ -44,7 +44,12 @@ class IsccStore:
         :param path: Directory path for LMDB storage
         :param realm_id: ISCC realm ID (0-1) for ISCC-ID reconstruction (default: 0)
         :param lmdb_options: Optional LMDB configuration dict (merged with defaults)
+        :raises ValueError: If realm_id is not 0 or 1
         """
+        # Validate realm_id
+        if realm_id not in (0, 1):
+            raise ValueError(f"realm_id must be 0 or 1, got {realm_id}")
+
         # Merge user options with defaults
         options = self.DEFAULT_LMDB_OPTIONS.copy()
         if lmdb_options:
@@ -206,6 +211,11 @@ class IsccStore:
 
         Note: Must be called when no transactions are active. Only increases persist.
         """
+        current_size = self.map_size
+        if new_size < current_size:
+            raise ValueError(
+                f"Cannot shrink database: new_size ({new_size:,}) < current map_size ({current_size:,})"
+            )
         self.env.set_mapsize(new_size)
 
     def close(self):

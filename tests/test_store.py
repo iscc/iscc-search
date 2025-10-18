@@ -627,3 +627,89 @@ def test_string_iscc_id_without_prefix(temp_store_path, sample_entry, iscc_id_ke
     assert store.get(iscc_id_int) == sample_entry
 
     store.close()
+
+
+def test_realm_id_validation_rejects_invalid_values(temp_store_path):
+    # type: (typing.Any) -> None
+    """Test realm_id validation rejects values outside 0-1 range."""
+    # Test negative value
+    try:
+        IsccStore(temp_store_path, realm_id=-1)
+        assert False, "Expected ValueError for realm_id=-1"
+    except ValueError as e:
+        assert "realm_id must be 0 or 1" in str(e)
+
+    # Test value > 1
+    try:
+        IsccStore(temp_store_path, realm_id=2)
+        assert False, "Expected ValueError for realm_id=2"
+    except ValueError as e:
+        assert "realm_id must be 0 or 1" in str(e)
+
+    # Test large invalid value
+    try:
+        IsccStore(temp_store_path, realm_id=100)
+        assert False, "Expected ValueError for realm_id=100"
+    except ValueError as e:
+        assert "realm_id must be 0 or 1" in str(e)
+
+
+def test_realm_id_validation_accepts_valid_values(temp_store_path):
+    # type: (typing.Any) -> None
+    """Test realm_id validation accepts 0 and 1."""
+    # realm_id=0 should work
+    path0 = temp_store_path / "realm0"
+    path0.parent.mkdir(parents=True, exist_ok=True)
+    store0 = IsccStore(path0, realm_id=0)
+    assert store0.realm_id == 0
+    store0.close()
+
+    # realm_id=1 should work
+    path1 = temp_store_path / "realm1"
+    path1.parent.mkdir(parents=True, exist_ok=True)
+    store1 = IsccStore(path1, realm_id=1)
+    assert store1.realm_id == 1
+    store1.close()
+
+
+def test_set_mapsize_rejects_shrinking(temp_store_path):
+    # type: (typing.Any) -> None
+    """Test set_mapsize raises ValueError when attempting to shrink database."""
+    store = IsccStore(temp_store_path)
+    current_size = store.map_size
+
+    # Attempt to shrink by half
+    try:
+        store.set_mapsize(current_size // 2)
+        assert False, "Expected ValueError when shrinking database"
+    except ValueError as e:
+        assert "Cannot shrink database" in str(e)
+        assert "new_size" in str(e)
+        assert "current map_size" in str(e)
+
+    # Attempt to set to 0
+    try:
+        store.set_mapsize(0)
+        assert False, "Expected ValueError for new_size=0"
+    except ValueError as e:
+        assert "Cannot shrink database" in str(e)
+
+    store.close()
+
+
+def test_set_mapsize_accepts_equal_or_larger(temp_store_path):
+    # type: (typing.Any) -> None
+    """Test set_mapsize accepts sizes equal to or larger than current."""
+    store = IsccStore(temp_store_path)
+    current_size = store.map_size
+
+    # Setting to same size should work
+    store.set_mapsize(current_size)
+    assert store.map_size == current_size
+
+    # Setting to larger size should work
+    new_size = current_size * 2
+    store.set_mapsize(new_size)
+    assert store.map_size == new_size
+
+    store.close()

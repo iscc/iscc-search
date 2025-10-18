@@ -2,12 +2,11 @@
 LMDB-backed primary storage for ISCC entries and metadata.
 
 IsccStore serves as the source of truth with two named databases:
-- entries: 64-bit integer keys (ISCC-IDs), JSON values
+- entries: 64-bit big-endian keys (ISCC-IDs), JSON values
 - metadata: string keys, JSON values
 """
 
 import os
-import sys
 from typing import Any, Iterator
 
 import iscc_core
@@ -20,7 +19,7 @@ class IsccStore:
     """Durable LMDB-backed storage for ISCC entries and metadata.
 
     Provides atomic writes, efficient lookups by ISCC-ID, and persistent metadata storage.
-    Time ordering is preserved as LMDB sorts integer keys by value.
+    Time ordering is preserved as LMDB lexicographically sorts big-endian keys.
     """
 
     DEFAULT_LMDB_OPTIONS = {
@@ -57,7 +56,7 @@ class IsccStore:
 
         self.env = lmdb.open(str(path), **options)
 
-        self.entries_db = self.env.open_db(b"entries", integerkey=True)
+        self.entries_db = self.env.open_db(b"entries", integerkey=False)
         self.metadata_db = self.env.open_db(b"metadata")
 
         # Initialize or restore realm_id from metadata
@@ -70,17 +69,15 @@ class IsccStore:
 
     def _iscc_id_to_key(self, iscc_id):
         # type: (int | str) -> bytes
-        """Convert ISCC-ID (string or int) to LMDB key bytes.
+        """Convert ISCC-ID (string or int) to big-endian LMDB key bytes.
 
         :param iscc_id: 64-bit integer ISCC-ID or ISCC-ID string (e.g., "ISCC:...")
-        :return: 8-byte key in native byte order for LMDB
+        :return: 8-byte key in big-endian byte order
         """
         if isinstance(iscc_id, int):
-            return iscc_id.to_bytes(8, sys.byteorder)
-        # Decode full ISCC-ID, extract body (skip 2-byte header), convert to native byte order
-        body_bytes = iscc_core.decode_base32(iscc_id.removeprefix("ISCC:"))[2:]
-        # ISCC bytes are big-endian, but LMDB integerkey needs native byte order
-        return int.from_bytes(body_bytes, "big").to_bytes(8, sys.byteorder)
+            return iscc_id.to_bytes(8, "big")
+        # Decode full ISCC-ID, extract body (skip 2-byte header) - already big-endian
+        return iscc_core.decode_base32(iscc_id.removeprefix("ISCC:"))[2:]
 
     def add(self, iscc_ids, entries):
         # type: (int | str | list[int | str], dict | list[dict]) -> int
@@ -153,7 +150,7 @@ class IsccStore:
         with self.env.begin(db=self.entries_db) as txn:
             cursor = txn.cursor()
             for key, value in cursor:
-                iscc_id = int.from_bytes(key, sys.byteorder)
+                iscc_id = int.from_bytes(key, "big")
                 entry = simdjson.loads(value)
                 yield iscc_id, entry
 

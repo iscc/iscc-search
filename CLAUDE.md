@@ -152,3 +152,6 @@ Common pitfalls to avoid:
 - **Custom metrics**: Use `CompiledMetric` with Numba `@cfunc` for custom distance functions
 - **Length signaling**: First byte stores actual vector length for variable-length support
 - **Batch operations**: Index supports batch add/search with multiple vectors
+- **Virtual Environment**: Assume you are running within an activated virtual environment
+- **Command prefix**: You don't need to prefix commands with `uv run` with an activated virtual environment
+- **Working directory**: Assume your current working directory is the project directory

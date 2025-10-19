@@ -677,19 +677,23 @@ def test_map_size_auto_expansion(temp_instance_path, sample_iscc_ids):
     idx = InstanceIndex(temp_instance_path)
 
     # Manually set small map_size to test expansion quickly
-    small_size = 32 * 1024  # 32KB
+    # Use larger size to accommodate LMDB page size rounding on macOS
+    small_size = 256 * 1024  # 256KB
     idx.set_mapsize(small_size)
-    assert idx.map_size == small_size
+    # LMDB may round up to page size (especially on macOS)
+    initial_size = idx.map_size
+    assert initial_size >= small_size
 
     # Create Instance-Codes and add entries until map_size expands
     # Use many entries with 256-bit codes to trigger expansion
-    for i in range(2000):  # Should fill 32KB and trigger expansion
+    # Need ~6500+ entries to fill 256KB and trigger expansion
+    for i in range(7000):  # Should fill initial size and trigger expansion
         ic_code = ic.Code.rnd(ic.MT.INSTANCE, bits=256)
         ic_str = f"ISCC:{ic_code}"
         idx.add(sample_iscc_ids[i % len(sample_iscc_ids)], ic_str)
 
     # Verify map_size has doubled at least once
-    assert idx.map_size > small_size
+    assert idx.map_size > initial_size
 
     # Verify entries are retrievable
     ic_code1 = ic.Code.rnd(ic.MT.INSTANCE, bits=256)
@@ -721,18 +725,22 @@ def test_reopen_larger_database(temp_instance_path, sample_iscc_ids):
     idx1 = InstanceIndex(temp_instance_path)
 
     # Set small map_size and add entries to force expansion
-    idx1.set_mapsize(32 * 1024)  # 32KB
+    # Use larger size to accommodate LMDB page size rounding on macOS
+    small_size = 256 * 1024  # 256KB
+    idx1.set_mapsize(small_size)
+    initial_size = idx1.map_size  # May be rounded up by LMDB
 
-    # Add many entries to force expansion beyond 32KB
+    # Add many entries to force expansion beyond initial size
+    # Need ~6500+ entries to fill 256KB and trigger expansion
     entries_added = []
-    for i in range(2000):
+    for i in range(7000):
         ic_code = ic.Code.rnd(ic.MT.INSTANCE, bits=256)
         ic_str = f"ISCC:{ic_code}"
         idx1.add(sample_iscc_ids[i % len(sample_iscc_ids)], ic_str)
         entries_added.append((sample_iscc_ids[i % len(sample_iscc_ids)], ic_str))
 
     final_size = idx1.map_size
-    assert final_size > 32 * 1024  # Should have grown
+    assert final_size > initial_size  # Should have grown
     idx1.close()
 
     # Reopen - LMDB uses actual database size

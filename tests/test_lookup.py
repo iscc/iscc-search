@@ -812,3 +812,33 @@ def test_reverse_search_empty_database_sections(temp_lookup_path):
             assert len(results) == 1
 
     idx.close()
+
+
+def test_reverse_search_no_prefix_match(temp_lookup_path):
+    # type: (typing.Any) -> None
+    """Test reverse search when cursor.set_range finds no matching prefix.
+
+    This test specifically targets the uncovered branch 363->358 in lookup.py
+    where cursor.set_range(prefix) returns False and the loop continues.
+    """
+    idx = IsccLookupIndex(temp_lookup_path)
+
+    # Add many random 256-bit DATA units to populate the database
+    # The goal is to create a sparse key space where some prefixes won't match
+    for i in range(200):
+        unit = ic.gen_data_code_v0(io.BytesIO(f"stored_data_{i}".encode()), bits=256)["iscc"]
+        item = IsccItemDict(units=[unit])
+        idx.add(item)
+
+    # Perform many searches with random queries
+    # Due to hash randomness and sparse key space, at least one query's prefixes
+    # (64, 128, or 192 bits) will not exist in the database, causing cursor.set_range
+    # to return False and triggering the branch 363->358
+    for i in range(300):
+        query = ic.gen_data_code_v0(io.BytesIO(f"query_data_{i}_xyz".encode()), bits=256)["iscc"]
+        query_item = IsccItemDict(units=[query])
+        results = idx.search(query_item)
+        assert len(results) == 1
+        assert "lookup_matches" in results[0]
+
+    idx.close()

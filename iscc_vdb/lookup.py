@@ -60,18 +60,18 @@ result structure:
 {
     lookup_matches: [
     {
-        iscc_id: ...,
-        score:
-        meta: 64,
-        semantic: 0,
-        content: 128,
-        data: 64,
-        intance: 0
+        iscc_id: "ISCC:...",
+        score: 256,
+        matches: {
+            "META_NONE_V0": 64,
+            "CONTENT_TEXT_V0": 128,
+            "DATA_NONE_V0": 64
+        }
     ]
 }
 
-where score is the sum of all matched bits
-meta, semantic, content, data, instance signify the number of exact overlaping prefix bits per unit.
+where score is the sum of all matched bits across unit_types.
+matches maps each unit_type to the number of exact overlapping prefix bits.
 """
 
 import os
@@ -87,11 +87,7 @@ class IsccLookupMatchDict(TypedDict):
 
     iscc_id: str
     score: int
-    meta: int
-    semantic: int
-    content: int
-    data: int
-    instance: int
+    matches: dict[str, int]  # Maps unit_type (e.g., "CONTENT_TEXT_V0") -> matched bits
 
 
 class IsccLookupResultDict(TypedDict):
@@ -221,7 +217,7 @@ class IsccLookupIndex:
                 # Convert to IsccItem
                 iscc_item = IsccItem.from_dict(item)
 
-                # Accumulate matches: iscc_id -> {main_type -> max_bits}
+                # Accumulate matches: iscc_id -> {unit_type -> max_bits}
                 matches = {}  # type: dict[str, dict[str, int]]
 
                 # Process each query unit
@@ -237,34 +233,22 @@ class IsccLookupIndex:
                     # Find matching units with prefix search
                     unit_matches = self._search_unit(txn, db, unit)
 
-                    # Aggregate matches by ISCC-ID
+                    # Aggregate matches by ISCC-ID and unit_type
                     for iscc_id, matched_bits in unit_matches.items():
                         if iscc_id not in matches:
-                            matches[iscc_id] = {
-                                "meta": 0,
-                                "semantic": 0,
-                                "content": 0,
-                                "data": 0,
-                                "instance": 0,
-                            }
+                            matches[iscc_id] = {}
 
-                        # Map unit type to main type
-                        main_type = self._get_main_type(unit)
-                        # Keep maximum bits matched for this main type
-                        matches[iscc_id][main_type] = max(matches[iscc_id][main_type], matched_bits)
+                        # Keep maximum bits matched for this unit_type
+                        matches[iscc_id][unit_type] = max(matches[iscc_id].get(unit_type, 0), matched_bits)
 
                 # Calculate scores and sort
                 lookup_matches = []
-                for iscc_id, type_scores in matches.items():
-                    total_score = sum(type_scores.values())
+                for iscc_id, unit_type_scores in matches.items():
+                    total_score = sum(unit_type_scores.values())
                     match_dict = IsccLookupMatchDict(
                         iscc_id=iscc_id,
                         score=total_score,
-                        meta=type_scores["meta"],
-                        semantic=type_scores["semantic"],
-                        content=type_scores["content"],
-                        data=type_scores["data"],
-                        instance=type_scores["instance"],
+                        matches=unit_type_scores,
                     )
                     lookup_matches.append(match_dict)
 
@@ -381,7 +365,7 @@ class IsccLookupIndex:
                     if not key.startswith(prefix):
                         break
                     # Check if this is truly a prefix match (not just range)
-                    if query_body.startswith(key):
+                    if query_body.startswith(key):  # pragma: no branch
                         iscc_id = self._bytes_to_iscc_id(value)
                         matched_bits = len(key) * 8
                         matches[iscc_id] = max(matches.get(iscc_id, 0), matched_bits)
@@ -398,10 +382,3 @@ class IsccLookupIndex:
         else:
             raise ValueError(f"Invalid realm_id {self.realm_id}, must be 0 or 1")
         return "ISCC:" + ic.encode_base32(header + digest)
-
-    @staticmethod
-    def _get_main_type(unit):
-        # type: (IsccUnit) -> str
-        """Get lowercase main type name from unit."""
-        mt = ic.MT(unit.fields[0])
-        return mt.name.lower()

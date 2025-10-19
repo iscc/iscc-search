@@ -258,8 +258,10 @@ def test_search_score_calculation(temp_lookup_path):
     # First match should be the item itself with high scores
     match = matches[0]
     assert match["iscc_id"] == added_ids[0]
-    assert match["data"] == 64  # 64-bit match
-    assert match["instance"] == 64  # 64-bit match
+    assert "DATA_NONE_V0" in match["matches"]
+    assert "INSTANCE_NONE_V0" in match["matches"]
+    assert match["matches"]["DATA_NONE_V0"] == 64  # 64-bit match
+    assert match["matches"]["INSTANCE_NONE_V0"] == 64  # 64-bit match
     assert match["score"] == 128  # Total
     idx.close()
 
@@ -310,7 +312,7 @@ def test_search_sorting_by_score(temp_lookup_path):
 
 def test_search_unit_type_aggregation(temp_lookup_path):
     # type: (typing.Any) -> None
-    """Test that scores are aggregated by main type correctly."""
+    """Test that scores are tracked by specific unit_type correctly."""
     idx = IsccLookupIndex(temp_lookup_path)
 
     # Add item with multiple unit types
@@ -333,21 +335,16 @@ def test_search_unit_type_aggregation(temp_lookup_path):
     matches = results[0]["lookup_matches"]
     assert len(matches) > 0
 
-    # Check that all main types have scores
+    # Check that all unit types have scores
     match = matches[0]
     assert match["iscc_id"] == added_ids[0]
-    assert match["meta"] > 0
-    assert match["semantic"] > 0
-    assert match["content"] > 0
-    assert match["data"] > 0
-    assert match["instance"] > 0
-    assert match["score"] == sum([
-        match["meta"],
-        match["semantic"],
-        match["content"],
-        match["data"],
-        match["instance"],
-    ])
+    assert "META_NONE_V0" in match["matches"]
+    assert "SEMANTIC_TEXT_V0" in match["matches"]
+    assert "CONTENT_TEXT_V0" in match["matches"]
+    assert "DATA_NONE_V0" in match["matches"]
+    assert "INSTANCE_NONE_V0" in match["matches"]
+    assert all(score > 0 for score in match["matches"].values())
+    assert match["score"] == sum(match["matches"].values())
     idx.close()
 
 
@@ -505,26 +502,6 @@ def test_normalize_input_list_of_dicts(temp_lookup_path, sample_iscc_items):
     assert isinstance(result, list)
     assert len(result) == len(sample_iscc_items)
     assert result == sample_iscc_items
-    idx.close()
-
-
-def test_get_main_type(temp_lookup_path):
-    # type: (typing.Any) -> None
-    """Test _get_main_type helper method."""
-    idx = IsccLookupIndex(temp_lookup_path)
-
-    # Test with different main types
-    from iscc_vdb.types import IsccUnit
-
-    meta_unit = IsccUnit(ic.gen_meta_code_v0("Test")["iscc"])
-    assert idx._get_main_type(meta_unit) == "meta"
-
-    data_unit = IsccUnit(ic.gen_data_code_v0(io.BytesIO(b"data"))["iscc"])
-    assert idx._get_main_type(data_unit) == "data"
-
-    instance_unit = IsccUnit(ic.gen_instance_code_v0(io.BytesIO(b"inst"))["iscc"])
-    assert idx._get_main_type(instance_unit) == "instance"
-
     idx.close()
 
 
@@ -695,15 +672,15 @@ def test_typed_dict_structures():
     match_dict = IsccLookupMatchDict(
         iscc_id="ISCC:MAIGIGAPWHP6WYAA",
         score=128,
-        meta=64,
-        semantic=0,
-        content=0,
-        data=64,
-        instance=0,
+        matches={
+            "DATA_NONE_V0": 64,
+            "INSTANCE_NONE_V0": 64,
+        },
     )
 
     assert match_dict["iscc_id"] == "ISCC:MAIGIGAPWHP6WYAA"
     assert match_dict["score"] == 128
+    assert match_dict["matches"]["DATA_NONE_V0"] == 64
 
     result_dict = IsccLookupResultDict(lookup_matches=[match_dict])
     assert len(result_dict["lookup_matches"]) == 1
@@ -751,4 +728,87 @@ def test_reverse_search_coverage(temp_lookup_path):
     matches = results[0]["lookup_matches"]
     # Should have found the shorter stored units
     assert len(matches) >= 1
+
+    # Also test edge case: search with very short unit (64-bit) when longer units stored
+    # This should not trigger reverse search branches (all bit_lengths >= query_bits)
+    source_data.seek(0)
+    query_short = ic.gen_data_code_v0(source_data, bits=64)["iscc"]
+    query_item_short = IsccItemDict(units=[query_short])
+    results_short = idx.search(query_item_short)
+    # Should still find matches via forward search
+    assert len(results_short) == 1
+    idx.close()
+
+
+def test_reverse_search_edge_cases(temp_lookup_path):
+    # type: (typing.Any) -> None
+    """Test reverse search edge cases for full coverage."""
+    idx = IsccLookupIndex(temp_lookup_path)
+
+    # Add many units with varied bit lengths and different data
+    # This creates a diverse key space to trigger edge cases
+    for i in range(50):
+        for bits in [64, 128, 192, 256]:
+            item = IsccItemDict(
+                units=[
+                    ic.gen_data_code_v0(io.BytesIO(f"data{i}_{bits}".encode()), bits=bits)["iscc"],
+                ]
+            )
+            idx.add(item)
+
+    # Search with many different queries to maximize chances of hitting edge cases
+    # Some will have matching prefixes, some won't
+    for i in range(20):
+        query_item = IsccItemDict(units=[ic.gen_data_code_v0(io.BytesIO(f"query{i}".encode()), bits=256)["iscc"]])
+        results = idx.search(query_item)
+        assert len(results) == 1
+        assert "lookup_matches" in results[0]
+
+    # Search with completely different data patterns
+    for prefix in [b"xyz", b"abc", b"123", b"test", b"zzzz"]:
+        query_item = IsccItemDict(
+            units=[ic.gen_data_code_v0(io.BytesIO(prefix + b" different data"), bits=192)["iscc"]]
+        )
+        results = idx.search(query_item)
+        assert len(results) == 1
+
+    idx.close()
+
+
+def test_reverse_search_empty_database_sections(temp_lookup_path):
+    # type: (typing.Any) -> None
+    """Test reverse search when specific prefix ranges don't exist."""
+    idx = IsccLookupIndex(temp_lookup_path)
+
+    # Add only 64-bit DATA units (creating gaps in key space)
+    for i in range(5):
+        item = IsccItemDict(units=[ic.gen_data_code_v0(io.BytesIO(f"short{i}".encode()), bits=64)["iscc"]])
+        idx.add(item)
+
+    # Search with SEMANTIC units (different unit_type, empty database)
+    # This creates a scenario where cursor.set_range might return False
+    for i in range(10):
+        query_item = IsccItemDict(units=[f"ISCC:{ic.Code.rnd(ic.MT.SEMANTIC, ic.ST_CC.TEXT, bits=256)}"])
+        results = idx.search(query_item)
+        # SEMANTIC db doesn't exist, so should return empty results
+        assert len(results) == 1
+
+    # Add some CONTENT units with specific patterns
+    for i in range(20):
+        # Use different subtypes to create varied key patterns
+        for subtype in [ic.ST_CC.TEXT, ic.ST_CC.IMAGE, ic.ST_CC.AUDIO]:
+            unit = f"ISCC:{ic.Code.rnd(ic.MT.CONTENT, subtype, bits=128)}"
+            item = IsccItemDict(units=[unit])
+            idx.add(item)
+
+    # Search with longer CONTENT units
+    # This maximizes chances of cursor.set_range finding keys but
+    # query_body.startswith(key) being False
+    for i in range(30):
+        for subtype in [ic.ST_CC.TEXT, ic.ST_CC.VIDEO]:
+            query = f"ISCC:{ic.Code.rnd(ic.MT.CONTENT, subtype, bits=256)}"
+            query_item = IsccItemDict(units=[query])
+            results = idx.search(query_item)
+            assert len(results) == 1
+
     idx.close()

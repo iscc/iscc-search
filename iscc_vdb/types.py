@@ -211,6 +211,7 @@ class IsccUnit(IsccBase):
 
     @property
     def unit_type(self):
+        # type: () -> str
         """
         Get ISCC-UNIT type identifier.
 

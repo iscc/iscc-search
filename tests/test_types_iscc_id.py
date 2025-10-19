@@ -110,34 +110,33 @@ def test_iscc_type_property():
     assert iscc_id_r1.iscc_type == "ID-REALM_1-V1"
 
 
-def test_int_returns_full_digest_as_integer():
+def test_int_returns_body_as_integer():
     # type: () -> None
-    """__int__ returns full digest as integer (including header)."""
+    """__int__ returns body-only as integer (header excluded)."""
     iscc_id_str = ic.gen_iscc_id(timestamp=1000000, hub_id=5, realm_id=0)["iscc"]
     iscc_id = IsccID(iscc_id_str)
 
-    # __int__ should return the full digest as integer
+    # __int__ should return only the body as integer
     int_val = int(iscc_id)
-    expected_int = int.from_bytes(iscc_id.digest, "big", signed=False)
+    expected_int = int.from_bytes(iscc_id.body, "big", signed=False)
 
     assert int_val == expected_int
     assert int_val > 0
 
 
-def test_int_warning_header_included():
+def test_int_excludes_header():
     # type: () -> None
-    """__int__ includes header in integer representation (verify warning is accurate)."""
+    """__int__ excludes header from integer representation (body-only)."""
     iscc_id_str = ic.gen_iscc_id(timestamp=1000000, hub_id=5, realm_id=0)["iscc"]
     iscc_id = IsccID(iscc_id_str)
 
-    full_int = int(iscc_id)
+    int_val = int(iscc_id)
     body_int = int.from_bytes(iscc_id.body, "big", signed=False)
 
-    # The full integer should be larger than body-only integer
-    assert full_int > body_int
-    # Full digest is 10 bytes, body is 8 bytes
-    assert full_int.bit_length() <= 80
-    assert body_int.bit_length() <= 64
+    # __int__ should return body-only
+    assert int_val == body_int
+    # Body is 8 bytes = 64 bits
+    assert int_val.bit_length() <= 64
 
 
 def test_from_int_with_realm_0():
@@ -214,18 +213,21 @@ def test_roundtrip_body_preserves_iscc_id():
     assert bytes(reconstructed) == bytes(original)
 
 
-def test_roundtrip_full_int_fails():
+def test_roundtrip_with_int_succeeds():
     # type: () -> None
-    """Roundtrip with __int__ fails because it includes header."""
+    """Roundtrip with __int__ succeeds because it returns body-only."""
     original_str = ic.gen_iscc_id(timestamp=1000000, hub_id=5, realm_id=0)["iscc"]
     original = IsccID(original_str)
 
-    # Get full digest as int
-    full_int = int(original)
+    # Get body as int using __int__
+    body_int = int(original)
 
-    # Trying to reconstruct with full int should fail
-    with pytest.raises((OverflowError, ValueError)):
-        IsccID.from_int(full_int, realm_id=0)
+    # Reconstruct with same realm_id should succeed
+    reconstructed = IsccID.from_int(body_int, realm_id=0)
+
+    # Should match original
+    assert str(reconstructed) == str(original)
+    assert reconstructed.digest == original.digest
 
 
 def test_with_sample_iscc_ids_fixture(sample_iscc_ids):

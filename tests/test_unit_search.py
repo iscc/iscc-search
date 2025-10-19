@@ -463,3 +463,23 @@ def test_unit_batch_matches_count_matches_with_count_greater_than_one(sample_isc
     # Should find both exact matches within top 3
     count = result.count_matches(expected, count=3)
     assert count == 2
+
+
+def test_search_with_count_zero_raises_value_error(sample_iscc_ids, sample_meta_units):
+    # type: (list[str], list[str]) -> None
+    """Search with count=0 raises ValueError to prevent usearch segfault."""
+    idx = UnitIndex(max_dim=256)
+    idx.add(sample_iscc_ids[:4], sample_meta_units[:4])
+
+    with pytest.raises(ValueError, match="count must be >= 1"):
+        idx.search(sample_meta_units[0], count=0)
+
+
+def test_search_with_negative_count_raises_value_error(sample_iscc_ids, sample_meta_units):
+    # type: (list[str], list[str]) -> None
+    """Search with negative count raises ValueError."""
+    idx = UnitIndex(max_dim=256)
+    idx.add(sample_iscc_ids[:4], sample_meta_units[:4])
+
+    with pytest.raises(ValueError, match="count must be >= 1"):
+        idx.search(sample_meta_units[0], count=-10)

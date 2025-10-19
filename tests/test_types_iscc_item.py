@@ -119,7 +119,7 @@ def test_new_raises_value_error_without_code_or_units():
     """Test new() raises ValueError when neither code nor units provided."""
     iscc_id_str = ic.gen_iscc_id(timestamp=1000000, hub_id=5, realm_id=0)["iscc"]
 
-    with pytest.raises(ValueError, match="Either iscc_code or iscc_units must be provided"):
+    with pytest.raises(ValueError, match="Either iscc_code or units must be provided"):
         IsccItem.new(iscc_id_str)
 
 
@@ -128,7 +128,7 @@ def test_new_raises_value_error_with_none_values():
     """Test new() raises ValueError when both code and units are None."""
     iscc_id_str = ic.gen_iscc_id(timestamp=1000000, hub_id=5, realm_id=0)["iscc"]
 
-    with pytest.raises(ValueError, match="Either iscc_code or iscc_units must be provided"):
+    with pytest.raises(ValueError, match="Either iscc_code or units must be provided"):
         IsccItem.new(iscc_id_str, iscc_code=None, units=None)
 
 
@@ -661,5 +661,5 @@ def test_from_dict_raises_without_code_or_units():
 
     data_dict = {"iscc_id": iscc_id_str}
 
-    with pytest.raises(ValueError, match="Either iscc_code or iscc_units must be provided"):
+    with pytest.raises(ValueError, match="Either iscc_code or units must be provided"):
         IsccItem.from_dict(data_dict)

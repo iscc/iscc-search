@@ -356,3 +356,13 @@ def test_new_iscc_id_multiple_calls_unique_timestamps():
     unique_hub_ids = set(hub_ids)
     # With random selection from 4096 values, we expect many unique values
     assert len(unique_hub_ids) > 50  # Probabilistically very likely
+
+
+def test_split_iscc_sequence_invalid_raises_value_error():
+    # type: () -> None
+    """split_iscc_sequence raises ValueError for invalid ISCC-SEQUENCE."""
+    # Test with corrupted data that will cause decode_header to fail
+    invalid_data = b"\xff\xff\xff\xff"
+
+    with pytest.raises(ValueError, match="Invalid ISCC-SEQUENCE"):
+        split_iscc_sequence(invalid_data)

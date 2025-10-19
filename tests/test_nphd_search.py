@@ -9,6 +9,7 @@ Verifies that NphdIndex.search() correctly handles:
 """
 
 import numpy as np
+import pytest
 from numpy.testing import assert_array_equal
 
 from iscc_vdb.nphd import NphdIndex
@@ -142,3 +143,27 @@ def test_search_threads_parameter_passed_via_kwargs():
     result = idx.search(query, count=1, threads=1)
 
     assert len(result) == 1
+
+
+def test_search_with_count_zero_raises_value_error():
+    # type: () -> None
+    """Search with count=0 raises ValueError to prevent usearch segfault."""
+    idx = NphdIndex(max_dim=256)
+    idx.add(1, np.array([178, 204, 60, 240], dtype=np.uint8))
+
+    query = np.array([178, 204, 60, 240], dtype=np.uint8)
+
+    with pytest.raises(ValueError, match="count must be >= 1"):
+        idx.search(query, count=0)
+
+
+def test_search_with_negative_count_raises_value_error():
+    # type: () -> None
+    """Search with negative count raises ValueError."""
+    idx = NphdIndex(max_dim=256)
+    idx.add(1, np.array([178, 204, 60, 240], dtype=np.uint8))
+
+    query = np.array([178, 204, 60, 240], dtype=np.uint8)
+
+    with pytest.raises(ValueError, match="count must be >= 1"):
+        idx.search(query, count=-5)

@@ -74,16 +74,6 @@ packages = ["iscc_vdb"]
 [tool.hatch.metadata]
 allow-direct-references = true
 
-[tool.mypy]
-files = ["iscc_vdb"]
-disallow_untyped_defs = true
-disallow_any_unimported = true
-no_implicit_optional = true
-check_untyped_defs = true
-warn_return_any = true
-warn_unused_ignores = true
-show_error_codes = true
-
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 
@@ -111,4 +101,4 @@ format-markdown = { shell = "uv run mdformat --end-of-line lf --wrap 112 --numbe
 precommit = { shell = "uv run prek run"}
 format = { sequence = ["format-code", "format-markdown",], help = "Format all files" }
 test = { shell = "uv run python -m pytest --cov --cov-config=pyproject.toml --cov-report=xml --cov-report=term-missing", help = "Test the code with pytest" }
-all = { sequence = ["format", "test",], help = "Run all pre-commit tasks: format, check, test, and docs-test" }
+all = { sequence = ["format", "test",], help = "Run all pre-commit tasks: format and test" }

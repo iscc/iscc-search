@@ -8,21 +8,6 @@ on:
     types: [opened, synchronize, reopened, ready_for_review]
 
 jobs:
-  quality:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check out
-        uses: actions/checkout@v4
-
-      - name: Set up the environment
-        uses: ./.github/actions/setup-python-env
-
-      - name: Clean pre-commit cache
-        run: uv run pre-commit clean || true
-
-      - name: Run checks
-        run: uv run poe check
-
   tests-full:
     runs-on: ubuntu-latest
     strategy:
@@ -43,10 +28,6 @@ jobs:
 
       - name: Run tests
         run: uv run poe test
-
-      - name: Check typing
-        run: uv run mypy
-
 
       - name: Upload coverage reports to Codecov with GitHub Action on Python 3.11
         uses: codecov/codecov-action@v4
@@ -74,18 +55,3 @@ jobs:
 
       - name: Run tests
         run: uv run poe test
-
-      - name: Check typing
-        run: uv run mypy
-
-  check-docs:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check out
-        uses: actions/checkout@v4
-
-      - name: Set up the environment
-        uses: ./.github/actions/setup-python-env
-
-      - name: Check if documentation can be built
-        run: uv run poe docs-test

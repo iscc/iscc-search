@@ -23,8 +23,21 @@ from numpy.typing import NDArray, DTypeLike
 
 
 class IsccBase:
+    """
+    Base class for ISCC objects providing common properties and methods.
+
+    Handles conversion between different ISCC representations (string, bytes)
+    and provides access to ISCC components (header, body, fields).
+    """
+
     def __init__(self, iscc):
         # type: (str | bytes) -> None
+        """
+        Initialize ISCC object from string or binary representation.
+
+        :param iscc: ISCC in canonical string format (with or without "ISCC:" prefix) or binary digest
+        :raises TypeError: If iscc is not str or bytes
+        """
         if isinstance(iscc, str):
             self.digest = ic.decode_base32(iscc.removeprefix("ISCC:"))
         elif isinstance(iscc, bytes):
@@ -35,16 +48,31 @@ class IsccBase:
     @property
     def body(self):
         # type: () -> bytes
+        """
+        Extract ISCC-BODY bytes (payload without header).
+
+        :return: ISCC-BODY as raw bytes
+        """
         return self.digest[2:]
 
     @cached_property
     def fields(self):
         # type: () -> ic.IsccTuple
+        """
+        Decode ISCC header into structured fields.
+
+        :return: IsccTuple with MainType, SubType, Version, Length, and Body
+        """
         return ic.decode_header(self.digest)
 
     @cached_property
     def iscc_type(self):
         # type: () -> str
+        """
+        Get human-readable ISCC type identifier.
+
+        :return: ISCC type string in format "MAINTYPE-SUBTYPE-VERSION" (e.g., "CONTENT-TEXT-V1")
+        """
         mtype = ic.MT(self.fields[0])
         stype = ic.SUBTYPE_MAP[(self.fields[0], self.fields[2])](self.fields[1])
         version = ic.VS(self.fields[2])
@@ -53,39 +81,81 @@ class IsccBase:
     @cache
     def __str__(self):
         # type: () -> str
-        """Canongical ISCC"""
+        """
+        Get canonical ISCC string representation.
+
+        :return: ISCC in canonical format with "ISCC:" prefix and base32 encoding
+        """
         return f"ISCC:{ic.encode_base32(self.digest)}"
 
     @cache
     def __len__(self):
         # type: () -> int
-        """ISCC-BODY bit-length"""
+        """
+        Get ISCC-BODY bit-length.
+
+        :return: Number of bits in ISCC-BODY (64, 128, 192, or 256)
+        """
         return len(self.digest[2:]) * 8
 
     def __bytes__(self):
         # type: () -> bytes
-        """ISCC-DIGEST bytes"""
+        """
+        Get binary ISCC-DIGEST representation.
+
+        :return: Complete ISCC-DIGEST as bytes (ISCC-HEADER + ISCC-BODY)
+        """
         return self.digest
 
 
 class IsccID(IsccBase):
+    """
+    ISCC-ID: Globally unique digital asset identifier.
+
+    Combines ISCC-HEADER with 52-bit timestamp and 12-bit server-id for
+    unique identification of digital assets across distributed systems.
+    """
+
     @cache
     def __int__(self):
         """
+        Convert ISCC-ID to integer representation.
+
         WARNING: Integer representation does not include ISCC-HEADER information.
+        Use as a 64-bit integer database id and keep track of the REALM-ID for recustruction
+
+        :return: Integer representation of complete ISCC-ID digest
         """
         return int.from_bytes(self.digest, "big", signed=False)
 
     @classmethod
     def from_int(cls, iscc_id, realm_id):
         # type: (int, int) -> IsccID
-        """Build ISCC-ID with REALM-ID"""
+        """
+        Construct ISCC-ID from integer and realm identifier.
+
+        :param iscc_id: Integer representation of ISCC-ID body (8 bytes)
+        :param realm_id: Realm identifier for ISCC-HEADER SubType
+        :return: New IsccID instance
+        """
         return cls(ic.encode_header(ic.MT.ID, realm_id, ic.VS.V1, 0) + iscc_id.to_bytes(8, "big", signed=False))
 
 
 class IsccUnit(IsccBase):
+    """
+    ISCC-UNIT: Single-algorithm ISCC component.
+
+    An ISCC-UNIT combines ISCC-HEADER with ISCC-BODY calculated from a single
+    algorithm. Multiple ISCC-UNITs can be combined to form an ISCC-CODE.
+    """
+
     @property
     def unit_type(self):
+        """
+        Get ISCC-UNIT type identifier.
+
+        :return: ISCC type string (alias for iscc_type property)
+        """
         return self.iscc_type
 
     def __array__(self, dtype=np.uint8, copy=None):
@@ -104,10 +174,25 @@ class IsccUnit(IsccBase):
 
 
 class IsccCode(IsccBase):
+    """
+    ISCC-CODE: Composite ISCC combining multiple ISCC-UNITs.
+
+    An ISCC-CODE combines multiple ISCC-UNIT bodies into a single identifier.
+    Minimum requirement: DATA and INSTANCE units. Can include META, SEMANTIC,
+    and CONTENT units depending on the content type.
+    """
+
     @cached_property
     def units(self):
         # type: () -> list[IsccUnit]
-        """List of ISCC-UNITS in ISCC-CODE."""
+        """
+        Decompose ISCC-CODE into constituent ISCC-UNITs.
+
+        Parses the ISCC-CODE body and reconstructs individual ISCC-UNITs with
+        their headers. Handles both standard codes and WIDE subtype codes.
+
+        :return: List of IsccUnit objects contained in this ISCC-CODE
+        """
         units = []
         raw_code = self.digest
         while raw_code:

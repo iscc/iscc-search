@@ -285,7 +285,7 @@ class IsccCode(IsccBase):
         return units
 
 
-class IsccItemDict(TypedDict):
+class IsccItemDict(TypedDict, total=False):
     """Dictionary representation of an ISCC item with ID, code, and units as strings."""
 
     iscc_id: str
@@ -327,6 +327,25 @@ class IsccItem(msgspec.Struct, frozen=True, array_like=True):
             raise ValueError("Either iscc_code or iscc_units must be provided")
         return IsccItem(IsccID(iscc_id).digest, units_data)
 
+    @classmethod
+    def from_dict(cls, data):
+        # type: (IsccItemDict) -> IsccItem
+        """
+        Create IsccItem from dictionary, generating random ISCC-ID if missing.
+
+        :param data: Dictionary with optional iscc_id and either iscc_code or units
+        :return: New IsccItem instance
+        :raises ValueError: If neither iscc_code nor units is provided
+        """
+        iscc_id = data.get("iscc_id")
+        if iscc_id is None:
+            iscc_id = str(IsccID.random())
+
+        iscc_code = data.get("iscc_code")
+        units = data.get("units")
+
+        return cls.new(iscc_id, iscc_code=iscc_code, units=units)
+
     @property
     def iscc_id(self):
         # type: () -> str
@@ -345,6 +364,7 @@ class IsccItem(msgspec.Struct, frozen=True, array_like=True):
         """ISCC-UNITs as list of canonical strings."""
         return [f"ISCC:{ic.encode_base32(u)}" for u in split_iscc_sequence(self.units_data)]
 
+    @property
     def dict(self):
         # type: () -> IsccItemDict
         """
@@ -358,6 +378,7 @@ class IsccItem(msgspec.Struct, frozen=True, array_like=True):
             units=self.units,
         )
 
+    @property
     def json(self):
         # type: () -> bytes
         """
@@ -365,4 +386,4 @@ class IsccItem(msgspec.Struct, frozen=True, array_like=True):
 
         :return: JSON-encoded representation of IsccItem dictionary
         """
-        return msgspec.json.encode(self.dict())
+        return msgspec.json.encode(self.dict)

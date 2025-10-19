@@ -229,9 +229,9 @@ def test_properties_return_consistent_values():
     assert units1 == units2
 
 
-def test_dict_method_returns_typed_dict():
+def test_dict_property_returns_typed_dict():
     # type: () -> None
-    """Test dict() method returns IsccItemDict with all fields."""
+    """Test dict property returns IsccItemDict with all fields."""
     iscc_id_str = ic.gen_iscc_id(timestamp=1000000, hub_id=5, realm_id=0)["iscc"]
     meta = ic.gen_meta_code("Test Title")
     data = ic.gen_data_code(BytesIO(b"Test Data"))
@@ -239,7 +239,7 @@ def test_dict_method_returns_typed_dict():
 
     item = IsccItem.new(iscc_id_str, units=[meta["iscc"], data["iscc"], instance["iscc"]])
 
-    item_dict = item.dict()
+    item_dict = item.dict
 
     assert isinstance(item_dict, dict)
     assert "iscc_id" in item_dict
@@ -250,9 +250,9 @@ def test_dict_method_returns_typed_dict():
     assert item_dict["units"] == item.units
 
 
-def test_json_method_returns_bytes():
+def test_json_property_returns_bytes():
     # type: () -> None
-    """Test json() method returns msgspec JSON bytes."""
+    """Test json property returns msgspec JSON bytes."""
     iscc_id_str = ic.gen_iscc_id(timestamp=1000000, hub_id=5, realm_id=0)["iscc"]
     meta = ic.gen_meta_code("Test")
     data = ic.gen_data_code(BytesIO(b"Test"))
@@ -260,7 +260,7 @@ def test_json_method_returns_bytes():
 
     item = IsccItem.new(iscc_id_str, units=[meta["iscc"], data["iscc"], instance["iscc"]])
 
-    json_bytes = item.json()
+    json_bytes = item.json
 
     assert isinstance(json_bytes, bytes)
     # Should be valid JSON
@@ -279,12 +279,12 @@ def test_json_roundtrip_decodes_correctly():
     item = IsccItem.new(iscc_id_str, units=[meta["iscc"], data["iscc"], instance["iscc"]])
 
     # Encode to JSON
-    json_bytes = item.json()
+    json_bytes = item.json
 
     # Decode back
     decoded = msgspec.json.decode(json_bytes)
 
-    # Should match dict()
+    # Should match dict property
     assert decoded["iscc_id"] == item.iscc_id
     assert decoded["iscc_code"] == item.iscc_code
     assert decoded["units"] == item.units
@@ -300,11 +300,11 @@ def test_roundtrip_dict_to_new_to_dict():
     instance = ic.gen_instance_code(BytesIO(b"Test Data"))
 
     original_item = IsccItem.new(iscc_id_str, units=[meta["iscc"], data["iscc"], instance["iscc"]])
-    original_dict = original_item.dict()
+    original_dict = original_item.dict
 
     # Reconstruct from dict data
     reconstructed_item = IsccItem.new(original_dict["iscc_id"], units=original_dict["units"])
-    reconstructed_dict = reconstructed_item.dict()
+    reconstructed_dict = reconstructed_item.dict
 
     # Dicts should be equivalent
     assert reconstructed_dict["iscc_id"] == original_dict["iscc_id"]
@@ -571,14 +571,14 @@ def test_edge_case_maximum_components():
 
 def test_dict_keys_match_typed_dict():
     # type: () -> None
-    """Test dict() returns exactly the keys defined in IsccItemDict."""
+    """Test dict property returns exactly the keys defined in IsccItemDict."""
     iscc_id_str = ic.gen_iscc_id(timestamp=1000000, hub_id=5, realm_id=0)["iscc"]
     meta = ic.gen_meta_code("Test")
     data = ic.gen_data_code(BytesIO(b"Test"))
     instance = ic.gen_instance_code(BytesIO(b"Test"))
 
     item = IsccItem.new(iscc_id_str, units=[meta["iscc"], data["iscc"], instance["iscc"]])
-    item_dict = item.dict()
+    item_dict = item.dict
 
     # Should have exactly these keys
     expected_keys = {"iscc_id", "iscc_code", "units"}
@@ -603,4 +603,63 @@ def test_multiple_items_with_same_data():
     # But have same content
     assert item1.id_data == item2.id_data
     assert item1.units_data == item2.units_data
-    assert item1.dict() == item2.dict()
+    assert item1.dict == item2.dict
+
+
+def test_from_dict_with_iscc_id_and_units():
+    # type: () -> None
+    """Test from_dict with iscc_id and units provided."""
+    iscc_id_str = ic.gen_iscc_id(timestamp=1000000, hub_id=5, realm_id=0)["iscc"]
+    meta = ic.gen_meta_code("Test")
+    data = ic.gen_data_code(BytesIO(b"Test"))
+    instance = ic.gen_instance_code(BytesIO(b"Test"))
+
+    data_dict = {"iscc_id": iscc_id_str, "units": [meta["iscc"], data["iscc"], instance["iscc"]]}
+
+    item = IsccItem.from_dict(data_dict)
+
+    assert item.iscc_id == iscc_id_str
+    assert len(item.units) == 3
+
+
+def test_from_dict_without_iscc_id():
+    # type: () -> None
+    """Test from_dict generates random iscc_id when not provided."""
+    meta = ic.gen_meta_code("Test")
+    data = ic.gen_data_code(BytesIO(b"Test"))
+    instance = ic.gen_instance_code(BytesIO(b"Test"))
+
+    data_dict = {"units": [meta["iscc"], data["iscc"], instance["iscc"]]}
+
+    item = IsccItem.from_dict(data_dict)
+
+    assert item.iscc_id.startswith("ISCC:")
+    assert len(item.units) == 3
+
+
+def test_from_dict_with_iscc_code():
+    # type: () -> None
+    """Test from_dict with iscc_code instead of units."""
+    iscc_id_str = ic.gen_iscc_id(timestamp=1000000, hub_id=5, realm_id=0)["iscc"]
+    meta = ic.gen_meta_code("Test")
+    data = ic.gen_data_code(BytesIO(b"Test"))
+    instance = ic.gen_instance_code(BytesIO(b"Test"))
+    code = ic.gen_iscc_code([meta["iscc"], data["iscc"], instance["iscc"]])
+
+    data_dict = {"iscc_id": iscc_id_str, "iscc_code": code["iscc"]}
+
+    item = IsccItem.from_dict(data_dict)
+
+    assert item.iscc_id == iscc_id_str
+    assert len(item.units) == 3
+
+
+def test_from_dict_raises_without_code_or_units():
+    # type: () -> None
+    """Test from_dict raises ValueError when neither code nor units provided."""
+    iscc_id_str = ic.gen_iscc_id(timestamp=1000000, hub_id=5, realm_id=0)["iscc"]
+
+    data_dict = {"iscc_id": iscc_id_str}
+
+    with pytest.raises(ValueError, match="Either iscc_code or iscc_units must be provided"):
+        IsccItem.from_dict(data_dict)

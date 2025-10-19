@@ -10,7 +10,7 @@ def test_restore_from_file(large_dataset):
     """Verify index can be restored from saved file."""
     iscc_ids, iscc_units = large_dataset
     # Create and save index
-    index1 = UnitIndex(max_dim=256, unit_type="META-NONE-V0", realm_id=1)
+    index1 = UnitIndex(max_dim=256, unit_type="META_NONE_V0", realm_id=1)
     index1.add(iscc_ids[:10], iscc_units[:10])
 
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -28,7 +28,7 @@ def test_restore_with_metadata(large_dataset):
     """Verify metadata is restored via restore()."""
     iscc_ids, iscc_units = large_dataset
     # Create and save index
-    index1 = UnitIndex(max_dim=256, unit_type="META-NONE-V0", realm_id=1)
+    index1 = UnitIndex(max_dim=256, unit_type="META_NONE_V0", realm_id=1)
     index1.add(iscc_ids[:10], iscc_units[:10])
 
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -38,7 +38,7 @@ def test_restore_with_metadata(large_dataset):
         # Restore from file
         index2 = UnitIndex.restore(path)
 
-        assert index2.unit_type == "META-NONE-V0"
+        assert index2.unit_type == "META_NONE_V0"
         assert index2.realm_id == 1
 
 
@@ -82,7 +82,7 @@ def test_restore_with_view(large_dataset):
     """Verify restore() with view=True works."""
     iscc_ids, iscc_units = large_dataset
     # Create and save index
-    index1 = UnitIndex(max_dim=256, unit_type="META-NONE-V0", realm_id=1)
+    index1 = UnitIndex(max_dim=256, unit_type="META_NONE_V0", realm_id=1)
     index1.add(iscc_ids[:10], iscc_units[:10])
 
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -94,7 +94,7 @@ def test_restore_with_view(large_dataset):
 
         try:
             assert index2 is not None
-            assert index2.unit_type == "META-NONE-V0"
+            assert index2.unit_type == "META_NONE_V0"
             assert index2.realm_id == 1
             assert len(index2) == 10
         finally:

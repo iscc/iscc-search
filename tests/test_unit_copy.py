@@ -8,12 +8,12 @@ from iscc_vdb.unit import UnitIndex
 def test_copy_preserves_metadata(large_dataset):
     """Verify unit_type and realm_id are preserved in copy."""
     iscc_ids, iscc_units = large_dataset
-    index1 = UnitIndex(max_dim=256, unit_type="META-NONE-V0", realm_id=1)
+    index1 = UnitIndex(max_dim=256, unit_type="META_NONE_V0", realm_id=1)
     index1.add(iscc_ids[:10], iscc_units[:10])
 
     index2 = index1.copy()
 
-    assert index2.unit_type == "META-NONE-V0"
+    assert index2.unit_type == "META_NONE_V0"
     assert index2.realm_id == 1
 
 

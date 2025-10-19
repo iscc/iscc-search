@@ -18,9 +18,9 @@ def test_unit_index_init_default():
 
 def test_unit_index_init_with_unit_type():
     """Test UnitIndex initialization with explicit unit_type string."""
-    index = UnitIndex(unit_type="META-NONE-V0")
+    index = UnitIndex(unit_type="META_NONE_V0")
 
-    assert index.unit_type == "META-NONE-V0"
+    assert index.unit_type == "META_NONE_V0"
     assert index.realm_id is None
     assert index.max_dim == 256
 
@@ -36,9 +36,9 @@ def test_unit_index_init_with_realm_id():
 
 def test_unit_index_init_with_both_parameters():
     """Test UnitIndex initialization with both unit_type and realm_id."""
-    index = UnitIndex(unit_type="SEMANTIC-TEXT-V0", realm_id=1)
+    index = UnitIndex(unit_type="SEMANTIC_TEXT_V0", realm_id=1)
 
-    assert index.unit_type == "SEMANTIC-TEXT-V0"
+    assert index.unit_type == "SEMANTIC_TEXT_V0"
     assert index.realm_id == 1
     assert index.max_dim == 256
 
@@ -56,9 +56,9 @@ def test_unit_index_init_custom_max_dim():
 
 def test_unit_index_init_all_parameters():
     """Test UnitIndex initialization with all parameters."""
-    index = UnitIndex(unit_type="CONTENT-IMAGE-V0", max_dim=192, realm_id=1)
+    index = UnitIndex(unit_type="CONTENT_IMAGE_V0", max_dim=192, realm_id=1)
 
-    assert index.unit_type == "CONTENT-IMAGE-V0"
+    assert index.unit_type == "CONTENT_IMAGE_V0"
     assert index.max_dim == 192
     assert index.max_bytes == 24
     assert index.realm_id == 1
@@ -84,20 +84,20 @@ def test_unit_index_init_realm_id_max():
 def test_unit_index_init_various_unit_types():
     """Test UnitIndex initialization with various unit type strings."""
     # META
-    index_meta = UnitIndex(unit_type="META-NONE-V0")
-    assert index_meta.unit_type == "META-NONE-V0"
+    index_meta = UnitIndex(unit_type="META_NONE_V0")
+    assert index_meta.unit_type == "META_NONE_V0"
 
     # SEMANTIC TEXT
-    index_sem = UnitIndex(unit_type="SEMANTIC-TEXT-V0")
-    assert index_sem.unit_type == "SEMANTIC-TEXT-V0"
+    index_sem = UnitIndex(unit_type="SEMANTIC_TEXT_V0")
+    assert index_sem.unit_type == "SEMANTIC_TEXT_V0"
 
     # CONTENT IMAGE
-    index_cont = UnitIndex(unit_type="CONTENT-IMAGE-V0")
-    assert index_cont.unit_type == "CONTENT-IMAGE-V0"
+    index_cont = UnitIndex(unit_type="CONTENT_IMAGE_V0")
+    assert index_cont.unit_type == "CONTENT_IMAGE_V0"
 
     # DATA
-    index_data = UnitIndex(unit_type="DATA-NONE-V0")
-    assert index_data.unit_type == "DATA-NONE-V0"
+    index_data = UnitIndex(unit_type="DATA_NONE_V0")
+    assert index_data.unit_type == "DATA_NONE_V0"
 
 
 def test_unit_index_inherits_from_nphd():
@@ -131,14 +131,14 @@ def test_unit_index_unit_type_extraction():
     iscc_unit = f"ISCC:{unit}"
 
     # Extract unit_type using the same method as will be used in add()
-    # ic.iscc_type_id returns "META-NONE-V0-128", we need "META-NONE-V0"
-    unit_type = "-".join(ic.iscc_type_id(iscc_unit).split("-")[:-1])
+    # ic.iscc_type_id returns "META_NONE_V0-128", we need "META_NONE_V0"
+    unit_type = "_".join(ic.iscc_type_id(iscc_unit).split("-")[:-1])
 
-    assert unit_type == "META-NONE-V0"
+    assert unit_type == "META_NONE_V0"
 
     # Test with SEMANTIC TEXT
     unit_sem = ic.Code.rnd(ic.MT.SEMANTIC, ic.ST_CC.TEXT, bits=128)
     iscc_unit_sem = f"ISCC:{unit_sem}"
-    unit_type_sem = "-".join(ic.iscc_type_id(iscc_unit_sem).split("-")[:-1])
+    unit_type_sem = "_".join(ic.iscc_type_id(iscc_unit_sem).split("-")[:-1])
 
-    assert unit_type_sem == "SEMANTIC-TEXT-V0"
+    assert unit_type_sem == "SEMANTIC_TEXT_V0"

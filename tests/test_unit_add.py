@@ -70,7 +70,7 @@ def test_unit_type_auto_detection(sample_meta_units):
     idx.add(None, sample_meta_units[0])
 
     assert idx.unit_type is not None
-    assert idx.unit_type == "META-NONE-V0"
+    assert idx.unit_type == "META_NONE_V0"
 
 
 def test_realm_id_auto_detection_from_key(sample_iscc_ids, sample_meta_units):
@@ -95,11 +95,11 @@ def test_realm_id_defaults_to_zero_for_auto_keys(sample_meta_units):
 
 def test_explicit_unit_type_preserved(sample_meta_units):
     """Test that explicitly set unit_type is not overridden."""
-    idx = UnitIndex(unit_type="META-NONE-V0")
+    idx = UnitIndex(unit_type="META_NONE_V0")
 
     idx.add(None, sample_meta_units[0])
 
-    assert idx.unit_type == "META-NONE-V0"
+    assert idx.unit_type == "META_NONE_V0"
 
 
 def test_explicit_realm_id_preserved(sample_iscc_ids, sample_meta_units):
@@ -132,7 +132,7 @@ def test_add_semantic_units(sample_semantic_units):
     result = idx.add(None, sample_semantic_units[:3])
 
     assert len(result) == 3
-    assert idx.unit_type.startswith("SEMANTIC-")
+    assert idx.unit_type.startswith("SEMANTIC_")
 
 
 def test_add_content_units(sample_content_units):
@@ -142,7 +142,7 @@ def test_add_content_units(sample_content_units):
     result = idx.add(None, sample_content_units[:3])
 
     assert len(result) == 3
-    assert idx.unit_type.startswith("CONTENT-")
+    assert idx.unit_type.startswith("CONTENT_")
 
 
 def test_add_data_units(sample_data_units):
@@ -152,7 +152,7 @@ def test_add_data_units(sample_data_units):
     result = idx.add(None, sample_data_units[:3])
 
     assert len(result) == 3
-    assert idx.unit_type == "DATA-NONE-V0"
+    assert idx.unit_type == "DATA_NONE_V0"
 
 
 def test_add_units_of_different_lengths(sample_meta_units):
@@ -165,7 +165,7 @@ def test_add_units_of_different_lengths(sample_meta_units):
 
     assert len(result) == len(all_units)
     # All should have same unit_type
-    assert idx.unit_type == "META-NONE-V0"
+    assert idx.unit_type == "META_NONE_V0"
 
 
 def test_auto_generated_keys_are_sequential(sample_meta_units):

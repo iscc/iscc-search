@@ -9,7 +9,7 @@ class IsccIndex:
     """Multi-index ANNS search for ISCCs.
 
     Manages multiple internal indexes:
-    - One UnitIndex per ISCC-UNIT-TYPE (META-NONE-V0, CONTENT-TEXT-V0, etc.)
+    - One UnitIndex per ISCC-UNIT-TYPE (META_NONE_V0, CONTENT_TEXT_V0, etc.)
     - One InstanceIndex for exact/prefix matching
     """
 

@@ -103,11 +103,11 @@ def test_iscc_type_property():
     """iscc_type property returns formatted type string."""
     # Test realm_id 0
     iscc_id_r0 = IsccID(ic.gen_iscc_id(timestamp=1000000, hub_id=5, realm_id=0)["iscc"])
-    assert iscc_id_r0.iscc_type == "ID-REALM_0-V1"
+    assert iscc_id_r0.iscc_type == "ID_REALM_0_V1"
 
     # Test realm_id 1
     iscc_id_r1 = IsccID(ic.gen_iscc_id(timestamp=2000000, hub_id=10, realm_id=1)["iscc"])
-    assert iscc_id_r1.iscc_type == "ID-REALM_1-V1"
+    assert iscc_id_r1.iscc_type == "ID_REALM_1_V1"
 
 
 def test_int_returns_body_as_integer():
@@ -192,8 +192,8 @@ def test_from_int_changes_realm_id():
     assert reconstructed.body == original.body
     # But header should be different
     assert reconstructed.digest != original.digest
-    assert reconstructed.iscc_type == "ID-REALM_0-V1"
-    assert original.iscc_type == "ID-REALM_1-V1"
+    assert reconstructed.iscc_type == "ID_REALM_0_V1"
+    assert original.iscc_type == "ID_REALM_1_V1"
 
 
 def test_roundtrip_body_preserves_iscc_id():
@@ -322,7 +322,7 @@ def test_multiple_iscc_ids_different_realm_ids():
         iscc_id = IsccID(iscc_id_str)
 
         # Check type
-        expected_type = f"ID-REALM_{realm_id}-V1"
+        expected_type = f"ID_REALM_{realm_id}_V1"
         assert iscc_id.iscc_type == expected_type
 
         # Roundtrip
@@ -432,10 +432,10 @@ def test_random_generates_different_ids():
 
 def test_random_has_correct_type():
     # type: () -> None
-    """random() generates ISCC-ID with type ID-REALM_0-V1."""
+    """random() generates ISCC-ID with type ID_REALM_0_V1."""
     iscc_id = IsccID.random()
 
-    assert iscc_id.iscc_type == "ID-REALM_0-V1"
+    assert iscc_id.iscc_type == "ID_REALM_0_V1"
 
 
 def test_random_has_valid_structure():

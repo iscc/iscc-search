@@ -111,8 +111,8 @@ def test_iscc_type_meta(sample_meta_units):
         obj = IsccBase(iscc_str)
         iscc_type = obj.iscc_type
         assert isinstance(iscc_type, str)
-        assert iscc_type.startswith("META-")
-        assert "-V0" in iscc_type or "-V1" in iscc_type
+        assert iscc_type.startswith("META_")
+        assert "_V0" in iscc_type or "_V1" in iscc_type
         # Verify caching
         assert obj.iscc_type is iscc_type
 
@@ -124,7 +124,7 @@ def test_iscc_type_semantic(sample_semantic_units):
         obj = IsccBase(iscc_str)
         iscc_type = obj.iscc_type
         assert isinstance(iscc_type, str)
-        assert iscc_type.startswith("SEMANTIC-")
+        assert iscc_type.startswith("SEMANTIC_")
         assert any(subtype in iscc_type for subtype in ["TEXT", "IMAGE", "MIXED"])
 
 
@@ -135,7 +135,7 @@ def test_iscc_type_content(sample_content_units):
         obj = IsccBase(iscc_str)
         iscc_type = obj.iscc_type
         assert isinstance(iscc_type, str)
-        assert iscc_type.startswith("CONTENT-")
+        assert iscc_type.startswith("CONTENT_")
         assert any(subtype in iscc_type for subtype in ["TEXT", "IMAGE", "AUDIO", "VIDEO", "MIXED"])
 
 
@@ -146,7 +146,7 @@ def test_iscc_type_data(sample_data_units):
         obj = IsccBase(iscc_str)
         iscc_type = obj.iscc_type
         assert isinstance(iscc_type, str)
-        assert iscc_type.startswith("DATA-")
+        assert iscc_type.startswith("DATA_")
         assert "NONE" in iscc_type
 
 
@@ -333,8 +333,8 @@ def test_iscc_type_format():
     """Test iscc_type returns properly formatted type string."""
     # Test META
     meta_obj = IsccBase(str(ic.Code.rnd(ic.MT.META, bits=64)))
-    assert "-" in meta_obj.iscc_type
-    parts = meta_obj.iscc_type.split("-")
+    assert "_" in meta_obj.iscc_type
+    parts = meta_obj.iscc_type.split("_")
     assert len(parts) == 3
     assert parts[0] in ["META", "SEMANTIC", "CONTENT", "DATA", "INSTANCE"]
     assert parts[2].startswith("V")

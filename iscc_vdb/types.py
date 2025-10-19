@@ -120,7 +120,7 @@ class IsccBase:
         mtype = ic.MT(self.fields[0])
         stype = ic.SUBTYPE_MAP[(self.fields[0], self.fields[2])](self.fields[1])
         version = ic.VS(self.fields[2])
-        return f"{mtype.name}-{stype.name}-{version.name}"
+        return f"{mtype.name}_{stype.name}_{version.name}"
 
     def __str__(self):
         # type: () -> str

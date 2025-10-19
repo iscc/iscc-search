@@ -160,7 +160,7 @@ class UnitIndex(NphdIndex):
         # type: (str | None, int, int | None, Any) -> None
         """Create a new ISCC-UNIT index.
 
-        :param unit_type: ISCC type string (e.g. 'META-NONE-V0') or None for auto-detection
+        :param unit_type: ISCC type string (e.g. 'META_NONE_V0') or None for auto-detection
         :param max_dim: Maximum vector dimension in bits (default 256)
         :param realm_id: ISCC realm ID for ID realms only (0=ISCC, 1=ISCC-SUM) or None for auto-detection
         :param kwargs: Additional arguments passed to NphdIndex
@@ -406,7 +406,7 @@ class UnitIndex(NphdIndex):
         # type: (NDArray[np.uint8]) -> str
         """Convert binary vector to ISCC-UNIT string."""
         # Parse unit_type to extract MT, ST, VS
-        parts = self.unit_type.split("-")
+        parts = self.unit_type.split("_")
         mt = getattr(ic.MT, parts[0])
 
         # Handle subtype (either ST.NONE or ST_CC.*)

@@ -62,9 +62,9 @@ def test_iscc_unit_iscc_type_property(sample_content_units):
     unit = IsccUnit(sample_content_units[0])
     iscc_type = unit.iscc_type
     assert isinstance(iscc_type, str)
-    assert "-" in iscc_type
-    parts = iscc_type.split("-")
-    assert len(parts) == 3  # MAINTYPE-SUBTYPE-VERSION
+    assert "_" in iscc_type
+    parts = iscc_type.split("_")
+    assert len(parts) >= 3  # MAINTYPE_SUBTYPE_VERSION (or more with multi-word types)
 
 
 def test_iscc_unit_unit_type_property(sample_meta_units):

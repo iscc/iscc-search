@@ -10,7 +10,7 @@ def test_view_from_file_restores_metadata(large_dataset):
     """Verify metadata is restored when viewing from file."""
     iscc_ids, iscc_units = large_dataset
     # Create and save index
-    index1 = UnitIndex(max_dim=256, unit_type="META-NONE-V0", realm_id=1)
+    index1 = UnitIndex(max_dim=256, unit_type="META_NONE_V0", realm_id=1)
     index1.add(iscc_ids[:10], iscc_units[:10])
 
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -22,7 +22,7 @@ def test_view_from_file_restores_metadata(large_dataset):
         index2.view(path)
 
         try:
-            assert index2.unit_type == "META-NONE-V0"
+            assert index2.unit_type == "META_NONE_V0"
             assert index2.realm_id == 1
             assert len(index2) == 10
         finally:
@@ -46,12 +46,12 @@ def test_view_without_metadata_file(large_dataset):
         os.remove(meta_path)
 
         # View should work, but metadata won't be restored
-        index2 = UnitIndex(max_dim=256, unit_type="TEXT-NONE-V0", realm_id=1)
+        index2 = UnitIndex(max_dim=256, unit_type="TEXT_NONE_V0", realm_id=1)
         index2.view(path)
 
         try:
             # Metadata from constructor should be preserved
-            assert index2.unit_type == "TEXT-NONE-V0"
+            assert index2.unit_type == "TEXT_NONE_V0"
             assert index2.realm_id == 1
             assert len(index2) == 10
         finally:
@@ -62,7 +62,7 @@ def test_view_overwrites_existing_metadata(large_dataset):
     """Verify view() overwrites existing metadata."""
     iscc_ids, iscc_units = large_dataset
     # Create and save index with metadata
-    index1 = UnitIndex(max_dim=256, unit_type="META-NONE-V0", realm_id=1)
+    index1 = UnitIndex(max_dim=256, unit_type="META_NONE_V0", realm_id=1)
     index1.add(iscc_ids[:10], iscc_units[:10])
 
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -70,12 +70,12 @@ def test_view_overwrites_existing_metadata(large_dataset):
         index1.save(path)
 
         # Create index with different metadata and view
-        index2 = UnitIndex(max_dim=256, unit_type="TEXT-NONE-V0", realm_id=0)
+        index2 = UnitIndex(max_dim=256, unit_type="TEXT_NONE_V0", realm_id=0)
         index2.view(path)
 
         try:
             # Metadata should be from viewed file, not constructor
-            assert index2.unit_type == "META-NONE-V0"
+            assert index2.unit_type == "META_NONE_V0"
             assert index2.realm_id == 1
         finally:
             index2.reset()
@@ -88,7 +88,7 @@ def test_view_uses_self_path(large_dataset):
         path = os.path.join(tmpdir, "test.usearch")
 
         # Create and save
-        index1 = UnitIndex(max_dim=256, path=path, unit_type="META-NONE-V0", realm_id=1)
+        index1 = UnitIndex(max_dim=256, path=path, unit_type="META_NONE_V0", realm_id=1)
         index1.add(iscc_ids[:10], iscc_units[:10])
         index1.save()
 
@@ -97,7 +97,7 @@ def test_view_uses_self_path(large_dataset):
         index2.view()
 
         try:
-            assert index2.unit_type == "META-NONE-V0"
+            assert index2.unit_type == "META_NONE_V0"
             assert index2.realm_id == 1
         finally:
             index2.reset()
@@ -154,19 +154,19 @@ def test_view_from_buffer_no_metadata(large_dataset):
     """Verify view from buffer works without metadata."""
     iscc_ids, iscc_units = large_dataset
     # Create and save index
-    index1 = UnitIndex(max_dim=256, unit_type="META-NONE-V0", realm_id=1)
+    index1 = UnitIndex(max_dim=256, unit_type="META_NONE_V0", realm_id=1)
     index1.add(iscc_ids[:10], iscc_units[:10])
 
     # Save to buffer
     buffer = index1.save()
 
     # View from buffer into new index (metadata won't be restored)
-    index2 = UnitIndex(max_dim=256, unit_type="TEXT-NONE-V0", realm_id=1)
+    index2 = UnitIndex(max_dim=256, unit_type="TEXT_NONE_V0", realm_id=1)
     index2.view(buffer)
 
     try:
         # Metadata from constructor should be preserved (not from buffer)
-        assert index2.unit_type == "TEXT-NONE-V0"
+        assert index2.unit_type == "TEXT_NONE_V0"
         assert index2.realm_id == 1
         assert len(index2) == 10
     finally:

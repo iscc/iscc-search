@@ -158,6 +158,12 @@ class IsccID(IsccBase):
     unique identification of digital assets across distributed systems.
     """
 
+    # Pre-computed headers for valid realm IDs (only REALM_0 and REALM_1 are defined)
+    _iscc_id_headers = (
+        ic.encode_header(ic.MT.ID, 0, ic.VS.V1, 0),  # REALM_0
+        ic.encode_header(ic.MT.ID, 1, ic.VS.V1, 0),  # REALM_1
+    )
+
     @cache
     def __int__(self):
         """
@@ -177,10 +183,10 @@ class IsccID(IsccBase):
         Construct ISCC-ID from integer and realm identifier.
 
         :param iscc_id: Integer representation of ISCC-ID body (8 bytes)
-        :param realm_id: Realm identifier for ISCC-HEADER SubType
+        :param realm_id: Realm identifier for ISCC-HEADER SubType (0 or 1)
         :return: New IsccID instance
         """
-        return cls(ic.encode_header(ic.MT.ID, realm_id, ic.VS.V1, 0) + iscc_id.to_bytes(8, "big", signed=False))
+        return cls(cls._iscc_id_headers[realm_id] + iscc_id.to_bytes(8, "big", signed=False))
 
     @classmethod
     def random(cls):

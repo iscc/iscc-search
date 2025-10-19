@@ -30,7 +30,7 @@ def test_save_to_file_creates_metadata(large_dataset):
 def test_save_metadata_content(large_dataset):
     """Verify metadata content is correct."""
     iscc_ids, iscc_units = large_dataset
-    index = UnitIndex(max_dim=256, unit_type="META-NONE-V0", realm_id=5)
+    index = UnitIndex(max_dim=256, unit_type="META-NONE-V0", realm_id=1)
     index.add(iscc_ids[:10], iscc_units[:10])
 
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -42,7 +42,7 @@ def test_save_metadata_content(large_dataset):
             meta = json.load(f)
 
         assert meta["unit_type"] == "META-NONE-V0"
-        assert meta["realm_id"] == 5
+        assert meta["realm_id"] == 1
 
 
 def test_save_with_none_values(large_dataset):

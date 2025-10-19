@@ -104,11 +104,11 @@ def test_explicit_unit_type_preserved(sample_meta_units):
 
 def test_explicit_realm_id_preserved(sample_iscc_ids, sample_meta_units):
     """Test that explicitly set realm_id is not overridden."""
-    idx = UnitIndex(realm_id=5)
+    idx = UnitIndex(realm_id=1)
 
     idx.add(sample_iscc_ids[0], sample_meta_units[0])
 
-    assert idx.realm_id == 5
+    assert idx.realm_id == 1
 
 
 def test_returned_keys_are_valid_iscc_ids(sample_meta_units):
@@ -214,11 +214,3 @@ def test_mixed_add_operations(sample_iscc_ids, sample_meta_units):
 
     # Total of 3 vectors in index
     assert len(idx) == 3
-
-
-def test_iscc_id_header_requires_realm_id():
-    """Test that accessing _iscc_id_header without realm_id raises ValueError."""
-    idx = UnitIndex()
-
-    with pytest.raises(ValueError, match="realm_id must be set"):
-        _ = idx._iscc_id_header

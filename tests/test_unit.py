@@ -27,19 +27,19 @@ def test_unit_index_init_with_unit_type():
 
 def test_unit_index_init_with_realm_id():
     """Test UnitIndex initialization with explicit realm_id."""
-    index = UnitIndex(realm_id=5)
+    index = UnitIndex(realm_id=1)
 
     assert index.unit_type is None
-    assert index.realm_id == 5
+    assert index.realm_id == 1
     assert index.max_dim == 256
 
 
 def test_unit_index_init_with_both_parameters():
     """Test UnitIndex initialization with both unit_type and realm_id."""
-    index = UnitIndex(unit_type="SEMANTIC-TEXT-V0", realm_id=3)
+    index = UnitIndex(unit_type="SEMANTIC-TEXT-V0", realm_id=1)
 
     assert index.unit_type == "SEMANTIC-TEXT-V0"
-    assert index.realm_id == 3
+    assert index.realm_id == 1
     assert index.max_dim == 256
 
 
@@ -56,12 +56,12 @@ def test_unit_index_init_custom_max_dim():
 
 def test_unit_index_init_all_parameters():
     """Test UnitIndex initialization with all parameters."""
-    index = UnitIndex(unit_type="CONTENT-IMAGE-V0", max_dim=192, realm_id=7)
+    index = UnitIndex(unit_type="CONTENT-IMAGE-V0", max_dim=192, realm_id=1)
 
     assert index.unit_type == "CONTENT-IMAGE-V0"
     assert index.max_dim == 192
     assert index.max_bytes == 24
-    assert index.realm_id == 7
+    assert index.realm_id == 1
     assert index.ndim == 200  # 192 + 8 bits
 
 

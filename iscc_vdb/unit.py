@@ -15,6 +15,7 @@ from numpy.typing import NDArray
 from usearch.index import BatchMatches, Index, Matches
 
 from iscc_vdb.nphd import NphdIndex
+from iscc_vdb.types import IsccID, IsccUnit
 
 
 @dataclass
@@ -376,53 +377,30 @@ class UnitIndex(NphdIndex):
 
         return index
 
-    @cached_property
-    def _iscc_id_header(self):
-        # type: () -> bytes
-        """Return header bytes for ISCC-ID reconstruction."""
-        if self.realm_id is None:
-            raise ValueError("realm_id must be set before converting keys to ISCC-IDs")
-        return ic.encode_header(ic.MT.ID, self.realm_id, ic.VS.V1, 0)
-
     def _extract_realm_id(self, iscc_id):
         # type: (str) -> int
         """Extract realm_id from ISCC-ID."""
-        _mt, st, _vs, _ln, _body = ic.iscc_decode(iscc_id)
-        return st
+        return IsccID(iscc_id).fields[1]  # SubType field
 
     def _extract_unit_type(self, iscc_unit):
         # type: (str) -> str
         """Extract unit_type from ISCC-UNIT."""
-        type_id = ic.iscc_type_id(iscc_unit)
-        # Remove the length part (last segment)
-        return "-".join(type_id.split("-")[:-1])
+        return IsccUnit(iscc_unit).unit_type
 
     def _to_keys(self, iscc_ids):
         # type: (list[str]) -> list[int]
         """Convert ISCC-ID strings to integer keys."""
-        keys = []
-        for iid in iscc_ids:
-            body = ic.decode_base32(iid.removeprefix("ISCC:"))[2:]
-            keys.append(int.from_bytes(body, "big", signed=False))
-        return keys
+        return [int(IsccID(iid)) for iid in iscc_ids]
 
     def _to_vectors(self, iscc_units):
         # type: (list[str]) -> list[NDArray[np.uint8]]
         """Convert ISCC-UNIT strings to binary vectors."""
-        vectors = []
-        for iunit in iscc_units:
-            vector = np.frombuffer(ic.decode_base32(iunit.removeprefix("ISCC:"))[2:], dtype=np.uint8)
-            vectors.append(vector)
-        return vectors
+        return [np.array(IsccUnit(iunit), dtype=np.uint8) for iunit in iscc_units]
 
     def _to_iscc_ids(self, keys):
         # type: (NDArray[np.uint64]) -> list[str]
         """Convert integer keys to ISCC-ID strings."""
-        arr_big = keys.astype(">u8")
-        byte_array = arr_big.view(np.uint8).reshape(-1, 8)
-        digests = [row.tobytes() for row in byte_array]
-        iscc_ids = ["ISCC:" + ic.encode_base32(self._iscc_id_header + digest) for digest in digests]
-        return iscc_ids
+        return [str(IsccID.from_int(int(k), self.realm_id)) for k in keys]
 
     def _vector_to_iscc_unit(self, vector):
         # type: (NDArray[np.uint8]) -> str

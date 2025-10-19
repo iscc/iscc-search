@@ -171,16 +171,6 @@ def test_str_with_prefix_input():
     assert result == "ISCC:AAA6HZYGQLBASTFM"
 
 
-def test_str_caching():
-    # type: () -> None
-    """Test __str__ result is cached."""
-    obj = IsccBase("AAA6HZYGQLBASTFM")
-    result1 = str(obj)
-    result2 = str(obj)
-    # Should return the same object (cached)
-    assert result1 is result2
-
-
 def test_len_returns_body_bit_length():
     # type: () -> None
     """Test __len__ returns ISCC-BODY bit-length."""

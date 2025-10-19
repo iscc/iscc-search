@@ -143,7 +143,11 @@ class NphdIndex(Index):
         :param count: Maximum number of nearest neighbors to return per query
         :param kwargs: Additional arguments passed to parent Index.search()
         :return: Matches for single query or BatchMatches for batch queries
+        :raises ValueError: If count < 1
         """
+        if count < 1:
+            raise ValueError("count must be >= 1 (usearch limitation)")
+
         # Handle single vector - wrap in list for padding
         if hasattr(vectors, "ndim") and vectors.ndim == 1:
             vectors = [vectors]

@@ -245,7 +245,11 @@ class UnitIndex(NphdIndex):
         :param count: Maximum number of nearest neighbors to return per query
         :param kwargs: Additional arguments passed to parent Index.search()
         :return: UnitMatches for single query or UnitBatchMatches for batch queries with ISCC-ID keys
+        :raises ValueError: If count < 1
         """
+        if count < 1:
+            raise ValueError("count must be >= 1 (usearch limitation)")
+
         # Normalize input and convert ISCC-UNITs to binary vectors
         iscc_units = [vectors] if isinstance(vectors, str) else list(vectors)
         bin_vectors = self._to_vectors(iscc_units)

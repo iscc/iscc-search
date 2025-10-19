@@ -8,10 +8,11 @@
     bits encode MainType, SubType, and Version. Additional bits encode Length for variable-length ISCCs.
 - **ISCC-BODY** - Actual payload of an ISCC, similarity preserving compact binary code, hash or timestamp
 - **ISCC-DIGEST** - Binary representation of complete ISCC (ISCC-HEADER + ISCC-BODY).
+- **ISCC-SEQUENCE** - Binary sequence of ISCC-DIGESTS
 - **ISCC-UNIT** - ISCC-HEADER + ISCC-BODY where the ISCC-BODY is calculated from a single algorithm
 - **ISCC-CODE** - ISCC-HEADER + ISCC-BODY where the ISCC-BODY is a sequence of multiple ISCC-UNIT BODYs
     - DATA and INSTANCE are the minimum required mandatory ISCC-UNITS for a valid ISCC-CODE
-- **ISCC-ID** - Globally unique digital asset identifier (ISCC-HEADER + 52-bit timestamp + 12-bit server-id)
+- **ISCC-ID** - Globally unique digital asset identifier (ISCC-HEADER + 52-bit timestamp + 12-bit hub_id)
 - **SIMPRINT** - Headerless base64 encoded similarity hash that describes a content segment (granular feature)
 - **UNIT-TYPE**: Identifier for ISCC-UNIT types that can be indexed together with meaningful similarity search
 """
@@ -49,15 +50,19 @@ def split_iscc_sequence(data):
 
     :param data: Concatenated ISCC-DIGESTS (variable-length)
     :return: List of individual ISCC-DIGEST bytes
+    :raises: ValueError if ISCC-SEQUENCE parsing fails
     """
     units = []
     offset = 0
-    while offset < len(data):
-        mt, st, vs, ln, body = ic.decode_header(data[offset:])
-        ln_bits = ic.decode_length(mt, ln)
-        unit_len = 2 + (ln_bits // 8)  # header (2 bytes) + body
-        units.append(data[offset : offset + unit_len])
-        offset += unit_len
+    try:
+        while offset < len(data):
+            mt, st, vs, ln, body = ic.decode_header(data[offset:])
+            ln_bits = ic.decode_length(mt, ln)
+            unit_len = 2 + (ln_bits // 8)  # header (2 bytes) + body
+            units.append(data[offset : offset + unit_len])
+            offset += unit_len
+    except Exception as e:
+        raise ValueError(f"Invalid ISCC-SEQUENCE: {e}")
     return units
 
 
@@ -117,7 +122,6 @@ class IsccBase:
         version = ic.VS(self.fields[2])
         return f"{mtype.name}-{stype.name}-{version.name}"
 
-    @cache
     def __str__(self):
         # type: () -> str
         """
@@ -127,7 +131,6 @@ class IsccBase:
         """
         return f"ISCC:{ic.encode_base32(self.digest)}"
 
-    @cache
     def __len__(self):
         # type: () -> int
         """
@@ -165,7 +168,7 @@ class IsccID(IsccBase):
 
         :return: Integer representation of complete ISCC-ID digest
         """
-        return int.from_bytes(self.digest, "big", signed=False)
+        return int.from_bytes(self.body, "big", signed=False)
 
     @classmethod
     def from_int(cls, iscc_id, realm_id):
@@ -324,7 +327,7 @@ class IsccItem(msgspec.Struct, frozen=True, array_like=True):
         elif iscc_code:
             units_data = b"".join(u.digest for u in IsccCode(iscc_code).units)
         else:
-            raise ValueError("Either iscc_code or iscc_units must be provided")
+            raise ValueError("Either iscc_code or units must be provided")
         return IsccItem(IsccID(iscc_id).digest, units_data)
 
     @classmethod

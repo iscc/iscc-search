@@ -10,12 +10,13 @@ A Nearest Neighbor Search Index for ISCCs
 - **ISCC-HEADER** - Self-describing 2-byte header for V1 components (3 bytes for future versions). The first 12
     bits encode MainType, SubType, and Version. Additional bits encode Length for variable-length ISCCs.
 - **ISCC-BODY** - Actual payload of an ISCC, similarity preserving compact binary code, hash or timestamp
+- **ISCC-DIGEST** - Binary representation of complete ISCC (ISCC-HEADER + ISCC-BODY).
 - **ISCC-UNIT** - ISCC-HEADER + ISCC-BODY where the ISCC-BODY is calculated from a single algorithm
 - **ISCC-CODE** - ISCC-HEADER + ISCC-BODY where the ISCC-BODY is a sequence of multiple ISCC-UNIT BODYs
     - DATA and INSTANCE are the minimum required mandatory ISCC-UNITS for a valid ISCC-CODE
 - **ISCC-ID** - Globally unique digital asset identifier (ISCC-HEADER + 52-bit timestamp + 12-bit server-id)
 - **SIMPRINT** - Headerless base64 encoded similarity hash that describes a content segment (granular feature)
-- ISCC-UNIT-TYPE: Identifier for UNIT-TYPES that can be indexed together with meaningful similarity search
+- **ISCC-UNIT-TYPE**: Identifier for UNIT-TYPES that can be indexed together with meaningful similarity search
     - All ISCCs of the same type are stored in the same index regardless of length
     - The type is identified by the composite of MainType, SubType, Version
     - The type is encoded in the first 12 bits of the ISCC-HEADER

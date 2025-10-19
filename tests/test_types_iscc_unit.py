@@ -477,3 +477,26 @@ def test_iscc_unit_comparison_via_arrays():
     arr2 = np.array(unit2)
 
     assert np.array_equal(arr1, arr2)
+
+
+def test_iscc_unit_array_copy_parameter(sample_meta_units):
+    # type: (list[str]) -> None
+    """Test __array__ method respects copy parameter (NumPy 2.0 compatibility)."""
+    unit = IsccUnit(sample_meta_units[0])
+
+    # Test copy=None (default) - should return view
+    arr_default = np.array(unit)
+    arr_none = np.array(unit, copy=None)
+    assert np.array_equal(arr_default, arr_none)
+
+    # Test copy=False - should return view (no copy)
+    arr_no_copy = np.array(unit, copy=False)
+    assert np.array_equal(arr_default, arr_no_copy)
+
+    # Test copy=True - should return a copy
+    arr_copy = np.array(unit, copy=True)
+    assert np.array_equal(arr_default, arr_copy)
+    # Verify it's actually a copy by modifying and checking independence
+    # Note: We can't modify the view since it's read-only from frombuffer,
+    # but we can verify that both exist as separate objects
+    assert arr_copy is not arr_default

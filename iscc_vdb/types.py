@@ -88,9 +88,19 @@ class IsccUnit(IsccBase):
     def unit_type(self):
         return self.iscc_type
 
-    def __array__(self, dtype=np.uint8):
-        # type: (DTypeLike) -> NDArray
-        return np.frombuffer(self.body, dtype=dtype)
+    def __array__(self, dtype=np.uint8, copy=None):
+        # type: (DTypeLike, bool | None) -> NDArray
+        """
+        Return numpy array from ISCC-BODY bytes.
+
+        :param dtype: NumPy dtype for the array
+        :param copy: If True, always copy. If False, never copy (view only). If None, copy only if needed.
+        :return: NumPy array representation of ISCC-BODY
+        """
+        arr = np.frombuffer(self.body, dtype=dtype)
+        if copy:
+            return arr.copy()
+        return arr
 
 
 class IsccCode(IsccBase):

@@ -395,3 +395,135 @@ def test_cached_len_property():
 
     # Should all be identical
     assert len1 == len2 == len3 == 64
+
+
+def test_random_returns_iscc_id_instance():
+    # type: () -> None
+    """random() class method returns IsccID instance."""
+    iscc_id = IsccID.random()
+
+    assert isinstance(iscc_id, IsccID)
+
+
+def test_random_generates_different_ids():
+    # type: () -> None
+    """random() generates different IDs on subsequent calls."""
+    import time
+
+    id1 = IsccID.random()
+    # Small delay to ensure different timestamp
+    time.sleep(0.001)
+    id2 = IsccID.random()
+    time.sleep(0.001)
+    id3 = IsccID.random()
+
+    # All IDs should be different
+    assert str(id1) != str(id2)
+    assert str(id1) != str(id3)
+    assert str(id2) != str(id3)
+
+    # Bytes should also be different
+    assert bytes(id1) != bytes(id2)
+    assert bytes(id1) != bytes(id3)
+    assert bytes(id2) != bytes(id3)
+
+
+def test_random_has_correct_type():
+    # type: () -> None
+    """random() generates ISCC-ID with type ID-REALM_0-V1."""
+    iscc_id = IsccID.random()
+
+    assert iscc_id.iscc_type == "ID-REALM_0-V1"
+
+
+def test_random_has_valid_structure():
+    # type: () -> None
+    """random() generates ISCC-ID with valid structure (10 bytes digest)."""
+    iscc_id = IsccID.random()
+
+    # Total digest should be 10 bytes (2-byte header + 8-byte body)
+    assert len(iscc_id.digest) == 10
+    # Body should be 8 bytes
+    assert len(iscc_id.body) == 8
+    # Body bit length should be 64 bits
+    assert len(iscc_id) == 64
+
+
+def test_random_has_reasonable_timestamp():
+    # type: () -> None
+    """random() generates ISCC-ID with timestamp close to current time."""
+    import time
+
+    # Capture current timestamp in microseconds
+    before_us = time.time_ns() // 1000
+    iscc_id = IsccID.random()
+    after_us = time.time_ns() // 1000
+
+    # Extract timestamp from ISCC-ID body
+    # Body is 8 bytes: 52 bits timestamp + 12 bits hub_id
+    body_int = int.from_bytes(iscc_id.body, "big", signed=False)
+    timestamp_us = body_int >> 12
+
+    # Timestamp should be within the time window
+    assert before_us <= timestamp_us <= after_us
+
+    # Timestamp should be reasonable (not zero, not too far in future)
+    assert timestamp_us > 0
+    # Should be less than max 52-bit value
+    assert timestamp_us < 2**52
+
+
+def test_random_can_convert_to_string():
+    # type: () -> None
+    """random() generates ISCC-ID that can be converted to string."""
+    iscc_id = IsccID.random()
+
+    # Should convert to valid ISCC string
+    iscc_str = str(iscc_id)
+    assert iscc_str.startswith("ISCC:")
+    assert len(iscc_str) > 5  # "ISCC:" prefix + base32 content
+
+    # Should be valid canonical format
+    assert iscc_str == iscc_str.upper()  # base32 should be uppercase
+
+
+def test_random_can_convert_to_bytes():
+    # type: () -> None
+    """random() generates ISCC-ID that can be converted to bytes."""
+    iscc_id = IsccID.random()
+
+    # Should convert to bytes
+    digest = bytes(iscc_id)
+    assert isinstance(digest, bytes)
+    assert len(digest) == 10
+
+    # Should match the digest property
+    assert digest == iscc_id.digest
+
+
+def test_random_can_roundtrip_through_string():
+    # type: () -> None
+    """random() ISCC-ID can roundtrip through string representation."""
+    original = IsccID.random()
+
+    # Convert to string and back
+    iscc_str = str(original)
+    reconstructed = IsccID(iscc_str)
+
+    # Should be identical
+    assert str(reconstructed) == str(original)
+    assert bytes(reconstructed) == bytes(original)
+
+
+def test_random_can_roundtrip_through_bytes():
+    # type: () -> None
+    """random() ISCC-ID can roundtrip through bytes representation."""
+    original = IsccID.random()
+
+    # Convert to bytes and back
+    digest = bytes(original)
+    reconstructed = IsccID(digest)
+
+    # Should be identical
+    assert str(reconstructed) == str(original)
+    assert bytes(reconstructed) == bytes(original)

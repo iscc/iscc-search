@@ -16,10 +16,42 @@
 - **UNIT-TYPE**: Identifier for ISCC-UNIT types that can be indexed together with meaningful similarity search
 """
 
+import time
 from functools import cached_property, cache
+from random import randint
+from typing import TypedDict
 import iscc_core as ic
 import numpy as np
+import msgspec
 from numpy.typing import NDArray, DTypeLike
+
+
+def new_iscc_id():
+    # type: () -> bytes
+    """New random 10-byte ISCC-ID DIGEST"""
+    timestamp = time.time_ns() // 1000
+    identifier = (timestamp << 12) | randint(0, 4095)
+    body = identifier.to_bytes(8, byteorder="big")
+    return ic.encode_header(ic.MT.ID, ic.ST_ID_REALM.REALM_0, ic.VS.V1, 0) + body
+
+
+def split_iscc_sequence(data):
+    # type: (bytes) -> list[bytes]
+    """
+    Split a sequence of concatenated ISCC-DIGESTS.
+
+    :param data: Concatenated ISCC-DIGESTS (variable-length)
+    :return: List of individual ISCC-DIGEST bytes
+    """
+    units = []
+    offset = 0
+    while offset < len(data):
+        mt, st, vs, ln, body = ic.decode_header(data[offset:])
+        ln_bits = ic.decode_length(mt, ln)
+        unit_len = 2 + (ln_bits // 8)  # header (2 bytes) + body
+        units.append(data[offset : offset + unit_len])
+        offset += unit_len
+    return units
 
 
 class IsccBase:
@@ -140,6 +172,17 @@ class IsccID(IsccBase):
         """
         return cls(ic.encode_header(ic.MT.ID, realm_id, ic.VS.V1, 0) + iscc_id.to_bytes(8, "big", signed=False))
 
+    @classmethod
+    def random(cls):
+        # type: () -> IsccID
+        """
+        Create a new random ISCC-ID
+
+        Uses RELAM-ID 0 for non-authoritative ISCC-IDs with current time and random HUB-ID
+        """
+
+        return cls(new_iscc_id())
+
 
 class IsccUnit(IsccBase):
     """
@@ -232,3 +275,65 @@ class IsccCode(IsccBase):
             break
 
         return units
+
+
+class IsccItemDict(TypedDict):
+    iscc_id: str
+    iscc_code: str
+    units: list[str]
+
+
+class IsccItem(msgspec.Struct, frozen=True, array_like=True):
+    """
+    Minimal ISCC container for efficient indexing.
+
+    Stores only binary representations (id and units). String representations
+    and derived values are computed on-demand (no caching for memory efficiency).
+
+    :param id_data: ISCC-ID digest (10 bytes: 2-byte header + 8-byte body)
+    :param units_data: Sequence of ISCC-UNIT digests
+    """
+
+    id_data: bytes
+    units_data: bytes
+
+    @classmethod
+    def new(cls, iscc_id, iscc_code=None, units=None):
+        # type: (str|bytes, str|bytes|None, list[str|bytes] | None) -> IsccItem
+        if units:
+            units_data = b"".join(IsccUnit(u).digest for u in units)
+        elif iscc_code:
+            units_data = b"".join(u.digest for u in IsccCode(iscc_code).units)
+        else:
+            raise ValueError("Either iscc_code or iscc_units must be provided")
+        return IsccItem(IsccID(iscc_id).digest, units_data)
+
+    @property
+    def iscc_id(self):
+        # type: () -> str
+        """ISCC-ID as canonical string."""
+        return f"ISCC:{ic.encode_base32(self.id_data)}"
+
+    @property
+    def iscc_code(self):
+        # type: () -> str
+        """ISCC-CODE computed from units (wide format)."""
+        return ic.gen_iscc_code_v0(self.units, wide=True)["iscc"]
+
+    @property
+    def units(self):
+        # type: () -> list[str]
+        """ISCC-UNITs as list of canonical strings."""
+        return [f"ISCC:{ic.encode_base32(u)}" for u in split_iscc_sequence(self.units_data)]
+
+    def dict(self):
+        # type: () -> IsccItemDict
+        return dict(
+            iscc_id=self.iscc_id,
+            iscc_code=self.iscc_code,
+            units=self.units,
+        )
+
+    def json(self):
+        # type: () -> bytes
+        return msgspec.json.encode(self.dict())

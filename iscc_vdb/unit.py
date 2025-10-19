@@ -161,7 +161,7 @@ class UnitIndex(NphdIndex):
 
         :param unit_type: ISCC type string (e.g. 'META-NONE-V0') or None for auto-detection
         :param max_dim: Maximum vector dimension in bits (default 256)
-        :param realm_id: ISCC realm ID (0-15) or None for auto-detection
+        :param realm_id: ISCC realm ID for ID realms only (0=ISCC, 1=ISCC-SUM) or None for auto-detection
         :param kwargs: Additional arguments passed to NphdIndex
         """
         super().__init__(max_dim=max_dim, **kwargs)

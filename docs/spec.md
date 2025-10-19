@@ -7,19 +7,20 @@ A Nearest Neighbor Search Index for ISCCs
 ### Terms and Definitions
 
 - **ISCC** - Any ISCC-CODE, ISCC-UNIT, or ISCC-ID
-- **ISCC-HEADER** - Self describing 3-byte header section of all ISCCs designating MainType, SubType, Version,
-    Length
+- **ISCC-HEADER** - Self-describing 2-byte header for V1 components (3 bytes for future versions). The first 12
+    bits encode MainType, SubType, and Version. Additional bits encode Length for variable-length ISCCs.
 - **ISCC-BODY** - Actual payload of an ISCC, similarity preserving compact binary code, hash or timestamp
 - **ISCC-UNIT** - ISCC-HEADER + ISCC-BODY where the ISCC-BODY is calculated from a single algorithm
 - **ISCC-CODE** - ISCC-HEADER + ISCC-BODY where the ISCC-BODY is a sequence of multiple ISCC-UNIT BODYs
     - DATA and INSTANCE are the minimum required mandatory ISCC-UNITS for a valid ISCC-CODE
-- **ISCC-ID** - Globally unique digital asset idendifier (ISCC-HEADER + 52-bit timestamp + 12-bit server-id)
+- **ISCC-ID** - Globally unique digital asset identifier (ISCC-HEADER + 52-bit timestamp + 12-bit server-id)
 - **SIMPRINT** - Headerless base64 encoded similarity hash that describes a content segment (granular feature)
 - ISCC-UNIT-TYPE: Identifier for UNIT-TYPES that can be indexed together with meaningful similarity search
     - All ISCCs of the same type are stored in the same index regardless of length
     - The type is identified by the composite of MainType, SubType, Version
-    - The typs is encoded in the first 12 bits of the ISCC-HEADER
+    - The type is encoded in the first 12 bits of the ISCC-HEADER
     - String representation example: CONTENT-TEXT-V0 (identified by the first 12 bits of an ISCC-UNIT)
+    - Note: ISCC-UNIT-TYPE excludes the length segment from the header
 
 ### ISCC Framework & Resources
 
@@ -43,7 +44,9 @@ The ISCC Framework consist of a collection of python libraries and applications 
 - ISCC-CODEs or extended ISCC-UNITs as bit-vectors for fast similarity search
 - Distance Metric: Normalized Prefix Hamming Distance (NPHD)
 - Highlevel API for indexing ISCCs
-- ISCC-IDs as stored as 64-bit keys with ISCC-HEADER at index level for reconstruction
+- ISCC-IDs are stored as 64-bit keys with ISCC-HEADER at index level for reconstruction. ISCC-ID strings include
+    a 2-byte header + 64-bit body (52-bit timestamp + 12-bit server-id). The store uses the 64-bit body as the
+    LMDB key; the header is reconstructed using the configured realm_id (0 or 1).
 - Indexes ISCC-CODEs or lists of ISCC-UNITs in a Multi-Index (one per ISCC-UNIT-TYPE)
 
 ### Supported ISCC-UNITS
@@ -153,7 +156,7 @@ IsccStore(path, realm_id=0, lmdb_options=None)
 **Parameters:**
 
 - `path` (str | os.PathLike): Directory path for LMDB storage
-- `realm_id` (int): ISCC realm ID (0-1) for ISCC-ID reconstruction (default: 0)
+- `realm_id` (int): ISCC realm ID for ISCC-ID reconstruction. Must be 0 or 1 for ID realms (default: 0)
 - `lmdb_options` (dict | None): Optional LMDB configuration dict merged with defaults (default: None)
 
 **Methods:**
@@ -256,7 +259,8 @@ The IsccIndex manages multiple internal components:
 
 - **IsccStore**: Primary LMDB storage (source of truth)
 - **UnitIndex** instances: One per ISCC-UNIT-TYPE (META-NONE-V0, CONTENT-TEXT-V0, etc.)
-- **InstanceIndex**: Exact/prefix matching for INSTANCE units
+- **InstanceIndex**: Exact/prefix matching for INSTANCE units. `add()` stores exact Instance-Code digests;
+    `search()` supports prefix matching (and bidirectional expansion) over stored digests.
 
 ### Constructor
 
@@ -268,16 +272,16 @@ IsccIndex(path=None, realm_id=0, max_dim=256, **kwargs)
 
 - `path` (str | os.PathLike | None): Directory path for index storage (optional, creates in-memory index if
     None)
-- `realm_id` (int): ISCC realm ID (0-1) for ISCC-ID reconstruction (default: 0)
+- `realm_id` (int): ISCC realm ID for ISCC-ID reconstruction. Must be 0 or 1 for ID realms. UnitIndex may infer
+    realm from IDs (default: 0)
 - `max_dim` (int): Maximum vector dimension in bits for UNIT indexes (default: 256)
 - `**kwargs`: Additional arguments passed to underlying UnitIndex instances
 
 **Behavior:**
 
 - When `path` is provided: Creates durable index with full LMDB persistence
-- When `path=None`: Creates in-memory index in temporary directory with reduced durability (sync=False,
-    metasync=False, lock=False)
-- In-memory indexes automatically cleaned up on `close()`
+- When `path=None`: Creates non-persistent index. Implementations may back UnitIndex/InstanceIndex with
+    temporary directories. `close()` may clean up such resources.
 - In-memory mode is ideal for testing scenarios where durability is not required
 
 **Returns:** IsccIndex instance
@@ -311,12 +315,17 @@ add(entries) -> list[str]
 
 - Single dict input normalized to list internally
 - Each entry must provide at least one of `iscc_code` or `units`
-- If `units` is present and not empty, `iscc_code` is ignored
-- If `iscc_id` is omitted, auto-generates sequential ISCC-IDs starting from 0
+- If `units` is present and not empty, `iscc_code` is ignored. If `units` is empty and `iscc_code` provided,
+    decomposes. Otherwise raises ValueError.
+- If `iscc_id` is omitted, auto-generates ISCC-IDs from current timestamp (52 bits) + server-id (12 bits,
+    default 0). Preserves chronological ordering and uniqueness.
+- Rejects duplicate `iscc_id` and returns the existing ID
 - Decomposes ISCC-CODEs into units automatically (when `units` not provided)
 - Writes entry to IsccStore first (atomic, source of truth)
 - Routes each unit to appropriate UnitIndex based on ISCC-UNIT-TYPE
-- Stores INSTANCE units in InstanceIndex for exact matching
+- Stores INSTANCE units in InstanceIndex for exact/prefix matching
+- All units from one entry must share a consistent realm. Mixing different unit types is allowed (each goes to
+    its own UnitIndex).
 - All units for same entry share the same ISCC-ID
 - Symmetric with `get()`: can add what `get()` returns
 
@@ -326,6 +335,7 @@ add(entries) -> list[str]
 
 - `ValueError`: If entry has neither `iscc_code` nor `units`
 - `ValueError`: If entry has `units` as empty list and no `iscc_code`
+- `ValueError`: If units from same entry have inconsistent realms
 
 **Examples:**
 
@@ -364,13 +374,15 @@ get(iscc_ids) -> list[dict] | dict | None
 **Behavior:**
 
 - Single ISCC-ID: returns dict or None
-- Multiple ISCC-IDs: returns list of dicts (with None for missing)
+- Multiple ISCC-IDs: returns list in input order with None placeholders for missing ids
 - Retrieves entry directly from IsccStore (single lookup, fast)
+- Always returns all fields (`iscc_id`, `iscc_code`, `units`); uses None for missing fields to preserve
+    round-trip `add(get(x))`
 
 **Returns:**
 
-- Single query: `dict | None` with keys: `iscc_id`, `iscc_code`, `units`
-- Multiple queries: `list[dict | None]`
+- Single query: `dict | None` with keys: `iscc_id`, `iscc_code`, `units` (None values for missing fields)
+- Multiple queries: `list[dict | None]` in input order
 
 **Examples:**
 

@@ -28,7 +28,14 @@ from numpy.typing import NDArray, DTypeLike
 
 def new_iscc_id():
     # type: () -> bytes
-    """New random 10-byte ISCC-ID DIGEST"""
+    """
+    Generate a new random ISCC-ID digest.
+
+    Creates a 10-byte ISCC-ID using current timestamp (52 bits) and random server ID (12 bits).
+    Uses REALM-0 for non-authoritative identifiers.
+
+    :return: Complete ISCC-ID digest (2-byte header + 8-byte body)
+    """
     timestamp = time.time_ns() // 1000
     identifier = (timestamp << 12) | randint(0, 4095)
     body = identifier.to_bytes(8, byteorder="big")
@@ -154,7 +161,7 @@ class IsccID(IsccBase):
         Convert ISCC-ID to integer representation.
 
         WARNING: Integer representation does not include ISCC-HEADER information.
-        Use as a 64-bit integer database id and keep track of the REALM-ID for recustruction
+        Use as a 64-bit integer database ID and keep track of the REALM-ID for reconstruction.
 
         :return: Integer representation of complete ISCC-ID digest
         """
@@ -176,11 +183,12 @@ class IsccID(IsccBase):
     def random(cls):
         # type: () -> IsccID
         """
-        Create a new random ISCC-ID
+        Create a new random ISCC-ID.
 
-        Uses RELAM-ID 0 for non-authoritative ISCC-IDs with current time and random HUB-ID
+        Uses REALM-ID 0 for non-authoritative ISCC-IDs with current timestamp and random server ID.
+
+        :return: New IsccID instance with random identifier
         """
-
         return cls(new_iscc_id())
 
 
@@ -278,6 +286,8 @@ class IsccCode(IsccBase):
 
 
 class IsccItemDict(TypedDict):
+    """Dictionary representation of an ISCC item with ID, code, and units as strings."""
+
     iscc_id: str
     iscc_code: str
     units: list[str]
@@ -300,6 +310,15 @@ class IsccItem(msgspec.Struct, frozen=True, array_like=True):
     @classmethod
     def new(cls, iscc_id, iscc_code=None, units=None):
         # type: (str|bytes, str|bytes|None, list[str|bytes] | None) -> IsccItem
+        """
+        Create a new IsccItem from ISCC-ID and either ISCC-CODE or units.
+
+        :param iscc_id: ISCC-ID as string or binary digest
+        :param iscc_code: Optional ISCC-CODE as string or binary digest
+        :param units: Optional list of ISCC-UNITs as strings or binary digests
+        :return: New IsccItem instance
+        :raises ValueError: If neither iscc_code nor units is provided
+        """
         if units:
             units_data = b"".join(IsccUnit(u).digest for u in units)
         elif iscc_code:
@@ -328,6 +347,11 @@ class IsccItem(msgspec.Struct, frozen=True, array_like=True):
 
     def dict(self):
         # type: () -> IsccItemDict
+        """
+        Convert IsccItem to dictionary representation.
+
+        :return: Dictionary with iscc_id, iscc_code, and units as canonical strings
+        """
         return dict(
             iscc_id=self.iscc_id,
             iscc_code=self.iscc_code,
@@ -336,4 +360,9 @@ class IsccItem(msgspec.Struct, frozen=True, array_like=True):
 
     def json(self):
         # type: () -> bytes
+        """
+        Serialize IsccItem to JSON bytes.
+
+        :return: JSON-encoded representation of IsccItem dictionary
+        """
         return msgspec.json.encode(self.dict())

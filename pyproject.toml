@@ -48,12 +48,17 @@ dependencies = [
     "usearch @ https://iscc.github.io/usearch/usearch/usearch-2.21.0-cp313-cp313-win_arm64.whl ; sys_platform == 'win32' and platform_machine == 'ARM64' and python_version == '3.13'",
     "pysimdjson (>=7.0.2,<8.0.0)",
     "loguru>=0.7.3",
+    "click>=8.3.0",
+    "tqdm>=4.67.1",
 ]
 
 [project.urls]
 Homepage = "https://iscc.io"
 Repository = "https://github.com/iscc/iscc-vdb"
 Documentation = "https://vdb.iscc.codes"
+
+[project.scripts]
+iscc-vdb = "iscc_vdb.cli:cli"
 
 [dependency-groups]
 dev = [
@@ -101,6 +106,7 @@ fail_under = 100
 [tool.coverage.run]
 branch = true
 source = ["iscc_vdb"]
+omit = ["iscc_vdb/cli.py"]
 
 
 [tool.poe.tasks]

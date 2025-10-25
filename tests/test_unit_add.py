@@ -1,7 +1,6 @@
 """Tests for UnitIndex.add() method."""
 
 import iscc_core as ic
-import pytest
 
 from iscc_vdb import UnitIndex
 

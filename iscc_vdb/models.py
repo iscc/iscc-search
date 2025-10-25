@@ -24,7 +24,6 @@ from typing import TypedDict
 import iscc_core as ic
 import numpy as np
 import msgspec
-from numpy.typing import NDArray, DTypeLike
 
 
 def new_iscc_id():

@@ -5,7 +5,7 @@ import msgspec
 import pytest
 from io import BytesIO
 
-from iscc_vdb.types import IsccItem, IsccID, IsccCode, IsccUnit, split_iscc_sequence
+from iscc_vdb.models import IsccItem, IsccUnit, split_iscc_sequence
 
 
 def test_direct_construction_with_bytes():

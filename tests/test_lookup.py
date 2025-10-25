@@ -4,7 +4,7 @@ import io
 import pytest
 import iscc_core as ic
 from iscc_vdb.lookup import IsccLookupIndex, IsccLookupMatchDict, IsccLookupResultDict
-from iscc_vdb.types import IsccItemDict
+from iscc_vdb.models import IsccItemDict
 
 
 @pytest.fixture
@@ -295,8 +295,8 @@ def test_search_sorting_by_score(temp_lookup_path):
         ]
     )
 
-    ids1 = idx.add(item1)
-    ids2 = idx.add(item2)
+    idx.add(item1)
+    idx.add(item2)
 
     # Search with item2 (128-bit)
     results = idx.search(item2)
@@ -452,7 +452,7 @@ def test_custom_realm_id(temp_lookup_path):
         ]
     )
 
-    added_ids = idx.add(item)
+    idx.add(item)
     results = idx.search(item)
 
     # Verify realm_id is embedded in returned ISCC-ID
@@ -591,7 +591,7 @@ def test_prefix_matching_forward(temp_lookup_path):
 
     # Add item with 128-bit data unit
     stored_item = IsccItemDict(units=[ic.gen_data_code_v0(io.BytesIO(b"test data"), bits=128)["iscc"]])
-    stored_ids = idx.add(stored_item)
+    idx.add(stored_item)
 
     # Search with 64-bit version (prefix of stored)
     query_item = IsccItemDict(units=[ic.gen_data_code_v0(io.BytesIO(b"test data"), bits=64)["iscc"]])
@@ -613,7 +613,7 @@ def test_prefix_matching_reverse(temp_lookup_path):
 
     # Add item with 64-bit data unit
     stored_item = IsccItemDict(units=[ic.gen_data_code_v0(io.BytesIO(b"test data"), bits=64)["iscc"]])
-    stored_ids = idx.add(stored_item)
+    idx.add(stored_item)
 
     # Search with 128-bit version
     query_item = IsccItemDict(units=[ic.gen_data_code_v0(io.BytesIO(b"test data"), bits=128)["iscc"]])

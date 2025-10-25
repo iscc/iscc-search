@@ -14,7 +14,7 @@ LMDB configuration:
 """
 
 import os
-from typing import Any, Protocol
+from typing import Protocol
 import lmdb
 import iscc_core as ic
 from loguru import logger

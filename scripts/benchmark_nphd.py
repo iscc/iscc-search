@@ -9,7 +9,6 @@ import ctypes
 import time
 import numpy as np
 from numba import cfunc, types, carray
-from usearch.index import CompiledMetric, MetricKind, MetricSignature
 
 # Maximum supported vector size: 264 bits (33 bytes including length signal)
 MAX_BYTES = 33

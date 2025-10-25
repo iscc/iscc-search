@@ -6,16 +6,13 @@ import json
 import os
 from collections.abc import Sequence
 from dataclasses import dataclass
-from functools import cached_property
-from typing import Any
 
 import iscc_core as ic
 import numpy as np
-from numpy.typing import NDArray
-from usearch.index import BatchMatches, Index, Matches
+from usearch.index import Index
 
 from iscc_vdb.nphd import NphdIndex
-from iscc_vdb.types import IsccID, IsccUnit
+from iscc_vdb.models import IsccID, IsccUnit
 
 
 @dataclass

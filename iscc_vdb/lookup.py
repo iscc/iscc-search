@@ -18,11 +18,11 @@ Results are aggregated: each ISCC-ID appears once with max bits per unit_type, s
 """
 
 import os
-from typing import Any, TypedDict
+from typing import TypedDict
 import lmdb
 import iscc_core as ic
 from loguru import logger
-from iscc_vdb.types import IsccItemDict, IsccItem, IsccUnit
+from iscc_vdb.models import IsccItem, IsccUnit
 
 
 class IsccLookupMatchDict(TypedDict):

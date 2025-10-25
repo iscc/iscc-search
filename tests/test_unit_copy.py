@@ -1,7 +1,5 @@
 """Tests for UnitIndex.copy() method."""
 
-import numpy as np
-
 from iscc_vdb.unit import UnitIndex
 
 

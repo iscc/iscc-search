@@ -6,9 +6,6 @@ IsccStore serves as the source of truth with two named databases:
 - metadata: string keys, JSON values
 """
 
-import os
-from typing import Any, Iterator
-
 import iscc_core
 import lmdb
 import simdjson

@@ -3,12 +3,11 @@ Scalable ANNS search for variable-length binary bit-vectors with NPHD metric.
 """
 
 from collections.abc import Sequence
-from typing import Any, Union
 
 import numpy as np
 from numba import njit
 from numpy.typing import NDArray
-from usearch.index import BatchMatches, Index, Matches, ScalarKind
+from usearch.index import Index, ScalarKind
 
 from iscc_vdb.metrics import create_nphd_metric
 

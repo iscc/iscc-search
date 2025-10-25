@@ -1,9 +1,8 @@
 """Tests for IsccCode class."""
 
 import iscc_core as ic
-import pytest
 from io import BytesIO
-from iscc_vdb.types import IsccCode, IsccUnit
+from iscc_vdb.models import IsccCode, IsccUnit
 
 
 def test_iscc_code_init_with_string():

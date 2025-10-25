@@ -9,7 +9,7 @@ from loguru import logger
 from platformdirs import user_data_dir
 from tqdm import tqdm
 from iscc_vdb.lookup import IsccLookupIndex
-from iscc_vdb.types import IsccItemDict
+from iscc_vdb.models import IsccItemDict
 
 
 APP_NAME = "iscc-vdb"

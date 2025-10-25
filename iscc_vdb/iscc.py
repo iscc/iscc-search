@@ -1,7 +1,6 @@
 """Scalable multi-index ANNS search for ISCCs."""
 
 import os
-from iscc_vdb.unit import UnitIndex
 from iscc_vdb.instance import InstanceIndex
 
 

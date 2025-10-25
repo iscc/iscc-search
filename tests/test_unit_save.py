@@ -4,7 +4,6 @@ import json
 import os
 import tempfile
 
-import numpy as np
 
 from iscc_vdb.unit import UnitIndex
 

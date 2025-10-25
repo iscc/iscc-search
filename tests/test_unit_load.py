@@ -1,6 +1,5 @@
 """Tests for UnitIndex.load() method."""
 
-import json
 import os
 import tempfile
 

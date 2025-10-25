@@ -1,7 +1,6 @@
 """Comprehensive tests for IsccStore with 100% coverage."""
 
 import pytest
-import iscc_core
 
 from iscc_vdb.store import IsccStore
 
@@ -364,7 +363,6 @@ def test_reopen_larger_database(temp_store_path, sample_entry):
         entry = {**large_entry, "iscc_id": f"ISCC:ID{i}"}
         store1.add(i, entry)
 
-    final_size = store1.map_size
     store1.close()
 
     # Reopen - LMDB uses actual database size

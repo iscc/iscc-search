@@ -50,6 +50,11 @@ dependencies = [
     "loguru>=0.7.3",
     "click>=8.3.0",
     "tqdm>=4.67.1",
+    "typer>=0.20.0",
+    "fastapi>=0.120.0",
+    "pyyaml>=6.0.3",
+    "uvicorn[standard]>=0.38.0",
+    "pydantic-settings>=2.11.0",
 ]
 
 [project.urls]
@@ -75,6 +80,7 @@ dev = [
     "mdformat-tables>=1.0.0",
     "mdformat-gfm-alerts>=2.0.0",
     "prek>=0.2.9",
+    "datamodel-code-generator>=0.35.0",
 ]
 
 [build-system]
@@ -108,11 +114,28 @@ branch = true
 source = ["iscc_vdb"]
 omit = ["iscc_vdb/cli.py"]
 
+[tool.datamodel-codegen]
+input = "iscc_vdb/openapi.yaml"
+input-file-type = "openapi"
+output = "iscc_vdb/schema.py"
+output-model-type = "pydantic_v2.BaseModel"
+disable-timestamp = true
+target-python-version = "3.12"
+use-subclass-enum = true
+use-standard-collections = true
+use-annotated = true
+field-constraints = true
+use-union-operator = true
+extra-fields = "forbid"
+strict-nullable = true
+use-title-as-name = true
+
 
 [tool.poe.tasks]
+build-schema = { cmd = "uv run datamodel-codegen", help = "Build code from openapi.yaml schemas" }
 format-code = { shell = "uv run ruff format .", help = "Format code files" }
 format-markdown = { shell = "uv run mdformat --end-of-line lf --wrap 112 --number *.md docs", help = "Format markdown files" }
 precommit = { shell = "uv run prek run"}
 format = { sequence = ["format-code", "format-markdown",], help = "Format all files" }
 test = { shell = "uv run python -m pytest --cov --cov-config=pyproject.toml --cov-report=xml --cov-report=term-missing", help = "Test the code with pytest" }
-all = { sequence = ["format", "test",], help = "Run all pre-commit tasks: format and test" }
+all = { sequence = ["format", "test",], help = "Run all tasks" }

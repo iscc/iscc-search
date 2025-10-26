@@ -1,0 +1,15 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "http://purl.org/iscc/schema/iscc-item.json"
+title: "IsccIndex"
+type: object
+description: A named index for searching and matching ISCCs
+properties:
+  name:
+    type: string
+    description: Short unique name of the index
+  items:
+    type: integer
+    description: Number of ISCCs in the index
+  size:
+    type: integer
+    description: Size of index in megabytes

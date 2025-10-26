@@ -115,7 +115,7 @@ source = ["iscc_vdb"]
 omit = ["iscc_vdb/cli.py"]
 
 [tool.datamodel-codegen]
-input = "iscc_vdb/openapi.yaml"
+input = "iscc_vdb/openapi/openapi.yaml"
 input-file-type = "openapi"
 output = "iscc_vdb/schema.py"
 output-model-type = "pydantic_v2.BaseModel"

@@ -104,6 +104,7 @@ fix = true
 
 [tool.ruff.format]
 preview = true
+line-ending = "lf"
 
 [tool.coverage.report]
 skip_empty = true
@@ -129,10 +130,11 @@ use-union-operator = true
 extra-fields = "forbid"
 strict-nullable = true
 use-title-as-name = true
+formatters = []
 
 
 [tool.poe.tasks]
-build-schema = { cmd = "uv run datamodel-codegen", help = "Build code from openapi.yaml schemas" }
+build-schema = { shell = "uv run datamodel-codegen && uv run ruff format iscc_vdb/schema.py", help = "Build code from openapi.yaml schemas" }
 format-code = { shell = "uv run ruff format .", help = "Format code files" }
 format-markdown = { shell = "uv run mdformat --end-of-line lf --wrap 112 --number *.md docs", help = "Format markdown files" }
 precommit = { shell = "uv run prek run"}

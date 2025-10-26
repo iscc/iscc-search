@@ -6,3 +6,33 @@ info:
 servers:
   - url: http://localhost:8000
     description: Development server
+
+paths:
+  /indexes:
+    get:
+      summary: List all indexes
+      description: Returns a list of all available ISCC indexes with their metadata
+      operationId: listIndexes
+      tags:
+        - indexes
+      responses:
+        '200':
+          description: Successful response with list of indexes
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/IsccIndex'
+              example:
+                - name: "default"
+                  items: 150000
+                  size: 42
+                - name: "production"
+                  items: 250000
+                  size: 68
+
+components:
+  schemas:
+    IsccIndex:
+      $ref: './IsccIndex.yaml'

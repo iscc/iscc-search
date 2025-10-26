@@ -140,4 +140,4 @@ format-markdown = { shell = "uv run mdformat --end-of-line lf --wrap 112 --numbe
 precommit = { shell = "uv run prek run"}
 format = { sequence = ["format-code", "format-markdown",], help = "Format all files" }
 test = { shell = "uv run python -m pytest --cov --cov-config=pyproject.toml --cov-report=xml --cov-report=term-missing", help = "Test the code with pytest" }
-all = { sequence = ["format", "test",], help = "Run all tasks" }
+all = { sequence = ["build-schema", "format", "test",], help = "Run all tasks" }

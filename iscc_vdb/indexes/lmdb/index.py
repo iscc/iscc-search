@@ -127,15 +127,8 @@ class LmdbIndex:
                         if asset.units:
                             iscc_id_body = common.extract_iscc_id_body(asset.iscc_id)
 
-                            for unit_item in asset.units:
-                                # Handle both Unit objects and strings
-                                if hasattr(unit_item, "root"):
-                                    # It's a Unit object from schema
-                                    unit_str = unit_item.root
-                                else:  # pragma: no cover
-                                    # Defensive: Pydantic always converts to Unit objects
-                                    unit_str = unit_item
-
+                            for unit_str in asset.units:
+                                # Units are plain ISCC strings
                                 unit = IsccUnit(unit_str)
                                 unit_type = unit.unit_type
                                 unit_body = unit.body
@@ -194,26 +187,23 @@ class LmdbIndex:
         Searches across all unit types and aggregates scores.
         Each ISCC-ID appears once with max bits per unit_type, summed across types.
 
-        :param query: IsccAsset with units to search for
+        Accepts query with either iscc_code or units (or both). If only iscc_code
+        is provided, units are automatically derived for search.
+
+        :param query: IsccAsset with iscc_code or units (or both)
         :param limit: Maximum number of results
         :return: IsccSearchResult with matches sorted by score (descending)
-        :raises ValueError: If query has no units
+        :raises ValueError: If query has neither iscc_code nor units
         """
-        if not query.units:
-            raise ValueError("Query asset must have units for search")
+        # Normalize query to ensure it has units (derive from iscc_code if needed)
+        query = common.normalize_query_asset(query)
 
         with self.env.begin() as txn:
             # Aggregate matches: iscc_id → {unit_type → max_bits}
             matches = {}  # type: dict[str, dict[str, int]]
 
-            for unit_item in query.units:
-                # Handle both Unit objects and strings
-                if hasattr(unit_item, "root"):
-                    unit_str = unit_item.root
-                else:  # pragma: no cover
-                    # Defensive: Pydantic always converts to Unit objects
-                    unit_str = unit_item
-
+            for unit_str in query.units:
+                # Units are plain ISCC strings
                 unit = IsccUnit(unit_str)
                 unit_type = unit.unit_type
 

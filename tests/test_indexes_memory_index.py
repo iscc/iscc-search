@@ -232,10 +232,10 @@ def test_get_asset_success(sample_iscc_ids, sample_iscc_codes, sample_content_un
 
     assert retrieved.iscc_id == sample_iscc_ids[0]
     assert retrieved.iscc_code == code
-    # Units are stored as Unit objects with a root attribute
+    # Units are stored as plain strings
     assert len(retrieved.units) == 2
-    assert retrieved.units[0].root == sample_content_units[0]
-    assert retrieved.units[1].root == sample_content_units[1]
+    assert retrieved.units[0] == sample_content_units[0]
+    assert retrieved.units[1] == sample_content_units[1]
     assert retrieved.metadata == {"title": "Test Document"}
 
 
@@ -291,24 +291,26 @@ def test_search_assets_by_iscc_code(sample_iscc_ids, sample_iscc_codes):
     result = index.search_assets("testindex", query)
 
     assert isinstance(result, IsccSearchResult)
-    assert result.query == query
+    # Query is normalized (units derived from iscc_code)
+    assert result.query.iscc_code == code1
+    assert result.query.units is not None  # Units were derived
     assert result.metric == Metric.bitlength
     assert len(result.matches) == 1
     assert result.matches[0].iscc_id == sample_iscc_ids[0]
     assert result.matches[0].score == 1.0
 
 
-def test_search_assets_by_iscc_id(sample_iscc_ids):
-    """Test searching assets by iscc_id."""
+def test_search_assets_by_iscc_id(sample_iscc_ids, sample_iscc_codes):
+    """Test searching assets by iscc_id with iscc_code."""
     index = MemoryIndex()
     index.create_index(IsccIndex(name="testindex"))
 
-    # Add assets
-    asset = IsccAsset(iscc_id=sample_iscc_ids[0])
+    # Add assets with iscc_code (required for search)
+    asset = IsccAsset(iscc_id=sample_iscc_ids[0], iscc_code=sample_iscc_codes[0])
     index.add_assets("testindex", [asset])
 
-    # Search by iscc_id
-    query = IsccAsset(iscc_id=sample_iscc_ids[0])
+    # Search by iscc_id and iscc_code
+    query = IsccAsset(iscc_id=sample_iscc_ids[0], iscc_code=sample_iscc_codes[0])
     result = index.search_assets("testindex", query)
 
     assert len(result.matches) == 1
@@ -439,18 +441,35 @@ def test_metadata_field(sample_iscc_ids, sample_iscc_codes):
     assert retrieved.metadata == {"source": "test", "tags": ["tag1", "tag2"]}
 
 
-def test_search_assets_no_matching_iscc_id(sample_iscc_ids):
-    """Test searching by iscc_id when no match exists (covers elif branch)."""
+def test_search_assets_no_matching_iscc_id(sample_iscc_ids, sample_iscc_codes):
+    """Test searching by different iscc_code when no match exists."""
     index = MemoryIndex()
     index.create_index(IsccIndex(name="testindex"))
 
-    # Add an asset
+    # Add an asset with one iscc_code
+    asset = IsccAsset(iscc_id=sample_iscc_ids[0], iscc_code=sample_iscc_codes[0])
+    index.add_assets("testindex", [asset])
+
+    # Search with different iscc_id and iscc_code
+    query = IsccAsset(iscc_id=sample_iscc_ids[1], iscc_code=sample_iscc_codes[1])
+    result = index.search_assets("testindex", query)
+
+    # Should not match (different iscc_code)
+    assert len(result.matches) == 0
+
+
+def test_search_assets_no_iscc_code_in_asset(sample_iscc_ids, sample_iscc_codes):
+    """Test searching when asset has no iscc_code (covers branch)."""
+    index = MemoryIndex()
+    index.create_index(IsccIndex(name="testindex"))
+
+    # Add an asset without iscc_code (only has iscc_id)
     asset = IsccAsset(iscc_id=sample_iscc_ids[0])
     index.add_assets("testindex", [asset])
 
-    # Search by different iscc_id (no iscc_code)
-    query = IsccAsset(iscc_id=sample_iscc_ids[1])
+    # Search with iscc_code (won't match asset without code)
+    query = IsccAsset(iscc_code=sample_iscc_codes[0])
     result = index.search_assets("testindex", query)
 
-    # Should not match
+    # Should not match (asset has no iscc_code)
     assert len(result.matches) == 0

@@ -70,8 +70,9 @@ def test_new_iscc_id_randomness():
     # Generate multiple ISCC-IDs
     ids = [new_iscc_id() for _ in range(10)]
 
-    # All should be different (due to random hub_id)
-    assert len(ids) == len(set(ids))
+    # Most should be different (allowing for rare random collisions)
+    # With 10 selections from 4096 possible hub_ids, expect at least 9 unique
+    assert len(set(ids)) >= 9
 
 
 def test_new_iscc_id_hub_id_range():

@@ -2,7 +2,7 @@
 #   filename:  openapi.yaml
 
 from __future__ import annotations
-from pydantic import BaseModel, ConfigDict, Field, RootModel
+from pydantic import BaseModel, ConfigDict, Field
 from typing import Annotated, Any
 from enum import Enum
 
@@ -37,12 +37,6 @@ class IsccIndex(BaseModel):
     ] = None
 
 
-class Unit(RootModel[str]):
-    root: Annotated[
-        str, Field(description="Individual extended ISCC-UNITs in canonical format", pattern="^ISCC:[A-Z2-7]{16,}$")
-    ]
-
-
 class IsccAsset(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -64,7 +58,7 @@ class IsccAsset(BaseModel):
         ),
     ] = None
     units: Annotated[
-        list[Unit] | None,
+        list[str] | None,
         Field(
             description="List of ISCC-UNITs as canonical strings (variable-length, 64-256 bits)",
             examples=[

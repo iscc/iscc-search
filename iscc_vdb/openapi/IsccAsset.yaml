@@ -27,7 +27,6 @@ properties:
     description: List of ISCC-UNITs as canonical strings (variable-length, 64-256 bits)
     items:
       type: string
-      pattern: "^ISCC:[A-Z2-7]{16,}$"
       description: Individual extended ISCC-UNITs in canonical format
     example:
       - "ISCC:AADYCMZIOY36XXGZ5B5BME7EIPPXRFKYQZ7VXKI7V55AEQQE67A33BY"

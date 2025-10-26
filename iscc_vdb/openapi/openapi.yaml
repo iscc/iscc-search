@@ -76,6 +76,49 @@ paths:
                     type: string
               example:
                 detail: "Index 'myindex' already exists"
+  /indexes/{name}:
+    delete:
+      summary: Delete an index
+      description: Permanently deletes an ISCC index and all its data
+      operationId: deleteIndex
+      tags:
+        - indexes
+      parameters:
+        - name: name
+          in: path
+          required: true
+          description: Name of the index to delete
+          schema:
+            type: string
+            pattern: "^[a-z][a-z0-9]*$"
+            minLength: 1
+            maxLength: 32
+            example: "myindex"
+      responses:
+        '204':
+          description: Index successfully deleted (no content returned)
+        '400':
+          description: Invalid index name format
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  detail:
+                    type: string
+              example:
+                detail: "Invalid index name format"
+        '404':
+          description: Index not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  detail:
+                    type: string
+              example:
+                detail: "Index 'myindex' not found"
 
 components:
   schemas:

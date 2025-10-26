@@ -1,0 +1,44 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "http://purl.org/iscc/schema/iscc-item.json"
+title: "IsccItem"
+type: object
+description: |
+  ISCC data for indexing. When creating an item, iscc_id is optional (will be generated if missing).
+  Either iscc_code or units must be provided. The complete object contains all three fields.
+properties:
+  iscc_id:
+    type: string
+    description: Globally unique digital asset identifier (ISCC-ID)
+    pattern: "^ISCC:[A-Z2-7]{16,}$"
+    example: "ISCC:MAIGIIFJRDGEQQAA"
+  iscc_code:
+    type: string
+    description: Composite ISCC-CODE combining multiple ISCC-UNITs (wide format, 128-bit Data + 128-bit Instance)
+    pattern: "^ISCC:[A-Z2-7]{16,}$"
+    example: "ISCC:KECYCMZIOY36XXGZ7S6QJQ2AEEXPOVEHZYPK6GMSFLU3WF54UPZMTPY"
+  units:
+    type: array
+    description: List of ISCC-UNITs as canonical strings (variable-length, 64-256 bits)
+    items:
+      type: string
+      pattern: "^ISCC:[A-Z2-7]{16,}$"
+      description: Individual extended ISCC-UNITs in canonical format
+    example:
+      - "ISCC:AADYCMZIOY36XXGZ5B5BME7EIPPXRFKYQZ7VXKI7V55AEQQE67A33BY"
+      - "ISCC:EED7ZPIEYNACCLXXZSS2LIM6JVXDYGCG2QSMC7DCPER4MYJPJATIM4Y"
+      - "ISCC:GADVJB6OD2XRTERK3G4KOFHGDJCBYEXAZCZLVVSA7MMURDPMJ5S5JWI"
+      - "ISCC:IAD6TOYXXSR7FSN7TRRRNOKQ6JCFK3ZF4KRFVEQRQ4M4PDPUR5H7GHQ"
+    minItems: 2
+required:
+  - units
+anyOf:
+  - required: ["iscc_code"]
+  - required: ["units"]
+example:
+  iscc_id: "ISCC:MAIGIIFJRDGEQQAA"
+  iscc_code: "ISCC:KECYCMZIOY36XXGZ7S6QJQ2AEEXPOVEHZYPK6GMSFLU3WF54UPZMTPY"
+  units:
+    - "ISCC:AADYCMZIOY36XXGZ5B5BME7EIPPXRFKYQZ7VXKI7V55AEQQE67A33BY"
+    - "ISCC:EED7ZPIEYNACCLXXZSS2LIM6JVXDYGCG2QSMC7DCPER4MYJPJATIM4Y"
+    - "ISCC:GADVJB6OD2XRTERK3G4KOFHGDJCBYEXAZCZLVVSA7MMURDPMJ5S5JWI"
+    - "ISCC:IAD6TOYXXSR7FSN7TRRRNOKQ6JCFK3ZF4KRFVEQRQ4M4PDPUR5H7GHQ"

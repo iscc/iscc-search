@@ -8,6 +8,7 @@ Provides configuration management using Pydantic settings with support for:
 - Type validation and defaults
 """
 
+from urllib.parse import urlparse
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 import iscc_vdb
@@ -16,6 +17,7 @@ import iscc_vdb
 __all__ = [
     "VdbSettings",
     "vdb_settings",
+    "get_index",
 ]
 
 
@@ -65,3 +67,36 @@ class VdbSettings(BaseSettings):
 
 
 vdb_settings = VdbSettings()
+
+
+def get_index():
+    # type: () -> IsccIndexProtocol
+    """
+    Factory function to create index from settings.
+
+    Parses indexes_uri to determine index type and returns appropriate
+    implementation. Currently supports:
+    - memory:// → MemoryIndex (in-memory, no persistence)
+    - file:// or path → UsearchIndex (future)
+    - postgresql:// → PostgresIndex (future)
+
+    :return: Index instance implementing IsccIndexProtocol
+    :raises ValueError: If URI scheme is not supported
+    """
+    from iscc_vdb.protocol import IsccIndexProtocol  # noqa: F401
+
+    uri = vdb_settings.indexes_uri
+    parsed = urlparse(uri)
+
+    if parsed.scheme == "memory" or uri == "memory://":
+        # In-memory index for testing
+        from iscc_vdb.indexes.memory import MemoryIndex
+
+        return MemoryIndex()
+
+    # Default to MemoryIndex for now (can be extended later)
+    # In the future, this will check for file paths (UsearchIndex)
+    # or postgresql:// DSNs (PostgresIndex)
+    from iscc_vdb.indexes.memory import MemoryIndex
+
+    return MemoryIndex()

@@ -172,7 +172,7 @@ iscc_vdb/
 
 ```python
 from typing import Protocol, runtime_checkable
-from iscc_vdb.schema import IsccIndex, IsccItem, IsccAddResult
+from iscc_vdb.schema import IsccIndex, IsccItem, IsccAddResult, IsccSearchResult
 
 @runtime_checkable
 class IsccIndexProtocol(Protocol):
@@ -241,14 +241,14 @@ class IsccIndexProtocol(Protocol):
         index_name: str,
         query: IsccItem,
         limit: int = 100
-    ) -> list[dict]:
+    ) -> IsccSearchResult:
         """
         Search for similar items in index.
 
         :param index_name: Target index name
         :param query: IsccItem to search for
         :param limit: Maximum number of results
-        :return: List of match dictionaries with scores and metadata
+        :return: IsccSearchResult with query, metric, and list of matches
         :raises FileNotFoundError: If index doesn't exist
         """
         ...
@@ -486,10 +486,12 @@ class UsearchIndex:
         index_name: str,
         query: IsccItem,
         limit: int = 100
-    ) -> list[dict]:
+    ) -> IsccSearchResult:
         """
         Search across all UNIT-TYPE indexes and aggregate results.
         """
+        from iscc_vdb.schema import IsccSearchResult, IsccMatch, Metric
+
         idx = self._get_or_load_index(index_name)
 
         query_item = IsccItem.from_dict(query)
@@ -521,23 +523,29 @@ class UsearchIndex:
                     score
                 )
 
-        # Build result list
-        results = []
+        # Build match list
+        match_list = []
         store = idx["store"]
 
         for iscc_id, unit_scores in matches.items():
             total_score = sum(unit_scores.values())
             entry = store.get(iscc_id)
 
-            results.append({
-                "iscc_id": entry["iscc_id"],
-                "score": total_score,
-                "matches": unit_scores,
-                "entry": entry
-            })
+            match_list.append(
+                IsccMatch(
+                    iscc_id=entry["iscc_id"],
+                    score=total_score,
+                    matches=unit_scores,
+                )
+            )
 
-        results.sort(key=lambda x: x["score"], reverse=True)
-        return results[:limit]
+        match_list.sort(key=lambda x: x.score, reverse=True)
+
+        return IsccSearchResult(
+            query=query,
+            metric=Metric.nphd,
+            matches=match_list[:limit],
+        )
 
     def close(self) -> None:
         """Close all open indexes and stores."""
@@ -734,22 +742,30 @@ class MemoryIndex:
         index_name: str,
         query: IsccItem,
         limit: int = 100
-    ) -> list[dict]:
+    ) -> IsccSearchResult:
         """Search for similar items (simple exact match for testing)."""
+        from iscc_vdb.schema import IsccSearchResult, IsccMatch, Metric
+
         if index_name not in self._indexes:
             raise FileNotFoundError(f"Index '{index_name}' not found")
 
         # Simple implementation for testing
-        results = []
+        match_list = []
         for item in self._indexes[index_name]["items"]:
             if item.iscc_code == query.iscc_code:
-                results.append({
-                    "iscc_id": item.iscc_id,
-                    "score": 1.0,
-                    "matches": {},
-                    "entry": item.dict()
-                })
-        return results[:limit]
+                match_list.append(
+                    IsccMatch(
+                        iscc_id=item.iscc_id,
+                        score=1.0,
+                        matches={},
+                    )
+                )
+
+        return IsccSearchResult(
+            query=query,
+            metric=Metric.bitlength,
+            matches=match_list[:limit],
+        )
 
     def close(self) -> None:
         """No-op for in-memory index."""
@@ -795,7 +811,7 @@ app = create_app()
 
 ```python
 from fastapi import APIRouter, Request, HTTPException, status
-from iscc_vdb.schema import IsccIndex, IsccItem, IsccAddResult
+from iscc_vdb.schema import IsccIndex, IsccItem, IsccAddResult, IsccSearchResult
 from iscc_vdb.protocol import IsccIndexProtocol
 
 router = APIRouter()
@@ -868,7 +884,7 @@ def add_items(name: str, items: list[IsccItem], request: Request):
             detail=f"Index '{name}' not found"
         )
 
-@router.post("/indexes/{name}/search")
+@router.post("/indexes/{name}/search", response_model=IsccSearchResult)
 def search_items(
     name: str,
     query: IsccItem,
@@ -990,11 +1006,13 @@ def search(
     index = get_index()
 
     try:
+        from iscc_vdb.schema import IsccItem
         query = IsccItem(iscc_code=iscc_code)
-        results = index.search_items(index_name, query, limit)
+        result = index.search_items(index_name, query, limit)
 
+        # Convert Pydantic model to JSON
         import json
-        typer.echo(json.dumps(results, indent=2))
+        typer.echo(json.dumps(result.model_dump(), indent=2))
     except FileNotFoundError as e:
         typer.echo(f"Error: {e}", err=True)
         raise typer.Exit(1)

@@ -473,3 +473,38 @@ def test_search_assets_no_iscc_code_in_asset(sample_iscc_ids, sample_iscc_codes)
 
     # Should not match (asset has no iscc_code)
     assert len(result.matches) == 0
+
+
+def test_search_assets_by_units_only(sample_iscc_ids, sample_iscc_codes):
+    """Test searching assets by units only (no iscc_code in query)."""
+    from iscc_vdb.models import IsccCode
+
+    index = MemoryIndex()
+    index.create_index(IsccIndex(name="testindex"))
+
+    # Use sample ISCC-CODE
+    code1 = sample_iscc_codes[0]
+
+    # Add asset with iscc_code
+    asset = IsccAsset(
+        iscc_id=sample_iscc_ids[0],
+        iscc_code=code1,
+    )
+    index.add_assets("testindex", [asset])
+
+    # Derive units from code1
+    code_obj = IsccCode(code1)
+    units = [str(u) for u in code_obj.units]
+
+    # Search with units only (no iscc_code)
+    query = IsccAsset(units=units)
+    result = index.search_assets("testindex", query)
+
+    assert isinstance(result, IsccSearchResult)
+    # Query is normalized (iscc_code derived from units)
+    assert result.query.units == units
+    assert result.query.iscc_code is not None  # iscc_code was derived
+    assert result.metric == Metric.bitlength
+    # Should find the matching asset
+    assert len(result.matches) == 1
+    assert result.matches[0].iscc_id == sample_iscc_ids[0]

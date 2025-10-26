@@ -194,32 +194,51 @@ def validate_iscc_id(iscc_id):
 def normalize_query_asset(query):
     # type: (IsccAsset) -> IsccAsset
     """
-    Normalize query asset to ensure it has units for search.
+    Normalize query asset to ensure consistent search behavior across backends.
 
-    Indexes should use units for similarity search because they may contain
-    more bits than the compressed iscc_code representation. This function
-    ensures query assets always have units by:
+    Indexes need both representations when possible:
+    - LMDB searches by units (more bits, better precision)
+    - Memory searches by iscc_code (simple exact matching)
 
-    1. If query has units → use them directly (may have more bits)
-    2. If query has no units but has iscc_code → derive units from code
-    3. If query has neither → raise error
+    This function performs bidirectional normalization:
+
+    1. If query has both units and iscc_code → keep both
+    2. If query has only units → try to derive iscc_code (if units form valid code)
+    3. If query has only iscc_code → derive units from code
+    4. If query has neither → raise error
+
+    Note: Not all unit combinations form valid ISCC-CODEs. Units-only queries
+    that don't form valid codes (e.g., missing DATA/INSTANCE) will work with
+    LMDB backend but return no matches with memory backend.
 
     :param query: Query asset (may have iscc_code or units or both)
-    :return: Query asset with units guaranteed to be present
+    :return: Query asset with units and/or iscc_code populated
     :raises ValueError: If query has neither iscc_code nor units
     """
-    # Already has units - prefer them (may have more bits than code)
-    if query.units:
+    import iscc_core as ic
+
+    # Case 1: Has both - return as is
+    if query.units and query.iscc_code:
         return query
 
-    # No units but has iscc_code - derive units from code
-    if query.iscc_code:
+    # Case 2: Has units but no iscc_code - try to derive code from units
+    if query.units and not query.iscc_code:
+        # Attempt to compose ISCC-CODE from ISCC-UNITs
+        # Always use wide=True (handles short/long units transparently)
+        try:
+            iscc_code = ic.gen_iscc_code_v0(query.units, wide=True)["iscc"]
+            return query.model_copy(update={"iscc_code": iscc_code})
+        except ValueError:
+            # Units don't form a valid ISCC-CODE (e.g., missing DATA/INSTANCE)
+            # Return query with units only - works for LMDB backend
+            return query
+
+    # Case 3: Has iscc_code but no units - derive units from code
+    if query.iscc_code and not query.units:
         # Decompose ISCC-CODE into ISCC-UNITs
         code = IsccCode(query.iscc_code)
         units = [str(unit) for unit in code.units]
-
-        # Return new asset with derived units
         return query.model_copy(update={"units": units})
 
-    # Neither units nor iscc_code - cannot search
+    # Case 4: Neither units nor iscc_code - cannot search
     raise ValueError("Query asset must have either 'iscc_code' or 'units' for search")

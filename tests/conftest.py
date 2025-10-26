@@ -243,22 +243,57 @@ def memory_index_instance():
     return MemoryIndex()
 
 
-@pytest.fixture
-def test_client():
-    # type: () -> TestClient
+@pytest.fixture(params=["memory", "lmdb"])
+def backend_index(request, tmp_path):
+    # type: (typing.Any, typing.Any) -> typing.Any
     """
-    Create TestClient with app configured to use MemoryIndex.
+    Parametrized fixture providing both index backend implementations.
+
+    Creates fresh index instances for each test with proper cleanup.
+    Tests using this fixture will automatically run against both backends.
+
+    :param request: Pytest request object with param ("memory" or "lmdb")
+    :param tmp_path: Pytest temp directory for LMDB storage
+    :return: Index instance (MemoryIndex or LmdbIndexManager)
+    """
+    backend_type = request.param
+
+    if backend_type == "memory":
+        from iscc_vdb.indexes.memory import MemoryIndex
+
+        index = MemoryIndex()
+    elif backend_type == "lmdb":
+        from iscc_vdb.indexes.lmdb import LmdbIndexManager
+
+        # Use isolated temp directory for each test
+        lmdb_path = tmp_path / "lmdb_indexes"
+        index = LmdbIndexManager(lmdb_path)
+    else:  # pragma: no cover
+        raise ValueError(f"Unknown backend type: {backend_type}")
+
+    yield index
+
+    # Cleanup
+    index.close()
+
+
+@pytest.fixture
+def test_client(backend_index):
+    # type: (typing.Any) -> TestClient
+    """
+    Create TestClient with app configured to use parametrized backend.
 
     Provides a FastAPI TestClient for making HTTP requests to the API.
-    Uses a fresh MemoryIndex for each test to ensure isolation.
+    Uses the backend_index fixture which parametrizes over all implementations.
+    This ensures all server tests run against both MemoryIndex and LmdbIndexManager.
 
+    :param backend_index: Parametrized index backend instance
     :return: FastAPI TestClient instance
     """
     from iscc_vdb.server import app
-    from iscc_vdb.indexes.memory import MemoryIndex
 
-    # Override app.state.index with fresh MemoryIndex for testing
-    app.state.index = MemoryIndex()
+    # Override app.state.index with parametrized backend
+    app.state.index = backend_index
 
     return TestClient(app)
 

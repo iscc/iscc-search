@@ -176,7 +176,9 @@ class MemoryIndex:
         like usearch should be used.
 
         Accepts query with either iscc_code or units (or both). If only units
-        are provided, iscc_code is automatically derived for matching.
+        are provided, iscc_code is automatically derived for matching (when
+        units form a valid code). Units-only queries that don't form valid
+        ISCC-CODEs will return no matches.
 
         :param index_name: Target index name
         :param query: IsccAsset with iscc_code or units (or both)

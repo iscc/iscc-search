@@ -312,3 +312,52 @@ def test_realm_consistency_across_updates(manager, sample_iscc_ids, sample_conte
 
     with pytest.raises(ValueError, match="Realm ID mismatch"):
         manager.add_assets("realm", [asset_wrong_realm])
+
+
+@pytest.mark.xfail(
+    reason="Known limitation: updating assets does not clean up old unit postings. "
+    "When an asset is updated with different units, the old unit→asset mappings "
+    "remain in the inverted index, causing stale search results. "
+    "See Issue 2 in code review - deferred for future implementation."
+)
+def test_update_removes_old_unit_postings(manager, sample_iscc_ids, sample_content_units):
+    """Test that updating asset units removes old unit postings from inverted index."""
+    manager.create_index(IsccIndex(name="cleanup"))
+
+    # Add original asset with units[0, 1]
+    original = IsccAsset(
+        iscc_id=sample_iscc_ids[0],
+        units=[sample_content_units[0], sample_content_units[1]],
+        metadata={"version": 1},
+    )
+    manager.add_assets("cleanup", [original])
+
+    # Verify original units can be searched
+    query_unit1 = IsccAsset(units=[sample_content_units[1]])
+    result_before = manager.search_assets("cleanup", query_unit1, limit=10)
+    assert len(result_before.matches) == 1
+    assert result_before.matches[0].iscc_id == sample_iscc_ids[0]
+
+    # Update asset with different units[0, 2] - removes unit[1], adds unit[2]
+    updated = IsccAsset(
+        iscc_id=sample_iscc_ids[0],
+        units=[sample_content_units[0], sample_content_units[2]],
+        metadata={"version": 2},
+    )
+    result = manager.add_assets("cleanup", [updated])
+    assert result[0].status.value == "updated"
+
+    # EXPECTED BEHAVIOR: Searching for old unit[1] should return NO matches
+    # because the asset no longer contains it
+    query_old_unit = IsccAsset(units=[sample_content_units[1]])
+    result_after = manager.search_assets("cleanup", query_old_unit, limit=10)
+    assert len(result_after.matches) == 0, (
+        f"Expected no matches for old unit, but found {len(result_after.matches)}. "
+        "Old unit postings should be removed when asset is updated."
+    )
+
+    # Searching for new unit[2] should return the asset
+    query_new_unit = IsccAsset(units=[sample_content_units[2]])
+    result_new = manager.search_assets("cleanup", query_new_unit, limit=10)
+    assert len(result_new.matches) == 1
+    assert result_new.matches[0].iscc_id == sample_iscc_ids[0]

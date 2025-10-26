@@ -1,0 +1,153 @@
+"""
+ISCC Index Protocol Definition
+
+Defines the protocol interface that all ISCC index implementations must satisfy.
+This protocol-based abstraction enables multiple backend implementations (usearch,
+postgres, memory) to be used interchangeably through a unified interface.
+"""
+
+from typing import TYPE_CHECKING, Protocol, runtime_checkable
+
+if TYPE_CHECKING:
+    from iscc_vdb.schema import IsccAddResult  # noqa: F401
+    from iscc_vdb.schema import IsccIndex  # noqa: F401
+    from iscc_vdb.schema import IsccItem  # noqa: F401
+    from iscc_vdb.schema import IsccSearchResult  # noqa: F401
+
+
+@runtime_checkable
+class IsccIndexProtocol(Protocol):
+    """
+    Protocol for ISCC index backends.
+
+    All methods are synchronous. Backends are free to use
+    threading, connection pools, etc. internally.
+
+    This protocol defines the core operations that all ISCC index implementations
+    must support:
+    - Index lifecycle: create, get, list, delete
+    - Item operations: add, search
+    - Resource cleanup: close
+
+    All index implementations should handle the protocol's exception contract:
+    - ValueError: Invalid parameters or validation failures
+    - FileExistsError: Attempting to create an existing index
+    - FileNotFoundError: Attempting to access a non-existent index
+    """
+
+    def list_indexes(self):
+        # type: () -> list[IsccIndex]
+        """
+        List all available indexes with metadata.
+
+        Scans the backend storage and returns metadata for all existing indexes.
+        The metadata includes index name, item count, and storage size.
+
+        :return: List of IsccIndex objects with name, items, and size
+        """
+        ...
+
+    def create_index(self, index):
+        # type: (IsccIndex) -> IsccIndex
+        """
+        Create a new named index.
+
+        Initializes a new index with the specified name. The index starts empty
+        with 0 items. If the backend requires initialization (creating directories,
+        database tables, etc.), this method handles it.
+
+        :param index: IsccIndex with name (items and size fields are ignored)
+        :return: Created IsccIndex with initial metadata (items=0, size=0)
+        :raises ValueError: If name is invalid (doesn't match pattern ^[a-z][a-z0-9]*$)
+        :raises FileExistsError: If index with this name already exists
+        """
+        ...
+
+    def get_index(self, name):
+        # type: (str) -> IsccIndex
+        """
+        Get index metadata by name.
+
+        Retrieves current metadata for the specified index, including
+        the number of items and storage size. This is useful for monitoring
+        index growth and health.
+
+        :param name: Index name (must match pattern ^[a-z][a-z0-9]*$)
+        :return: IsccIndex with current metadata
+        :raises FileNotFoundError: If index doesn't exist
+        """
+        ...
+
+    def delete_index(self, name):
+        # type: (str) -> None
+        """
+        Delete an index and all its data.
+
+        Permanently removes the index and all associated data. This operation
+        cannot be undone. Implementations should clean up all resources
+        (files, database tables, etc.).
+
+        :param name: Index name
+        :raises FileNotFoundError: If index doesn't exist
+        """
+        ...
+
+    def add_items(self, index_name, items):
+        # type: (str, list[IsccItem]) -> list[IsccAddResult]
+        """
+        Add items to index.
+
+        Adds multiple ISCC items to the specified index. Each item contains
+        an ISCC-ID and ISCC-UNITs for similarity indexing. Items with missing
+        ISCC-IDs will have them auto-generated.
+
+        Implementations should:
+        - Store item metadata for later retrieval
+        - Index ISCC-UNITs by type for similarity search
+        - Handle duplicates gracefully (update vs create)
+        - Return status for each item
+
+        :param index_name: Target index name
+        :param items: List of IsccItem objects to add
+        :return: List of IsccAddResult with status for each item
+        :raises FileNotFoundError: If index doesn't exist
+        :raises ValueError: If items contain invalid ISCC codes
+        """
+        ...
+
+    def search_items(self, index_name, query, limit=100):
+        # type: (str, IsccItem, int) -> IsccSearchResult
+        """
+        Search for similar items in index.
+
+        Performs similarity search using the query item's ISCC-UNITs.
+        Results are aggregated across all unit types and returned sorted
+        by relevance (highest scores first).
+
+        The returned IsccSearchResult includes:
+        - query: The original query item (may have auto-generated iscc_id)
+        - metric: The distance metric used (nphd, hamming, bitlength)
+        - matches: List of IsccMatch objects with scores and per-unit breakdowns
+
+        :param index_name: Target index name
+        :param query: IsccItem to search for (either iscc_code or units required)
+        :param limit: Maximum number of results to return (default: 100)
+        :return: IsccSearchResult with query, metric, and list of matches
+        :raises FileNotFoundError: If index doesn't exist
+        :raises ValueError: If query item is invalid
+        """
+        ...
+
+    def close(self):
+        # type: () -> None
+        """
+        Close connections and cleanup resources.
+
+        Should be called when the backend is no longer needed. Implementations
+        should clean up resources like database connections, file handles, and
+        memory caches. This method should be idempotent (safe to call multiple times).
+
+        After calling close(), the index instance should not be used for further
+        operations.
+        """
+        ...

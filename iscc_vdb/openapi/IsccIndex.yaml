@@ -1,5 +1,5 @@
 $schema: "https://json-schema.org/draft/2020-12/schema"
-$id: "http://purl.org/iscc/schema/iscc-item.json"
+$id: "http://purl.org/iscc/schema/iscc-index.json"
 title: "IsccIndex"
 type: object
 description: A named index for searching and matching ISCCs
@@ -7,9 +7,21 @@ properties:
   name:
     type: string
     description: Short unique name of the index
+    pattern: "^[a-z]([a-z0-9-]*[a-z0-9])?$"
+    minLength: 1
+    maxLength: 32
+    example: "default"
   items:
     type: integer
     description: Number of ISCCs in the index
+    minimum: 0
+    example: 150000
   size:
     type: integer
     description: Size of index in megabytes
+    minimum: 0
+    example: 42
+example:
+  name: "production"
+  items: 250000
+  size: 68

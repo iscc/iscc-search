@@ -8,8 +8,8 @@ required:
 properties:
   name:
     type: string
-    description: Short unique name of the index
-    pattern: "^[a-z]([a-z0-9-]*[a-z0-9])?$"
+    description: Short unique name of the index (valid code identifier)
+    pattern: "^[a-z][a-z0-9]*$"
     minLength: 1
     maxLength: 32
     example: "default"

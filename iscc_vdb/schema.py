@@ -13,11 +13,11 @@ class IsccIndex(BaseModel):
     name: Annotated[
         str,
         Field(
-            description="Short unique name of the index",
+            description="Short unique name of the index (valid code identifier)",
             examples=["default"],
             max_length=32,
             min_length=1,
-            pattern="^[a-z]([a-z0-9-]*[a-z0-9])?$",
+            pattern="^[a-z][a-z0-9]*$",
         ),
     ]
     items: Annotated[

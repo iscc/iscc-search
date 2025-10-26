@@ -1,22 +1,9 @@
 """FastAPI server for ISCC-VDB API."""
 
 from pathlib import Path
-import yaml
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
-
-
-# Load OpenAPI spec from YAML file
-def load_openapi_spec():
-    # type: () -> dict
-    """
-    Load OpenAPI specification from YAML file.
-
-    :return: OpenAPI specification as dictionary
-    """
-    spec_path = Path(__file__).parent.parent / "openapi" / "openapi.yaml"
-    with open(spec_path, "r", encoding="utf-8") as f:
-        return yaml.safe_load(f)
+from fastapi.staticfiles import StaticFiles
 
 
 # Create FastAPI app instance
@@ -28,6 +15,10 @@ app = FastAPI(
     redoc_url=None,  # Disable default redoc
     openapi_url=None,  # We'll serve our own OpenAPI spec
 )
+
+# Mount OpenAPI schema files as static directory
+openapi_dir = Path(__file__).parent.parent / "openapi"
+app.mount("/openapi", StaticFiles(directory=str(openapi_dir)), name="openapi")
 
 
 @app.get("/docs", response_class=HTMLResponse, include_in_schema=False)
@@ -49,24 +40,13 @@ def custom_docs():
       <body>
         <script
           id="api-reference"
-          data-url="/openapi.yaml"
+          data-url="/openapi/openapi.yaml"
           data-configuration='{{"telemetry": false, "hideClientButton": true, "hideSearch": true, "defaultOpenAllTags": true, "layout": "classic"}}'></script>
         <script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference"></script>
       </body>
     </html>
     """
     return HTMLResponse(content=html)
-
-
-@app.get("/openapi.yaml", include_in_schema=False)
-def get_openapi_spec():
-    # type: () -> dict
-    """
-    Serve the OpenAPI specification.
-
-    :return: OpenAPI specification as dictionary
-    """
-    return load_openapi_spec()
 
 
 @app.get("/", include_in_schema=False)

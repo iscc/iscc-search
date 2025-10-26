@@ -172,7 +172,7 @@ iscc_vdb/
 
 ```python
 from typing import Protocol, runtime_checkable
-from iscc_vdb.schema import IsccIndex, IsccItem
+from iscc_vdb.schema import IsccIndex, IsccItem, IsccAddResult
 
 @runtime_checkable
 class IsccIndexProtocol(Protocol):
@@ -225,13 +225,13 @@ class IsccIndexProtocol(Protocol):
         self,
         index_name: str,
         items: list[IsccItem]
-    ) -> int:
+    ) -> list[IsccAddResult]:
         """
         Add items to index.
 
         :param index_name: Target index name
         :param items: List of IsccItem objects to add
-        :return: Number of items successfully added
+        :return: List of IsccAddResult with status for each item
         :raises FileNotFoundError: If index doesn't exist
         """
         ...
@@ -355,7 +355,7 @@ def get_index() -> IsccIndexProtocol:
 ```python
 from pathlib import Path
 from iscc_vdb.protocol import IsccIndexProtocol
-from iscc_vdb.schema import IsccIndex, IsccItem
+from iscc_vdb.schema import IsccIndex, IsccItem, IsccAddResult
 
 class UsearchIndex:
     """
@@ -431,13 +431,14 @@ class UsearchIndex:
         import shutil
         shutil.rmtree(index_path)
 
-    def add_items(self, index_name: str, items: list[IsccItem]) -> int:
+    def add_items(self, index_name: str, items: list[IsccItem]) -> list[IsccAddResult]:
         """
         Add items to index.
 
         - Store in LMDB
         - Extract ISCC-UNITs
         - Add to per-UNIT-TYPE usearch indexes
+        - Return status for each item
         """
         idx = self._get_or_load_index(index_name)
 
@@ -446,12 +447,19 @@ class UsearchIndex:
 
         # Store in LMDB
         store = idx["store"]
-        iscc_ids = [int(IsccID(item.id_data)) for item in iscc_items]
-        entries = [item.dict for item in iscc_items]
-        added = store.add(iscc_ids, entries)
+        results = []
 
-        # Index units in usearch
         for item in iscc_items:
+            iscc_id_int = int(IsccID(item.id_data))
+
+            # Check if item exists
+            existing = store.get(iscc_id_int)
+            status = "updated" if existing else "created"
+
+            # Store entry
+            store.add([iscc_id_int], [item.dict])
+
+            # Index units in usearch
             for unit_str in item.units:
                 unit = IsccUnit(unit_str)
                 unit_type = unit.unit_type
@@ -463,9 +471,15 @@ class UsearchIndex:
                     idx["unit_indexes"][unit_type] = unit_idx
 
                 # Add to usearch
-                unit_idx.add(int(IsccID(item.id_data)), unit.body)
+                unit_idx.add(iscc_id_int, unit.body)
 
-        return added
+            # Add result for this item
+            results.append(IsccAddResult(
+                iscc_id=item.iscc_id,
+                status=status
+            ))
+
+        return results
 
     def search_items(
         self,
@@ -540,7 +554,7 @@ class UsearchIndex:
 import psycopg2
 from psycopg2.pool import SimpleConnectionPool
 from iscc_vdb.protocol import IsccIndexProtocol
-from iscc_vdb.schema import IsccIndex, IsccItem
+from iscc_vdb.schema import IsccIndex, IsccItem, IsccAddResult
 
 class PostgresIndex:
     """
@@ -643,7 +657,7 @@ class PostgresIndex:
 
 ```python
 from iscc_vdb.protocol import IsccIndexProtocol
-from iscc_vdb.schema import IsccIndex, IsccItem
+from iscc_vdb.schema import IsccIndex, IsccItem, IsccAddResult
 
 class MemoryIndex:
     """
@@ -700,13 +714,20 @@ class MemoryIndex:
 
         del self._indexes[name]
 
-    def add_items(self, index_name: str, items: list[IsccItem]) -> int:
+    def add_items(self, index_name: str, items: list[IsccItem]) -> list[IsccAddResult]:
         """Add items to in-memory index."""
         if index_name not in self._indexes:
             raise FileNotFoundError(f"Index '{index_name}' not found")
 
-        self._indexes[index_name]["items"].extend(items)
-        return len(items)
+        results = []
+        existing_ids = {item.iscc_id for item in self._indexes[index_name]["items"]}
+
+        for item in items:
+            status = "updated" if item.iscc_id in existing_ids else "created"
+            self._indexes[index_name]["items"].append(item)
+            results.append(IsccAddResult(iscc_id=item.iscc_id, status=status))
+
+        return results
 
     def search_items(
         self,
@@ -774,7 +795,7 @@ app = create_app()
 
 ```python
 from fastapi import APIRouter, Request, HTTPException, status
-from iscc_vdb.schema import IsccIndex, IsccItem
+from iscc_vdb.schema import IsccIndex, IsccItem, IsccAddResult
 from iscc_vdb.protocol import IsccIndexProtocol
 
 router = APIRouter()
@@ -834,13 +855,13 @@ def delete_index(name: str, request: Request):
             detail=f"Index '{name}' not found"
         )
 
-@router.post("/indexes/{name}/items")
+@router.post("/indexes/{name}/items", response_model=list[IsccAddResult], status_code=status.HTTP_201_CREATED)
 def add_items(name: str, items: list[IsccItem], request: Request):
     """Add items to index."""
     idx = get_index_impl(request)
     try:
-        added = idx.add_items(name, items)
-        return {"added": added}
+        results = idx.add_items(name, items)
+        return results
     except FileNotFoundError:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

@@ -66,18 +66,20 @@ def test_add_assets_index_not_found(test_client, sample_assets):
 
 
 def test_add_assets_missing_iscc_id(test_client, sample_content_units):
-    """Test adding asset without iscc_id raises error."""
+    """Test adding asset without iscc_id raises backend validation error."""
     # Create index
     test_client.post("/indexes", json={"name": "testindex"})
 
-    # Asset without iscc_id
+    # Asset without iscc_id (allowed by schema for search, but backend requires it for add)
     asset_dict = {"units": [sample_content_units[0], sample_content_units[1]]}
 
     response = test_client.post("/indexes/testindex/assets", json=[asset_dict])
 
+    # Backend returns 400 Bad Request for validation errors
     assert response.status_code == 400
     data = response.json()
     assert "detail" in data
+    assert "iscc_id" in data["detail"].lower()
 
 
 def test_get_asset_success(test_client, sample_assets):

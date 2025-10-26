@@ -47,16 +47,16 @@ def test_search_post_no_matches(test_client, sample_assets, sample_iscc_codes):
     assert len(data["matches"]) == 0
 
 
-def test_search_post_with_limit(test_client, sample_assets, sample_iscc_codes):
+def test_search_post_with_limit(test_client, sample_iscc_ids, sample_iscc_codes):
     """Test POST search respects limit parameter."""
     # Create index and add multiple assets with same ISCC-CODE
     test_client.post("/indexes", json={"name": "testindex"})
 
     code = sample_iscc_codes[0]
-    # Create multiple assets with same code but different IDs
+    # Create 10 unique assets with same code but different IDs
     for i in range(10):
         asset_dict = {
-            "iscc_id": sample_assets[i % len(sample_assets)].iscc_id,
+            "iscc_id": sample_iscc_ids[i],  # Use unique ISCC-ID for each asset
             "iscc_code": code,
         }
         test_client.post("/indexes/testindex/assets", json=[asset_dict])

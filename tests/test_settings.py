@@ -1,7 +1,6 @@
 """Test settings management for ISCC-VDB."""
 
 from iscc_vdb.settings import VdbSettings, vdb_settings, get_index
-from iscc_vdb.protocol import IsccIndexProtocol
 from iscc_vdb.indexes.memory import MemoryIndex
 
 
@@ -102,9 +101,18 @@ def test_vdb_settings_extra_fields_ignored():
 
 def test_get_index_default():
     """Test get_index() factory function with default settings."""
-    index = get_index()
-    assert isinstance(index, IsccIndexProtocol)
-    assert isinstance(index, MemoryIndex)
+    import iscc_vdb.settings
+    import pytest
+
+    original_uri = iscc_vdb.settings.vdb_settings.indexes_uri
+    try:
+        # Default URI from platformdirs is a file path, should raise ValueError
+        # since only memory:// is currently supported
+        with pytest.raises(ValueError, match="Unsupported ISCC_VDB_INDEXES_URI"):
+            get_index()
+    finally:
+        # Restore original
+        iscc_vdb.settings.vdb_settings.indexes_uri = original_uri
 
 
 def test_get_index_memory_uri():
@@ -123,16 +131,17 @@ def test_get_index_memory_uri():
 
 
 def test_get_index_custom_path():
-    """Test get_index() factory with custom path (falls back to MemoryIndex for now)."""
+    """Test get_index() factory with custom path raises ValueError (not yet implemented)."""
     import iscc_vdb.settings
+    import pytest
 
     original_uri = iscc_vdb.settings.vdb_settings.indexes_uri
     try:
         # Override settings temporarily
         iscc_vdb.settings.vdb_settings.indexes_uri = "/tmp/custom_path"
-        index = get_index()
-        # Currently falls back to MemoryIndex
-        assert isinstance(index, MemoryIndex)
+        # File paths are not yet supported, should raise ValueError
+        with pytest.raises(ValueError, match="Unsupported ISCC_VDB_INDEXES_URI"):
+            get_index()
     finally:
         # Restore original
         iscc_vdb.settings.vdb_settings.indexes_uri = original_uri

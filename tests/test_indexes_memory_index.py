@@ -200,14 +200,15 @@ def test_add_assets_index_not_found(sample_iscc_ids):
 
 
 def test_add_assets_missing_iscc_id(sample_content_units):
-    """Test that adding assets without iscc_id raises ValueError."""
+    """Test that adding assets without iscc_id raises ValueError from backend."""
     index = MemoryIndex()
     index.create_index(IsccIndex(name="testindex"))
 
-    # Asset without iscc_id (but with minimum 2 units required by schema)
+    # Asset without iscc_id (allowed by schema for search, but required for add)
     asset = IsccAsset(units=[sample_content_units[0], sample_content_units[1]])
 
-    with pytest.raises(ValueError, match="Asset must have iscc_id field"):
+    # Backend validates that iscc_id is required when adding
+    with pytest.raises(ValueError, match="Asset must have iscc_id field when adding to index"):
         index.add_assets("testindex", [asset])
 
 

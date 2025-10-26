@@ -1,12 +1,35 @@
 """Test FastAPI server for ISCC-VDB API."""
 
 from unittest.mock import patch, MagicMock
+import pytest
 from fastapi.testclient import TestClient
 from iscc_vdb.server import app, custom_docs, root
 
 
-# Create TestClient instance at module level following FastAPI best practices
-client = TestClient(app)
+@pytest.fixture
+def client():
+    # type: () -> TestClient
+    """
+    Create TestClient with proper resource cleanup.
+
+    Uses context manager to ensure the lifespan shutdown event is triggered
+    and resources are properly cleaned up after tests. Configures app to use
+    memory:// index backend.
+
+    :return: FastAPI TestClient instance
+    """
+    import iscc_vdb.settings
+
+    # Save original URI and set to memory://
+    original_uri = iscc_vdb.settings.vdb_settings.indexes_uri
+    iscc_vdb.settings.vdb_settings.indexes_uri = "memory://"
+
+    try:
+        with TestClient(app) as client:
+            yield client
+    finally:
+        # Restore original URI
+        iscc_vdb.settings.vdb_settings.indexes_uri = original_uri
 
 
 def test_app_instance():
@@ -19,7 +42,7 @@ def test_app_instance():
     assert "A Scalable Nearest Neighbor Search" in app.description
 
 
-def test_root_endpoint():
+def test_root_endpoint(client):
     """Test root endpoint returns API information."""
     response = client.get("/")
     assert response.status_code == 200
@@ -30,7 +53,7 @@ def test_root_endpoint():
     assert "description" in data
 
 
-def test_docs_endpoint():
+def test_docs_endpoint(client):
     """Test custom docs endpoint returns HTML with Scalar UI."""
     response = client.get("/docs")
     assert response.status_code == 200
@@ -64,7 +87,7 @@ def test_root_function():
     assert result["docs"] == "/docs"
 
 
-def test_openapi_static_files():
+def test_openapi_static_files(client):
     """Test that OpenAPI static files are accessible."""
     response = client.get("/openapi/openapi.yaml")
     assert response.status_code == 200
@@ -117,14 +140,27 @@ if __name__ == '__main__':
 def test_lifespan_shutdown():
     """Test that lifespan context manager properly closes index on shutdown."""
     from iscc_vdb.indexes.memory import MemoryIndex
+    import iscc_vdb.settings
 
-    # Create a mock index with a close method we can track
-    mock_index = MagicMock(spec=MemoryIndex)
+    # Save and override URI to use memory://
+    original_uri = iscc_vdb.settings.vdb_settings.indexes_uri
+    iscc_vdb.settings.vdb_settings.indexes_uri = "memory://"
 
-    # Use TestClient context manager to trigger lifespan shutdown
-    with TestClient(app) as client:
-        # Override with our mock
-        client.app.state.index = mock_index
+    try:
+        # Use TestClient context manager to trigger lifespan events
+        with TestClient(app) as client:
+            # Verify the lifespan startup created an index
+            assert hasattr(client.app.state, "index")
+            original_index = client.app.state.index
+            assert isinstance(original_index, MemoryIndex)
 
-    # Verify close was called during shutdown
-    mock_index.close.assert_called_once()
+            # Replace the index with a mock to track close() calls
+            mock_index = MagicMock(spec=MemoryIndex)
+            client.app.state.index = mock_index
+
+        # Verify close was called during shutdown on the mock
+        # (In production, the real index's close() would be called)
+        mock_index.close.assert_called_once()
+    finally:
+        # Restore original URI
+        iscc_vdb.settings.vdb_settings.indexes_uri = original_uri

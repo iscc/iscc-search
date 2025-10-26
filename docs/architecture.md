@@ -7,6 +7,9 @@ unified interface. The system uses Python's `typing.Protocol` to define an index
 CLI and REST API frontends to work seamlessly with different storage implementations (usearch, postgres,
 in-memory).
 
+**Current Implementation Status**: Currently only the MemoryIndex backend is fully implemented. UsearchIndex and
+PostgresIndex are planned for future development.
+
 ## High-Level Architecture
 
 ```
@@ -95,10 +98,10 @@ All operations are synchronous for simplicity:
 
 Single `ISCC_VDB_INDEXES_URI` environment variable determines index implementation:
 
-- **Directory path**: `ISCC_VDB_INDEXES_URI=/path/to/index_data` → UsearchIndex
-- **Postgres DSN**: `ISCC_VDB_INDEXES_URI=postgresql://user:pass@host/db` → PostgresIndex
-- **memory://**: `ISCC_VDB_INDEXES_URI=memory://` → MemoryIndex (in-memory, no persistence)
-- **Default**: Uses `platformdirs` to determine OS-appropriate user data directory
+- **memory://**: `ISCC_VDB_INDEXES_URI=memory://` → MemoryIndex (in-memory, no persistence) **[IMPLEMENTED]**
+- **Directory path**: `ISCC_VDB_INDEXES_URI=/path/to/index_data` → UsearchIndex **[PLANNED]**
+- **Postgres DSN**: `ISCC_VDB_INDEXES_URI=postgresql://user:pass@host/db` → PostgresIndex **[PLANNED]**
+- **Default**: Uses `platformdirs` to determine OS-appropriate user data directory **[PLANNED]**
 
 Configuration uses Pydantic Settings for:
 
@@ -169,6 +172,34 @@ iscc_vdb/
 
 ## Core Components
 
+### Schema Models (`schema.py`)
+
+The schema is generated from OpenAPI specifications and defines the core data models:
+
+**IsccAsset** - Represents an ISCC asset with metadata:
+
+- `iscc_id` (str | None): Required when adding assets, optional for search queries
+- `iscc_code` (str | None): Composite ISCC-CODE combining multiple ISCC-UNITs
+- `units` (list[Unit] | None): List of individual ISCC-UNITs as canonical strings
+- `metadata` (dict[str, Any] | None): Optional application-specific metadata stored opaquely
+
+**IsccAddResult** - Result of adding an asset:
+
+- `iscc_id` (str): The ISCC-ID of the asset that was added
+- `status` (Status): Enum with values "created" or "updated"
+
+**IsccIndex** - Index metadata:
+
+- `name` (str): Short unique name matching pattern `^[a-z][a-z0-9]*$`
+- `assets` (int | None): Number of ISCCs in the index (server-generated, read-only)
+- `size` (int | None): Size of index in megabytes (server-generated, read-only)
+
+**IsccSearchResult** - Search results:
+
+- `query` (IsccAsset): The original query asset (may include auto-generated iscc_id)
+- `metric` (Metric): Distance metric used (nphd, hamming, bitlength)
+- `matches` (list[IsccMatch]): List of matched ISCC-IDs with scores
+
 ### Protocol Definition (`protocol.py`)
 
 ```python
@@ -231,9 +262,10 @@ class IsccIndexProtocol(Protocol):
         Add assets to index.
 
         :param index_name: Target index name
-        :param assets: List of IsccAsset objects to add
+        :param assets: List of IsccAsset objects to add (must include iscc_id)
         :return: List of IsccAddResult with status for each asset
         :raises FileNotFoundError: If index doesn't exist
+        :raises ValueError: If asset is missing required iscc_id field
         """
         ...
 
@@ -335,35 +367,35 @@ def get_index() -> IsccIndexProtocol:
     """
     Factory function to create index from settings.
 
-    Parses indexes_uri to determine index type:
-    - file:// or path → UsearchIndex
-    - postgresql:// → PostgresIndex
-    - memory:// → MemoryIndex
+    Parses indexes_uri to determine index type and returns appropriate
+    implementation. Currently supports:
+    - memory:// → MemoryIndex (in-memory, no persistence)
+
+    Future implementations:
+    - file:// or path → UsearchIndex (not yet implemented)
+    - postgresql:// → PostgresIndex (not yet implemented)
 
     :return: Index instance implementing IsccIndexProtocol
     :raises ValueError: If URI scheme is not supported
     """
+    from iscc_vdb.protocol import IsccIndexProtocol  # noqa: F401
+
     uri = vdb_settings.indexes_uri
     parsed = urlparse(uri)
 
-    if parsed.scheme in ("", "file"):
-        # Local file path
-        from iscc_vdb.indexes.usearch import UsearchIndex
-        path = parsed.path if parsed.scheme == "file" else uri
-        return UsearchIndex(Path(path))
-
-    elif parsed.scheme in ("postgresql", "postgres"):
-        # Postgres connection
-        from iscc_vdb.indexes.postgres import PostgresIndex
-        return PostgresIndex(uri)
-
-    elif parsed.scheme == "memory":
-        # In-memory index
+    if parsed.scheme == "memory" or uri == "memory://":
+        # In-memory index for testing
         from iscc_vdb.indexes.memory import MemoryIndex
+
         return MemoryIndex()
 
-    else:
-        raise ValueError(f"Unsupported ISCC_VDB_INDEXES_URI scheme: {parsed.scheme}")
+    # Reject unsupported URI schemes to prevent silent data loss
+    supported = ["memory://"]
+    raise ValueError(
+        f"Unsupported ISCC_VDB_INDEXES_URI: '{uri}'. "
+        f"Currently supported schemes: {', '.join(supported)}. "
+        f"File paths and PostgreSQL URIs are not yet implemented."
+    )
 ```
 
 ### Usearch Index (`indexes/usearch/index.py`)
@@ -680,8 +712,12 @@ class PostgresIndex:
 ### Memory Index (`indexes/memory/index.py`)
 
 ```python
+import re
 from iscc_vdb.protocol import IsccIndexProtocol
-from iscc_vdb.schema import IsccIndex, IsccAsset, IsccAddResult
+from iscc_vdb.schema import IsccIndex, IsccAsset, IsccAddResult, Status
+
+INDEX_NAME_PATTERN = re.compile(r"^[a-z][a-z0-9]*$")
+
 
 class MemoryIndex:
     """
@@ -689,79 +725,144 @@ class MemoryIndex:
 
     Stores all data in memory using dictionaries. No persistence.
     Useful for testing and development.
+
+    Storage structure:
+        _indexes = {
+            "index_name": {
+                "assets": {iscc_id: IsccAsset, ...},
+                "metadata": {}
+            },
+            ...
+        }
     """
 
     def __init__(self):
         """
         Initialize MemoryIndex.
+
+        Creates empty in-memory storage for indexes and assets.
         """
-        self._indexes = {}  # name -> {assets: [], metadata: {}}
+        self._indexes = {}  # type: dict[str, dict]
 
     def list_indexes(self) -> list[IsccIndex]:
-        """List all in-memory indexes."""
+        """
+        List all in-memory indexes.
+
+        :return: List of IsccIndex objects with metadata
+        """
         indexes = []
         for name, data in self._indexes.items():
-            indexes.append(IsccIndex(
-                name=name,
-                assets=len(data["assets"]),
-                size=0  # Memory indexes don't track size
-            ))
+            indexes.append(
+                IsccIndex(
+                    name=name,
+                    assets=len(data["assets"]),
+                    size=0,  # Memory indexes don't track size
+                )
+            )
         return indexes
 
     def create_index(self, index: IsccIndex) -> IsccIndex:
-        """Create new in-memory index."""
+        """
+        Create new in-memory index.
+
+        :param index: IsccIndex with name (assets and size ignored)
+        :return: Created IsccIndex with initial metadata
+        :raises ValueError: If name is invalid
+        :raises FileExistsError: If index already exists
+        """
+        # Validate index name (Pydantic already validates, this is defensive)
+        if not INDEX_NAME_PATTERN.match(index.name):
+            raise ValueError(
+                f"Invalid index name: '{index.name}'. Must match pattern ^[a-z][a-z0-9]*$ "
+                f"(lowercase letters, digits, no special chars)"
+            )
+
         if index.name in self._indexes:
             raise FileExistsError(f"Index '{index.name}' already exists")
 
-        self._indexes[index.name] = {
-            "assets": [],
-            "metadata": {}
-        }
+        self._indexes[index.name] = {"assets": {}, "metadata": {}}
         return IsccIndex(name=index.name, assets=0, size=0)
 
     def get_index(self, name: str) -> IsccIndex:
-        """Get index metadata."""
+        """
+        Get index metadata.
+
+        :param name: Index name
+        :return: IsccIndex with current metadata
+        :raises FileNotFoundError: If index doesn't exist
+        """
         if name not in self._indexes:
             raise FileNotFoundError(f"Index '{name}' not found")
 
         data = self._indexes[name]
-        return IsccIndex(
-            name=name,
-            assets=len(data["assets"]),
-            size=0
-        )
+        return IsccIndex(name=name, assets=len(data["assets"]), size=0)
 
     def delete_index(self, name: str) -> None:
-        """Delete in-memory index."""
+        """
+        Delete in-memory index.
+
+        :param name: Index name
+        :raises FileNotFoundError: If index doesn't exist
+        """
         if name not in self._indexes:
             raise FileNotFoundError(f"Index '{name}' not found")
 
         del self._indexes[name]
 
     def add_assets(self, index_name: str, assets: list[IsccAsset]) -> list[IsccAddResult]:
-        """Add assets to in-memory index."""
+        """
+        Add assets to in-memory index.
+
+        Assets are stored by iscc_id. If an asset with the same iscc_id already
+        exists, it's updated (not duplicated). The iscc_id field must be provided
+        by the client when adding assets.
+
+        :param index_name: Target index name
+        :param assets: List of IsccAsset objects to add (must include iscc_id)
+        :return: List of IsccAddResult with status for each asset
+        :raises FileNotFoundError: If index doesn't exist
+        :raises ValueError: If asset is missing required iscc_id field
+        """
         if index_name not in self._indexes:
             raise FileNotFoundError(f"Index '{index_name}' not found")
 
         results = []
-        existing_ids = {asset.iscc_id for asset in self._indexes[index_name]["assets"]}
+        index_data = self._indexes[index_name]
 
         for asset in assets:
-            status = "updated" if asset.iscc_id in existing_ids else "created"
-            self._indexes[index_name]["assets"].append(asset)
+            # Validate that asset has required iscc_id for add operations
+            if asset.iscc_id is None:
+                raise ValueError("Asset must have iscc_id field when adding to index")
+
+            # Check if asset already exists
+            status = Status.updated if asset.iscc_id in index_data["assets"] else Status.created
+
+            # Store/update asset
+            index_data["assets"][asset.iscc_id] = asset
+
             results.append(IsccAddResult(iscc_id=asset.iscc_id, status=status))
 
         return results
 
     def get_asset(self, index_name: str, iscc_id: str) -> IsccAsset:
-        """Get a specific asset by ISCC-ID."""
+        """
+        Get a specific asset by ISCC-ID.
+
+        :param index_name: Target index name
+        :param iscc_id: ISCC-ID of the asset to retrieve
+        :return: IsccAsset with all stored metadata
+        :raises FileNotFoundError: If index doesn't exist or asset not found
+        :raises ValueError: If ISCC-ID format is invalid
+        """
         if index_name not in self._indexes:
             raise FileNotFoundError(f"Index '{index_name}' not found")
 
-        if iscc_id not in self._indexes[index_name]["assets"]:
+        index_data = self._indexes[index_name]
+
+        if iscc_id not in index_data["assets"]:
             raise FileNotFoundError(f"Asset '{iscc_id}' not found in index '{index_name}'")
 
-        return self._indexes[index_name]["assets"][iscc_id]
+        return index_data["assets"][iscc_id]
 
     def search_assets(
         self,
@@ -769,16 +870,42 @@ class MemoryIndex:
         query: IsccAsset,
         limit: int = 100
     ) -> IsccSearchResult:
-        """Search for similar assets (simple exact match for testing)."""
+        """
+        Search for similar assets (simple exact match for testing).
+
+        This is a simplified implementation that performs exact matching
+        on iscc_code. For production use, a real similarity search backend
+        like usearch should be used.
+
+        :param index_name: Target index name
+        :param query: IsccAsset to search for
+        :param limit: Maximum number of results
+        :return: IsccSearchResult with matches
+        :raises FileNotFoundError: If index doesn't exist
+        :raises ValueError: If query asset is invalid
+        """
         from iscc_vdb.schema import IsccSearchResult, IsccMatch, Metric
 
         if index_name not in self._indexes:
             raise FileNotFoundError(f"Index '{index_name}' not found")
 
-        # Simple implementation for testing
+        # Simple implementation: exact match on iscc_code if available
         match_list = []
-        for asset in self._indexes[index_name]["assets"]:
-            if asset.iscc_code == query.iscc_code:
+        index_data = self._indexes[index_name]
+
+        for asset in index_data["assets"].values():
+            # Match by iscc_code if both query and asset have it
+            if query.iscc_code and asset.iscc_code:
+                if asset.iscc_code == query.iscc_code:
+                    match_list.append(
+                        IsccMatch(
+                            iscc_id=asset.iscc_id,
+                            score=1.0,
+                            matches={},
+                        )
+                    )
+            # Match by iscc_id if query has it
+            elif query.iscc_id and asset.iscc_id == query.iscc_id:
                 match_list.append(
                     IsccMatch(
                         iscc_id=asset.iscc_id,
@@ -794,7 +921,13 @@ class MemoryIndex:
         )
 
     def close(self) -> None:
-        """No-op for in-memory index."""
+        """
+        No-op for in-memory index.
+
+        Since there are no external resources to clean up (no file handles,
+        database connections, etc.), this method does nothing. It's provided
+        for protocol compliance.
+        """
         pass
 ```
 
@@ -1146,12 +1279,12 @@ iscc-vdb search test "ISCC:..."
 
 ## Implementation Strategy
 
-### Phase 1: Foundation
+### Phase 1: Foundation **[COMPLETED]**
 
-1. Define `IsccIndexProtocol` in `protocol.py`
-2. Create `settings.py` with Pydantic settings and index factory
-3. Update OpenAPI spec with asset endpoints
-4. Regenerate `schema.py` from OpenAPI
+1. Define `IsccIndexProtocol` in `protocol.py` ✓
+2. Create `settings.py` with Pydantic settings and index factory ✓
+3. Update OpenAPI spec with asset endpoints ✓
+4. Regenerate `schema.py` from OpenAPI ✓
 
 ### Phase 2: Usearch Index
 
@@ -1176,9 +1309,9 @@ iscc-vdb search test "ISCC:..."
 
 ### Phase 5: Additional Indexes
 
-1. Implement `PostgresIndex` in `indexes/postgres/`
-2. Implement `MemoryIndex` in `indexes/memory/`
-3. Write index-specific tests
+1. Implement `MemoryIndex` in `indexes/memory/` ✓ **[COMPLETED]**
+2. Implement `PostgresIndex` in `indexes/postgres/` **[PLANNED]**
+3. Write index-specific tests ✓ (for MemoryIndex)
 4. Update documentation
 
 ### Phase 6: Polish

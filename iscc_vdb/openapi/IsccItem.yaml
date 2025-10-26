@@ -29,8 +29,6 @@ properties:
       - "ISCC:GADVJB6OD2XRTERK3G4KOFHGDJCBYEXAZCZLVVSA7MMURDPMJ5S5JWI"
       - "ISCC:IAD6TOYXXSR7FSN7TRRRNOKQ6JCFK3ZF4KRFVEQRQ4M4PDPUR5H7GHQ"
     minItems: 2
-required:
-  - units
 anyOf:
   - required: ["iscc_code"]
   - required: ["units"]

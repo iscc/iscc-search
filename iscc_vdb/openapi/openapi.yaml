@@ -169,8 +169,235 @@ paths:
                     type: string
               example:
                 detail: "Index 'myindex' not found"
+  /indexes/{name}/items:
+    post:
+      summary: Add items to an index
+      description: |
+        Adds multiple ISCC items to the specified index. Items are processed atomically
+        (all-or-nothing). ISCC-IDs are auto-generated if not provided. Returns status
+        for each item indicating whether it was newly created or already existed.
+      operationId: addItems
+      tags:
+        - items
+      parameters:
+        - name: name
+          in: path
+          required: true
+          description: Name of the index to add items to
+          schema:
+            type: string
+            pattern: "^[a-z][a-z0-9]*$"
+            minLength: 1
+            maxLength: 32
+            example: "default"
+      requestBody:
+        required: true
+        description: Array of ISCC items to add (either iscc_code or units required)
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/IsccItem'
+            example:
+              - iscc_code: "ISCC:KECYCMZIOY36XXGZ7S6QJQ2AEEXPOVEHZYPK6GMSFLU3WF54UPZMTPY"
+                units:
+                  - "ISCC:AADYCMZIOY36XXGZ5B5BME7EIPPXRFKYQZ7VXKI7V55AEQQE67A33BY"
+                  - "ISCC:EED7ZPIEYNACCLXXZSS2LIM6JVXDYGCG2QSMC7DCPER4MYJPJATIM4Y"
+              - units:
+                  - "ISCC:GADVJB6OD2XRTERK3G4KOFHGDJCBYEXAZCZLVVSA7MMURDPMJ5S5JWI"
+                  - "ISCC:IAD6TOYXXSR7FSN7TRRRNOKQ6JCFK3ZF4KRFVEQRQ4M4PDPUR5H7GHQ"
+      responses:
+        '201':
+          description: Items successfully added to index
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/IsccAddResult'
+              example:
+                - iscc_id: "ISCC:MAIGIIFJRDGEQQAA"
+                  status: "created"
+                - iscc_id: "ISCC:MAIGXXFZRDGEQQBB"
+                  status: "created"
+        '400':
+          description: Invalid request (malformed ISCC, validation error)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  detail:
+                    type: string
+              example:
+                detail: "Invalid ISCC format in item 1"
+        '404':
+          description: Index not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  detail:
+                    type: string
+              example:
+                detail: "Index 'myindex' not found"
+  /indexes/{name}/search:
+    post:
+      summary: Search for similar ISCCs (POST)
+      description: |
+        Searches for similar ISCC items in the index using the provided query item.
+        Supports complex queries with multiple units and custom ISCC-CODEs.
+      operationId: searchPost
+      tags:
+        - search
+      parameters:
+        - name: name
+          in: path
+          required: true
+          description: Name of the index to search
+          schema:
+            type: string
+            pattern: "^[a-z][a-z0-9]*$"
+            minLength: 1
+            maxLength: 32
+            example: "default"
+      requestBody:
+        required: true
+        description: ISCC item to use as search query
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IsccItem'
+            example:
+              iscc_code: "ISCC:KECYCMZIOY36XXGZ7S6QJQ2AEEXPOVEHZYPK6GMSFLU3WF54UPZMTPY"
+              units:
+                - "ISCC:AADYCMZIOY36XXGZ5B5BME7EIPPXRFKYQZ7VXKI7V55AEQQE67A33BY"
+                - "ISCC:EED7ZPIEYNACCLXXZSS2LIM6JVXDYGCG2QSMC7DCPER4MYJPJATIM4Y"
+      responses:
+        '200':
+          description: Search results with matched items
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IsccSearchResult'
+              example:
+                query:
+                  iscc_code: "ISCC:KECYCMZIOY36XXGZ7S6QJQ2AEEXPOVEHZYPK6GMSFLU3WF54UPZMTPY"
+                  units:
+                    - "ISCC:AADYCMZIOY36XXGZ5B5BME7EIPPXRFKYQZ7VXKI7V55AEQQE67A33BY"
+                    - "ISCC:EED7ZPIEYNACCLXXZSS2LIM6JVXDYGCG2QSMC7DCPER4MYJPJATIM4Y"
+                metric: "bitlength"
+                matches:
+                  - iscc_id: "ISCC:MAIGIIFJRDGEQQAA"
+                    score: 448
+                    matches:
+                      CONTENT_TEXT_V0: 256
+                      DATA_NONE_V0: 128
+                      INSTANCE_NONE_V0: 64
+        '400':
+          description: Invalid request (malformed ISCC)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  detail:
+                    type: string
+              example:
+                detail: "Invalid ISCC format"
+        '404':
+          description: Index not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  detail:
+                    type: string
+              example:
+                detail: "Index 'myindex' not found"
+    get:
+      summary: Search for similar ISCCs (GET)
+      description: |
+        Convenience endpoint for searching by ISCC-CODE via query parameter.
+        The ISCC-CODE is decomposed into units for searching.
+      operationId: searchGet
+      tags:
+        - search
+      parameters:
+        - name: name
+          in: path
+          required: true
+          description: Name of the index to search
+          schema:
+            type: string
+            pattern: "^[a-z][a-z0-9]*$"
+            minLength: 1
+            maxLength: 32
+            example: "default"
+        - name: iscc_code
+          in: query
+          required: true
+          description: ISCC-CODE to search for (will be decomposed into units)
+          schema:
+            type: string
+            pattern: "^ISCC:[A-Z2-7]{16,}$"
+          example: "ISCC:KECYCMZIOY36XXGZ7S6QJQ2AEEXPOVEHZYPK6GMSFLU3WF54UPZMTPY"
+      responses:
+        '200':
+          description: Search results with matched items
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IsccSearchResult'
+              example:
+                query:
+                  iscc_code: "ISCC:KECYCMZIOY36XXGZ7S6QJQ2AEEXPOVEHZYPK6GMSFLU3WF54UPZMTPY"
+                  units:
+                    - "ISCC:AADYCMZIOY36XXGZ5B5BME7EIPPXRFKYQZ7VXKI7V55AEQQE67A33BY"
+                    - "ISCC:EED7ZPIEYNACCLXXZSS2LIM6JVXDYGCG2QSMC7DCPER4MYJPJATIM4Y"
+                metric: "bitlength"
+                matches:
+                  - iscc_id: "ISCC:MAIGIIFJRDGEQQAA"
+                    score: 448
+                    matches:
+                      CONTENT_TEXT_V0: 256
+                      DATA_NONE_V0: 128
+                      INSTANCE_NONE_V0: 64
+        '400':
+          description: Invalid ISCC-CODE format
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  detail:
+                    type: string
+              example:
+                detail: "Invalid ISCC-CODE format"
+        '404':
+          description: Index not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  detail:
+                    type: string
+              example:
+                detail: "Index 'myindex' not found"
 
 components:
   schemas:
     IsccIndex:
       $ref: './IsccIndex.yaml'
+    IsccItem:
+      $ref: './IsccItem.yaml'
+    IsccAddResult:
+      $ref: './IsccAddResult.yaml'
+    IsccMatch:
+      $ref: './IsccMatch.yaml'
+    IsccSearchResult:
+      $ref: './IsccSearchResult.yaml'

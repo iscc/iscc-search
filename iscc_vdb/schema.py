@@ -3,7 +3,8 @@
 
 from __future__ import annotations
 from typing import Annotated
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, RootModel
+from enum import Enum
 
 
 class IsccIndex(BaseModel):
@@ -27,3 +28,200 @@ class IsccIndex(BaseModel):
     size: Annotated[
         int | None, Field(description="Size of index in megabytes (server-generated, read-only)", examples=[42], ge=0)
     ] = None
+
+
+class Unit(RootModel[str]):
+    root: Annotated[
+        str, Field(description="Individual extended ISCC-UNITs in canonical format", pattern="^ISCC:[A-Z2-7]{16,}$")
+    ]
+
+
+class IsccItem2(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    iscc_id: Annotated[
+        str | None,
+        Field(
+            description="Globally unique digital asset identifier (ISCC-ID)",
+            examples=["ISCC:MAIGIIFJRDGEQQAA"],
+            pattern="^ISCC:[A-Z2-7]{16,}$",
+        ),
+    ] = None
+    iscc_code: Annotated[
+        str,
+        Field(
+            description="Composite ISCC-CODE combining multiple ISCC-UNITs (wide format, 128-bit Data + 128-bit Instance)",
+            examples=["ISCC:KECYCMZIOY36XXGZ7S6QJQ2AEEXPOVEHZYPK6GMSFLU3WF54UPZMTPY"],
+            pattern="^ISCC:[A-Z2-7]{16,}$",
+        ),
+    ]
+    units: Annotated[
+        list[Unit] | None,
+        Field(
+            description="List of ISCC-UNITs as canonical strings (variable-length, 64-256 bits)",
+            examples=[
+                [
+                    "ISCC:AADYCMZIOY36XXGZ5B5BME7EIPPXRFKYQZ7VXKI7V55AEQQE67A33BY",
+                    "ISCC:EED7ZPIEYNACCLXXZSS2LIM6JVXDYGCG2QSMC7DCPER4MYJPJATIM4Y",
+                    "ISCC:GADVJB6OD2XRTERK3G4KOFHGDJCBYEXAZCZLVVSA7MMURDPMJ5S5JWI",
+                    "ISCC:IAD6TOYXXSR7FSN7TRRRNOKQ6JCFK3ZF4KRFVEQRQ4M4PDPUR5H7GHQ",
+                ]
+            ],
+            min_length=2,
+        ),
+    ] = None
+
+
+class IsccItem3(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    iscc_id: Annotated[
+        str | None,
+        Field(
+            description="Globally unique digital asset identifier (ISCC-ID)",
+            examples=["ISCC:MAIGIIFJRDGEQQAA"],
+            pattern="^ISCC:[A-Z2-7]{16,}$",
+        ),
+    ] = None
+    iscc_code: Annotated[
+        str | None,
+        Field(
+            description="Composite ISCC-CODE combining multiple ISCC-UNITs (wide format, 128-bit Data + 128-bit Instance)",
+            examples=["ISCC:KECYCMZIOY36XXGZ7S6QJQ2AEEXPOVEHZYPK6GMSFLU3WF54UPZMTPY"],
+            pattern="^ISCC:[A-Z2-7]{16,}$",
+        ),
+    ] = None
+    units: Annotated[
+        list[Unit],
+        Field(
+            description="List of ISCC-UNITs as canonical strings (variable-length, 64-256 bits)",
+            examples=[
+                [
+                    "ISCC:AADYCMZIOY36XXGZ5B5BME7EIPPXRFKYQZ7VXKI7V55AEQQE67A33BY",
+                    "ISCC:EED7ZPIEYNACCLXXZSS2LIM6JVXDYGCG2QSMC7DCPER4MYJPJATIM4Y",
+                    "ISCC:GADVJB6OD2XRTERK3G4KOFHGDJCBYEXAZCZLVVSA7MMURDPMJ5S5JWI",
+                    "ISCC:IAD6TOYXXSR7FSN7TRRRNOKQ6JCFK3ZF4KRFVEQRQ4M4PDPUR5H7GHQ",
+                ]
+            ],
+            min_length=2,
+        ),
+    ]
+
+
+class IsccItem(RootModel[IsccItem2 | IsccItem3]):
+    root: Annotated[
+        IsccItem2 | IsccItem3,
+        Field(
+            description="ISCC data for indexing. When creating an item, iscc_id is optional (will be generated if missing).\nEither iscc_code or units must be provided. The complete object contains all three fields.\n",
+            examples=[
+                {
+                    "iscc_id": "ISCC:MAIGIIFJRDGEQQAA",
+                    "iscc_code": "ISCC:KECYCMZIOY36XXGZ7S6QJQ2AEEXPOVEHZYPK6GMSFLU3WF54UPZMTPY",
+                    "units": [
+                        "ISCC:AADYCMZIOY36XXGZ5B5BME7EIPPXRFKYQZ7VXKI7V55AEQQE67A33BY",
+                        "ISCC:EED7ZPIEYNACCLXXZSS2LIM6JVXDYGCG2QSMC7DCPER4MYJPJATIM4Y",
+                        "ISCC:GADVJB6OD2XRTERK3G4KOFHGDJCBYEXAZCZLVVSA7MMURDPMJ5S5JWI",
+                        "ISCC:IAD6TOYXXSR7FSN7TRRRNOKQ6JCFK3ZF4KRFVEQRQ4M4PDPUR5H7GHQ",
+                    ],
+                }
+            ],
+            title="IsccItem",
+        ),
+    ]
+
+
+class Status(str, Enum):
+    created = "created"
+    updated = "updated"
+
+
+class IsccAddResult(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    iscc_id: Annotated[
+        str,
+        Field(
+            description="The ISCC-ID for the added item (auto-generated if not provided in request)",
+            examples=["ISCC:MAIGIIFJRDGEQQAA"],
+            pattern="^ISCC:[A-Z2-7]{16,}$",
+        ),
+    ]
+    status: Annotated[
+        Status,
+        Field(
+            description='Outcome of the add operation. "created" means item was newly added to the index,\n"updated" means item already existed (duplicate skipped via dupdata=False).\n',
+            examples=["created"],
+        ),
+    ]
+
+
+class IsccMatch(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    iscc_id: Annotated[
+        str,
+        Field(
+            description="The matched ISCC-ID from the index",
+            examples=["ISCC:MAIGIIFJRDGEQQAA"],
+            pattern="^ISCC:[A-Z2-7]{16,}$",
+        ),
+    ]
+    score: Annotated[
+        float,
+        Field(
+            description="Aggregated score across all unit_types. Metric semantics (bit-length, NPHD distance, etc.)\nare defined at the result collection level, not per match.\n",
+            examples=[448],
+            ge=0.0,
+        ),
+    ]
+    matches: Annotated[
+        dict[str, float],
+        Field(
+            description='Per-unit_type scores. Keys are unit type names (e.g., "CONTENT_TEXT_V0"),\nvalues are numeric scores whose semantics depend on the search backend\n(bit-length for lookup index, NPHD distance for usearch, etc.).\n',
+            examples=[{"CONTENT_TEXT_V0": 256, "DATA_NONE_V0": 128, "INSTANCE_NONE_V0": 64}],
+        ),
+    ]
+
+
+class Metric(str, Enum):
+    nphd = "nphd"
+    hamming = "hamming"
+    bitlength = "bitlength"
+
+
+class IsccSearchResult(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    query: Annotated[IsccItem, Field(description="The original query item (may include auto-generated iscc_id)")]
+    metric: Annotated[
+        Metric,
+        Field(
+            description="Defines the semantics of score values in matches. Different search backends\nuse different metrics (bitlength for lookup, NPHD distance for usearch, etc.).\n",
+            examples=["nphd"],
+        ),
+    ]
+    matches: Annotated[
+        list[IsccMatch],
+        Field(
+            description="List of matched ISCC-IDs with scores, ordered by relevance (best first)",
+            examples=[
+                [
+                    {
+                        "iscc_id": "ISCC:MAIGIIFJRDGEQQAA",
+                        "score": 448,
+                        "matches": {"CONTENT_TEXT_V0": 256, "DATA_NONE_V0": 128, "INSTANCE_NONE_V0": 64},
+                    },
+                    {
+                        "iscc_id": "ISCC:MAIGXXFZRDGEQQBB",
+                        "score": 384,
+                        "matches": {"CONTENT_TEXT_V0": 256, "DATA_NONE_V0": 128},
+                    },
+                ]
+            ],
+        ),
+    ]

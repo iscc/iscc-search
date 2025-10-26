@@ -1,0 +1,28 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "http://purl.org/iscc/schema/iscc-add-result.json"
+title: "IsccAddResult"
+type: object
+description: |
+  Result of adding an ISCC item to an index. Contains the ISCC-ID
+  (auto-generated if not provided) and operation status.
+required:
+  - iscc_id
+  - status
+properties:
+  iscc_id:
+    type: string
+    description: The ISCC-ID for the added item (auto-generated if not provided in request)
+    pattern: "^ISCC:[A-Z2-7]{16,}$"
+    example: "ISCC:MAIGIIFJRDGEQQAA"
+  status:
+    type: string
+    description: |
+      Outcome of the add operation. "created" means item was newly added to the index,
+      "updated" means item already existed (duplicate skipped via dupdata=False).
+    enum:
+      - created
+      - updated
+    example: "created"
+example:
+  iscc_id: "ISCC:MAIGIIFJRDGEQQAA"
+  status: "created"

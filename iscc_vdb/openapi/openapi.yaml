@@ -77,6 +77,56 @@ paths:
               example:
                 detail: "Index 'myindex' already exists"
   /indexes/{name}:
+    get:
+      summary: Get a specific index
+      description: Returns metadata for a specific ISCC index by name
+      operationId: getIndex
+      tags:
+        - indexes
+      parameters:
+        - name: name
+          in: path
+          required: true
+          description: Name of the index to retrieve
+          schema:
+            type: string
+            pattern: "^[a-z][a-z0-9]*$"
+            minLength: 1
+            maxLength: 32
+            example: "default"
+      responses:
+        '200':
+          description: Successful response with index metadata
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IsccIndex'
+              example:
+                name: "default"
+                items: 150000
+                size: 42
+        '400':
+          description: Invalid index name format
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  detail:
+                    type: string
+              example:
+                detail: "Invalid index name format"
+        '404':
+          description: Index not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  detail:
+                    type: string
+              example:
+                detail: "Index 'myindex' not found"
     delete:
       summary: Delete an index
       description: Permanently deletes an ISCC index and all its data

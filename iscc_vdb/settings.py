@@ -8,7 +8,6 @@ Provides configuration management using Pydantic settings with support for:
 - Type validation and defaults
 """
 
-from pathlib import Path
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 import iscc_vdb
@@ -31,12 +30,12 @@ class VdbSettings(BaseSettings):
     - Runtime override using the override() method
 
     Attributes:
-        data_dir: Directory where index data is stored (default: platform-specific user data path)
+        indexes_uri: Location where index data is stored (local file path, DSN, or URI scheme)
     """
 
-    data_dir: Path = Field(
-        iscc_vdb.dirs.user_data_path,
-        description="Directory where index data is stored",
+    indexes_uri: str = Field(
+        iscc_vdb.dirs.user_data_dir,
+        description="Location where index data is stored (local file path or DSN)",
     )
 
     model_config = SettingsConfigDict(

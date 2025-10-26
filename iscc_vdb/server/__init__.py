@@ -49,7 +49,8 @@ def custom_docs():
       <body>
         <script
           id="api-reference"
-          data-url="/openapi.yaml"></script>
+          data-url="/openapi.yaml"
+          data-configuration='{{"telemetry": false, "hideClientButton": true, "hideSearch": true, "defaultOpenAllTags": true, "layout": "classic"}}'></script>
         <script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference"></script>
       </body>
     </html>

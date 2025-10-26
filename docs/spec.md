@@ -1,15 +1,16 @@
 # ISCC-VDB Spec - Draft
 
-A Nearest Neighbor Search Index for ISCCs
+A Scalable Nearest Neighbor Search Multi-Index for the International Standard Content Code (ISCC)
 
 ## Overview
 
-### Terms and Definitions
+### ISCC Specific Terminology
 
 - **ISCC** - Any ISCC-CODE, ISCC-UNIT, or ISCC-ID
 - **ISCC-HEADER** - Self-describing 2-byte header for V1 components (3 bytes for future versions). The first 12
     bits encode MainType, SubType, and Version. Additional bits encode Length for variable-length ISCCs.
-- **ISCC-BODY** - Actual payload of an ISCC, similarity preserving compact binary code, hash or timestamp
+- **ISCC-BODY** - Binary payload of an ISCC, similarity preserving compact binary code, hash or timestamp
+    without HEADER
 - **ISCC-DIGEST** - Binary representation of complete ISCC (ISCC-HEADER + ISCC-BODY).
 - **ISCC-UNIT** - ISCC-HEADER + ISCC-BODY where the ISCC-BODY is calculated from a single algorithm
 - **ISCC-CODE** - ISCC-HEADER + ISCC-BODY where the ISCC-BODY is a sequence of multiple ISCC-UNIT BODYs
@@ -75,10 +76,10 @@ ISCC-UNIT for exact (prefix) match indexing:
 
 Index Entry:
 
-- iscc_id - Unique Digital (Optional)
-- iscc_code - ISCC-CODE
-- units - List of ISCC-UNITS
-- features
+- iscc_id - Unique ID for digital asset
+- iscc_code - ISCC-CODE (composite of short ISCC-UNITs)
+- units - List of exanded ISCC-UNITS
+- features - Granular simprints (fingerprints) for digital asset content
 
 ## Architecture
 

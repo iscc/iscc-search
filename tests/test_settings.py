@@ -99,13 +99,15 @@ def test_vdb_settings_extra_fields_ignored():
     assert not hasattr(settings, "unknown_field")
 
 
-def test_get_index_default():
+def test_get_index_default(tmp_path):
     """Test get_index() factory function with default settings."""
     import iscc_vdb.settings
     from iscc_vdb.indexes.lmdb import LmdbIndexManager
 
     original_uri = iscc_vdb.settings.vdb_settings.indexes_uri
     try:
+        # Override to tmp_path to avoid touching real user data directory
+        iscc_vdb.settings.vdb_settings.indexes_uri = str(tmp_path)
         # Default URI from platformdirs is a file path, now supported via LMDB
         index = get_index()
         assert isinstance(index, LmdbIndexManager)

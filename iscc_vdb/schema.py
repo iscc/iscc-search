@@ -2,7 +2,7 @@
 #   filename:  openapi.yaml
 
 from __future__ import annotations
-from typing import Annotated
+from typing import Annotated, Any
 from pydantic import BaseModel, ConfigDict, Field, RootModel
 from enum import Enum
 
@@ -71,6 +71,20 @@ class IsccItem2(BaseModel):
             min_length=2,
         ),
     ] = None
+    metadata: Annotated[
+        dict[str, Any] | None,
+        Field(
+            description="Optional application-specific metadata. This field allows clients to store\ncustom data without requiring API changes. The server stores this data\nopaquely without validation.\n",
+            examples=[
+                {
+                    "source": "example.com",
+                    "uploaded_by": "user123",
+                    "content_type": "image/jpeg",
+                    "tags": ["nature", "landscape"],
+                }
+            ],
+        ),
+    ] = None
 
 
 class IsccItem3(BaseModel):
@@ -108,6 +122,20 @@ class IsccItem3(BaseModel):
             min_length=2,
         ),
     ]
+    metadata: Annotated[
+        dict[str, Any] | None,
+        Field(
+            description="Optional application-specific metadata. This field allows clients to store\ncustom data without requiring API changes. The server stores this data\nopaquely without validation.\n",
+            examples=[
+                {
+                    "source": "example.com",
+                    "uploaded_by": "user123",
+                    "content_type": "image/jpeg",
+                    "tags": ["nature", "landscape"],
+                }
+            ],
+        ),
+    ] = None
 
 
 class IsccItem(RootModel[IsccItem2 | IsccItem3]):

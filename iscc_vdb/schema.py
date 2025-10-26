@@ -11,7 +11,7 @@ class IsccIndex(BaseModel):
         extra="forbid",
     )
     name: Annotated[
-        str | None,
+        str,
         Field(
             description="Short unique name of the index",
             examples=["default"],
@@ -19,6 +19,11 @@ class IsccIndex(BaseModel):
             min_length=1,
             pattern="^[a-z]([a-z0-9-]*[a-z0-9])?$",
         ),
+    ]
+    items: Annotated[
+        int | None,
+        Field(description="Number of ISCCs in the index (server-generated, read-only)", examples=[150000], ge=0),
     ] = None
-    items: Annotated[int | None, Field(description="Number of ISCCs in the index", examples=[150000], ge=0)] = None
-    size: Annotated[int | None, Field(description="Size of index in megabytes", examples=[42], ge=0)] = None
+    size: Annotated[
+        int | None, Field(description="Size of index in megabytes (server-generated, read-only)", examples=[42], ge=0)
+    ] = None

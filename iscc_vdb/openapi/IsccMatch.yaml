@@ -1,0 +1,44 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "http://purl.org/iscc/schema/iscc-match.json"
+title: "IsccMatch"
+type: object
+description: |
+  A single match result from ISCC lookup search. Contains the matched ISCC-ID,
+  aggregated score, and detailed bit-match breakdown per unit_type.
+required:
+  - iscc_id
+  - score
+  - matches
+properties:
+  iscc_id:
+    type: string
+    description: The matched ISCC-ID from the index
+    pattern: "^ISCC:[A-Z2-7]{16,}$"
+    example: "ISCC:MAIGIIFJRDGEQQAA"
+  score:
+    type: number
+    description: |
+      Aggregated score across all unit_types. Metric semantics (bit-length, NPHD distance, etc.)
+      are defined at the result collection level, not per match.
+    minimum: 0
+    example: 448
+  matches:
+    type: object
+    description: |
+      Per-unit_type scores. Keys are unit type names (e.g., "CONTENT_TEXT_V0"),
+      values are numeric scores whose semantics depend on the search backend
+      (bit-length for lookup index, NPHD distance for usearch, etc.).
+    additionalProperties:
+      type: number
+      minimum: 0
+    example:
+      CONTENT_TEXT_V0: 256
+      DATA_NONE_V0: 128
+      INSTANCE_NONE_V0: 64
+example:
+  iscc_id: "ISCC:MAIGIIFJRDGEQQAA"
+  score: 448
+  matches:
+    CONTENT_TEXT_V0: 256
+    DATA_NONE_V0: 128
+    INSTANCE_NONE_V0: 64

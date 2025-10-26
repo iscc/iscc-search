@@ -77,8 +77,10 @@ def get_index():
     Parses indexes_uri to determine index type and returns appropriate
     implementation. Currently supports:
     - memory:// → MemoryIndex (in-memory, no persistence)
-    - file:// or path → UsearchIndex (future)
-    - postgresql:// → PostgresIndex (future)
+
+    Future implementations:
+    - file:// or path → UsearchIndex (not yet implemented)
+    - postgresql:// → PostgresIndex (not yet implemented)
 
     :return: Index instance implementing IsccIndexProtocol
     :raises ValueError: If URI scheme is not supported
@@ -94,9 +96,10 @@ def get_index():
 
         return MemoryIndex()
 
-    # Default to MemoryIndex for now (can be extended later)
-    # In the future, this will check for file paths (UsearchIndex)
-    # or postgresql:// DSNs (PostgresIndex)
-    from iscc_vdb.indexes.memory import MemoryIndex
-
-    return MemoryIndex()
+    # Reject unsupported URI schemes to prevent silent data loss
+    supported = ["memory://"]
+    raise ValueError(
+        f"Unsupported ISCC_VDB_INDEXES_URI: '{uri}'. "
+        f"Currently supported schemes: {', '.join(supported)}. "
+        f"File paths and PostgreSQL URIs are not yet implemented."
+    )

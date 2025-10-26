@@ -77,29 +77,46 @@ def get_index():
     Parses indexes_uri to determine index type and returns appropriate
     implementation. Currently supports:
     - memory:// → MemoryIndex (in-memory, no persistence)
+    - file:// or path → LmdbIndexManager (LMDB-backed, production-ready)
 
     Future implementations:
-    - file:// or path → UsearchIndex (not yet implemented)
     - postgresql:// → PostgresIndex (not yet implemented)
 
     :return: Index instance implementing IsccIndexProtocol
     :raises ValueError: If URI scheme is not supported
     """
     from iscc_vdb.protocol import IsccIndexProtocol  # noqa: F401
+    import os
 
     uri = vdb_settings.indexes_uri
-    parsed = urlparse(uri)
 
-    if parsed.scheme == "memory" or uri == "memory://":
-        # In-memory index for testing
+    # Handle memory:// scheme
+    if uri == "memory://" or uri.startswith("memory://"):
         from iscc_vdb.indexes.memory import MemoryIndex
 
         return MemoryIndex()
 
+    # Detect file paths (Windows: C:\..., Unix: /..., relative: ...)
+    # Check if it's an absolute path before parsing as URI
+    if os.path.isabs(uri) or "://" not in uri:
+        # It's a file path (absolute or relative)
+        from iscc_vdb.indexes.lmdb import LmdbIndexManager
+
+        return LmdbIndexManager(uri)
+
+    # Parse as URI
+    parsed = urlparse(uri)
+
+    if parsed.scheme == "file":
+        # file:// URI
+        from iscc_vdb.indexes.lmdb import LmdbIndexManager
+
+        return LmdbIndexManager(parsed.path)
+
     # Reject unsupported URI schemes to prevent silent data loss
-    supported = ["memory://"]
+    supported = ["memory://", "file path", "file://"]
     raise ValueError(
         f"Unsupported ISCC_VDB_INDEXES_URI: '{uri}'. "
         f"Currently supported schemes: {', '.join(supported)}. "
-        f"File paths and PostgreSQL URIs are not yet implemented."
+        f"PostgreSQL URIs are not yet implemented."
     )

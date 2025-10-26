@@ -59,10 +59,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  detail:
-                    type: string
+                $ref: '#/components/schemas/HttpError'
               example:
                 detail: "Invalid index name format"
         '409':
@@ -70,10 +67,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  detail:
-                    type: string
+                $ref: '#/components/schemas/HttpError'
               example:
                 detail: "Index 'myindex' already exists"
   /indexes/{name}:
@@ -110,10 +104,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  detail:
-                    type: string
+                $ref: '#/components/schemas/HttpError'
               example:
                 detail: "Invalid index name format"
         '404':
@@ -121,10 +112,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  detail:
-                    type: string
+                $ref: '#/components/schemas/HttpError'
               example:
                 detail: "Index 'myindex' not found"
     delete:
@@ -152,10 +140,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  detail:
-                    type: string
+                $ref: '#/components/schemas/HttpError'
               example:
                 detail: "Invalid index name format"
         '404':
@@ -163,10 +148,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  detail:
-                    type: string
+                $ref: '#/components/schemas/HttpError'
               example:
                 detail: "Index 'myindex' not found"
   /indexes/{name}/items:
@@ -226,10 +208,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  detail:
-                    type: string
+                $ref: '#/components/schemas/HttpError'
               example:
                 detail: "Invalid ISCC format in item 1"
         '404':
@@ -237,10 +216,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  detail:
-                    type: string
+                $ref: '#/components/schemas/HttpError'
               example:
                 detail: "Index 'myindex' not found"
   /indexes/{name}/search:
@@ -301,10 +277,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  detail:
-                    type: string
+                $ref: '#/components/schemas/HttpError'
               example:
                 detail: "Invalid ISCC format"
         '404':
@@ -312,10 +285,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  detail:
-                    type: string
+                $ref: '#/components/schemas/HttpError'
               example:
                 detail: "Index 'myindex' not found"
     get:
@@ -371,10 +341,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  detail:
-                    type: string
+                $ref: '#/components/schemas/HttpError'
               example:
                 detail: "Invalid ISCC-CODE format"
         '404':
@@ -382,15 +349,14 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  detail:
-                    type: string
+                $ref: '#/components/schemas/HttpError'
               example:
                 detail: "Index 'myindex' not found"
 
 components:
   schemas:
+    HttpError:
+      $ref: './HttpError.yaml'
     IsccIndex:
       $ref: './IsccIndex.yaml'
     IsccItem:

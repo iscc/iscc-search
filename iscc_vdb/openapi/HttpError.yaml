@@ -1,0 +1,17 @@
+type: object
+required:
+  - detail
+properties:
+  detail:
+    oneOf:
+      - type: string
+        description: Single error message
+      - type: array
+        items:
+          type: string
+        description: Multiple error messages (e.g., validation errors)
+examples:
+  - detail: "Index 'myindex' not found"
+  - detail:
+      - "Invalid ISCC format in item 0"
+      - "Invalid ISCC format in item 2"

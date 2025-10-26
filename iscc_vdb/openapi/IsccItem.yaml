@@ -29,6 +29,18 @@ properties:
       - "ISCC:GADVJB6OD2XRTERK3G4KOFHGDJCBYEXAZCZLVVSA7MMURDPMJ5S5JWI"
       - "ISCC:IAD6TOYXXSR7FSN7TRRRNOKQ6JCFK3ZF4KRFVEQRQ4M4PDPUR5H7GHQ"
     minItems: 2
+  metadata:
+    type: object
+    additionalProperties: true
+    description: |
+      Optional application-specific metadata. This field allows clients to store
+      custom data without requiring API changes. The server stores this data
+      opaquely without validation.
+    example:
+      source: "example.com"
+      uploaded_by: "user123"
+      content_type: "image/jpeg"
+      tags: ["nature", "landscape"]
 anyOf:
   - required: ["iscc_code"]
   - required: ["units"]

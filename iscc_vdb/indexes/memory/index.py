@@ -143,6 +143,27 @@ class MemoryIndex:
 
         return results
 
+    def get_asset(self, index_name, iscc_id):
+        # type: (str, str) -> IsccAsset
+        """
+        Get a specific asset by ISCC-ID.
+
+        :param index_name: Target index name
+        :param iscc_id: ISCC-ID of the asset to retrieve
+        :return: IsccAsset with all stored metadata
+        :raises FileNotFoundError: If index doesn't exist or asset not found
+        :raises ValueError: If ISCC-ID format is invalid
+        """
+        if index_name not in self._indexes:
+            raise FileNotFoundError(f"Index '{index_name}' not found")
+
+        index_data = self._indexes[index_name]
+
+        if iscc_id not in index_data["assets"]:
+            raise FileNotFoundError(f"Asset '{iscc_id}' not found in index '{index_name}'")
+
+        return index_data["assets"][iscc_id]
+
     def search_assets(self, index_name, query, limit=100):
         # type: (str, IsccAsset, int) -> IsccSearchResult
         """

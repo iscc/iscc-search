@@ -219,6 +219,71 @@ paths:
                 $ref: '#/components/schemas/HttpError'
               example:
                 detail: "Index 'myindex' not found"
+  /indexes/{name}/assets/{iscc_id}:
+    get:
+      summary: Get a specific asset by ISCC-ID
+      description: |
+        Retrieves a single ISCC asset from the index by its ISCC-ID. This is useful for
+        fetching full asset details after a search operation, which returns only ISCC-IDs.
+      operationId: getAsset
+      tags:
+        - assets
+      parameters:
+        - name: name
+          in: path
+          required: true
+          description: Name of the index containing the asset
+          schema:
+            type: string
+            pattern: "^[a-z][a-z0-9]*$"
+            minLength: 1
+            maxLength: 32
+            example: "default"
+        - name: iscc_id
+          in: path
+          required: true
+          description: ISCC-ID of the asset to retrieve
+          schema:
+            type: string
+            pattern: "^ISCC:[A-Z2-7]{16}$"
+            example: "ISCC:MAIGIIFJRDGEQQAA"
+      responses:
+        '200':
+          description: Successful response with asset details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IsccAsset'
+              example:
+                iscc_id: "ISCC:MAIGIIFJRDGEQQAA"
+                iscc_code: "ISCC:KECYCMZIOY36XXGZ7S6QJQ2AEEXPOVEHZYPK6GMSFLU3WF54UPZMTPY"
+                units:
+                  - "ISCC:AADYCMZIOY36XXGZ5B5BME7EIPPXRFKYQZ7VXKI7V55AEQQE67A33BY"
+                  - "ISCC:EED7ZPIEYNACCLXXZSS2LIM6JVXDYGCG2QSMC7DCPER4MYJPJATIM4Y"
+                metadata:
+                  title: "Example Document"
+                  creator: "John Doe"
+        '400':
+          description: Invalid ISCC-ID format
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpError'
+              example:
+                detail: "Invalid ISCC-ID format"
+        '404':
+          description: Index or asset not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpError'
+              examples:
+                indexNotFound:
+                  value:
+                    detail: "Index 'myindex' not found"
+                assetNotFound:
+                  value:
+                    detail: "Asset 'ISCC:MAIGIIFJRDGEQQAA' not found in index 'myindex'"
   /indexes/{name}/search:
     post:
       summary: Search for similar ISCCs (POST)

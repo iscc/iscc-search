@@ -40,6 +40,7 @@ in-memory).
 │                      │ - get_index    │  Type-safe                     │
 │                      │ - delete_index │                                │
 │                      │ - add_assets   │                                │
+│                      │ - get_asset    │                                │
 │                      │ - search_assets│                                │
 │                      │ - close        │                                │
 │                      └───────┬────────┘                                │
@@ -233,6 +234,21 @@ class IsccIndexProtocol(Protocol):
         :param assets: List of IsccAsset objects to add
         :return: List of IsccAddResult with status for each asset
         :raises FileNotFoundError: If index doesn't exist
+        """
+        ...
+
+    def get_asset(
+        self,
+        index_name: str,
+        iscc_id: str
+    ) -> IsccAsset:
+        """
+        Get a specific asset by ISCC-ID.
+
+        :param index_name: Target index name
+        :param iscc_id: ISCC-ID of the asset to retrieve
+        :return: IsccAsset with all stored metadata
+        :raises FileNotFoundError: If index doesn't exist or asset not found
         """
         ...
 
@@ -737,6 +753,16 @@ class MemoryIndex:
 
         return results
 
+    def get_asset(self, index_name: str, iscc_id: str) -> IsccAsset:
+        """Get a specific asset by ISCC-ID."""
+        if index_name not in self._indexes:
+            raise FileNotFoundError(f"Index '{index_name}' not found")
+
+        if iscc_id not in self._indexes[index_name]["assets"]:
+            raise FileNotFoundError(f"Asset '{iscc_id}' not found in index '{index_name}'")
+
+        return self._indexes[index_name]["assets"][iscc_id]
+
     def search_assets(
         self,
         index_name: str,
@@ -882,6 +908,18 @@ def add_assets(name: str, assets: list[IsccAsset], request: Request):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Index '{name}' not found"
+        )
+
+@router.get("/indexes/{name}/assets/{iscc_id}", response_model=IsccAsset)
+def get_asset(name: str, iscc_id: str, request: Request):
+    """Get a specific asset by ISCC-ID."""
+    idx = get_index_impl(request)
+    try:
+        return idx.get_asset(name, iscc_id)
+    except FileNotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
         )
 
 @router.post("/indexes/{name}/search", response_model=IsccSearchResult)

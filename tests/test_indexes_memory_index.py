@@ -211,6 +211,58 @@ def test_add_assets_missing_iscc_id(sample_content_units):
         index.add_assets("testindex", [asset])
 
 
+def test_get_asset_success(sample_iscc_ids, sample_iscc_codes, sample_content_units):
+    """Test successfully retrieving an asset by ISCC-ID."""
+    index = MemoryIndex()
+    index.create_index(IsccIndex(name="testindex"))
+
+    # Add an asset
+    code = sample_iscc_codes[0]
+    asset = IsccAsset(
+        iscc_id=sample_iscc_ids[0],
+        iscc_code=code,
+        units=[sample_content_units[0], sample_content_units[1]],
+        metadata={"title": "Test Document"},
+    )
+    index.add_assets("testindex", [asset])
+
+    # Get the asset
+    retrieved = index.get_asset("testindex", sample_iscc_ids[0])
+
+    assert retrieved.iscc_id == sample_iscc_ids[0]
+    assert retrieved.iscc_code == code
+    # Units are stored as Unit objects with a root attribute
+    assert len(retrieved.units) == 2
+    assert retrieved.units[0].root == sample_content_units[0]
+    assert retrieved.units[1].root == sample_content_units[1]
+    assert retrieved.metadata == {"title": "Test Document"}
+
+
+def test_get_asset_index_not_found(sample_iscc_ids):
+    """Test that getting asset from non-existent index raises FileNotFoundError."""
+    index = MemoryIndex()
+
+    with pytest.raises(FileNotFoundError, match="Index 'nonexistent' not found"):
+        index.get_asset("nonexistent", sample_iscc_ids[0])
+
+
+def test_get_asset_not_found(sample_iscc_ids):
+    """Test that getting non-existent asset raises FileNotFoundError."""
+    index = MemoryIndex()
+    index.create_index(IsccIndex(name="testindex"))
+
+    # Add one asset
+    asset = IsccAsset(iscc_id=sample_iscc_ids[0])
+    index.add_assets("testindex", [asset])
+
+    # Try to get different asset
+    with pytest.raises(
+        FileNotFoundError,
+        match=f"Asset '{sample_iscc_ids[1]}' not found in index 'testindex'",
+    ):
+        index.get_asset("testindex", sample_iscc_ids[1])
+
+
 def test_search_assets_by_iscc_code(sample_iscc_ids, sample_iscc_codes):
     """Test searching assets by iscc_code."""
     index = MemoryIndex()

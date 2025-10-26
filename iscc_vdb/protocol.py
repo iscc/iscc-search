@@ -115,6 +115,23 @@ class IsccIndexProtocol(Protocol):
         """
         ...
 
+    def get_asset(self, index_name, iscc_id):
+        # type: (str, str) -> IsccAsset
+        """
+        Get a specific asset by ISCC-ID.
+
+        Retrieves the full asset details for a given ISCC-ID from the specified
+        index. This is useful for fetching complete asset metadata after performing
+        a search, which returns only ISCC-IDs and scores.
+
+        :param index_name: Target index name
+        :param iscc_id: ISCC-ID of the asset to retrieve
+        :return: IsccAsset with all stored metadata
+        :raises FileNotFoundError: If index doesn't exist or asset not found
+        :raises ValueError: If ISCC-ID format is invalid
+        """
+        ...
+
     def search_assets(self, index_name, query, limit=100):
         # type: (str, IsccAsset, int) -> IsccSearchResult
         """

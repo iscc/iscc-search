@@ -29,6 +29,10 @@ def test_protocol_is_runtime_checkable():
             # type: (str, list[IsccAsset]) -> list[IsccAddResult]
             return []
 
+        def get_asset(self, index_name, iscc_id):
+            # type: (str, str) -> IsccAsset
+            return IsccAsset(iscc_id=iscc_id)
+
         def search_assets(self, index_name, query, limit=100):
             # type: (str, IsccAsset, int) -> IsccSearchResult
             return IsccSearchResult(query=query, metric=Metric.bitlength, matches=[])
@@ -95,6 +99,9 @@ def test_protocol_accepts_complete_implementation():
         def add_assets(self, index_name, assets):
             return [IsccAddResult(iscc_id="ISCC:MAIGIIFJRDGEQQAA", status="created")]
 
+        def get_asset(self, index_name, iscc_id):
+            return IsccAsset(iscc_id=iscc_id)
+
         def search_assets(self, index_name, query, limit=100):
             return IsccSearchResult(
                 query=IsccAsset(iscc_id="ISCC:MAIGIIFJRDGEQQAA", units=["ISCC:AADYCMZIOY36XXGZ"]),
@@ -128,6 +135,9 @@ def test_protocol_method_signatures():
         def add_assets(self, index_name, assets):
             return []
 
+        def get_asset(self, index_name, iscc_id):
+            return IsccAsset(iscc_id=iscc_id)
+
         def search_assets(self, index_name, query, limit=100):
             return IsccSearchResult(query=query, metric=Metric.bitlength, matches=[])
 
@@ -143,6 +153,7 @@ def test_protocol_method_signatures():
     assert hasattr(test_index, "get_index")
     assert hasattr(test_index, "delete_index")
     assert hasattr(test_index, "add_assets")
+    assert hasattr(test_index, "get_asset")
     assert hasattr(test_index, "search_assets")
     assert hasattr(test_index, "close")
 
@@ -227,6 +238,9 @@ def test_protocol_with_extra_methods():
 
         def add_assets(self, index_name, assets):
             return []
+
+        def get_asset(self, index_name, iscc_id):
+            return IsccAsset(iscc_id=iscc_id)
 
         def search_assets(self, index_name, query, limit=100):
             return IsccSearchResult(query=query, metric=Metric.bitlength, matches=[])

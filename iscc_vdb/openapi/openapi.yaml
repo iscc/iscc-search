@@ -156,8 +156,8 @@ paths:
       summary: Add assets to an index
       description: |
         Adds multiple ISCC assets to the specified index. Assets are processed atomically
-        (all-or-nothing). ISCC-IDs are auto-generated if not provided. Returns status
-        for each asset indicating whether it was newly created or already existed.
+        (all-or-nothing). Each asset must include an iscc_id field (client-generated).
+        Returns status for each asset indicating whether it was newly created or already existed.
       operationId: addAssets
       tags:
         - assets

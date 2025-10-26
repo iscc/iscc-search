@@ -4,14 +4,14 @@ title: "IsccAddResult"
 type: object
 description: |
   Result of adding an ISCC asset to an index. Contains the ISCC-ID
-  (auto-generated if not provided) and operation status.
+  and operation status.
 required:
   - iscc_id
   - status
 properties:
   iscc_id:
     type: string
-    description: The ISCC-ID for the added asset (auto-generated if not provided in request)
+    description: The ISCC-ID of the asset that was added to the index (must be provided in add request)
     pattern: "^ISCC:[A-Z2-7]{16,}$"
     example: "ISCC:MAIGIIFJRDGEQQAA"
   status:

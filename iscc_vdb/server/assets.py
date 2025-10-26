@@ -23,10 +23,9 @@ def add_assets(
     """
     Add multiple assets to an index.
 
-    Adds ISCC assets to the specified index. Each asset should contain either
-    an iscc_code or units field (or both). ISCC-IDs are auto-generated if not
-    provided. Returns status for each asset indicating whether it was created
-    or updated.
+    Adds ISCC assets to the specified index. Each asset must contain an
+    iscc_id field and at least one of iscc_code or units. Returns status
+    for each asset indicating whether it was created or updated.
 
     :param name: Index name
     :param assets: List of IsccAsset objects to add

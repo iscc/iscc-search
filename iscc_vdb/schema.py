@@ -50,7 +50,7 @@ class IsccAsset(BaseModel):
     iscc_id: Annotated[
         str | None,
         Field(
-            description="Globally unique digital asset identifier (ISCC-ID)",
+            description="Globally unique digital asset identifier (ISCC-ID). Required when adding assets, optional for search queries.",
             examples=["ISCC:MAIGIIFJRDGEQQAA"],
             pattern="^ISCC:[A-Z2-7]{16,}$",
         ),
@@ -106,7 +106,7 @@ class IsccAddResult(BaseModel):
     iscc_id: Annotated[
         str,
         Field(
-            description="The ISCC-ID for the added asset (auto-generated if not provided in request)",
+            description="The ISCC-ID of the asset that was added to the index (must be provided in add request)",
             examples=["ISCC:MAIGIIFJRDGEQQAA"],
             pattern="^ISCC:[A-Z2-7]{16,}$",
         ),

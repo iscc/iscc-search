@@ -3,7 +3,10 @@ $id: "http://purl.org/iscc/schema/iscc-asset.json"
 title: "IsccAsset"
 type: object
 description: |
-  ISCC asset data for indexing. When creating an asset, iscc_id is optional (will be generated if missing).
+  ISCC asset data for indexing and search.
+
+  When adding assets: `iscc_id` is required.
+  When searching: `iscc_id` is optional (typically only `iscc_code` or `units` is provided).
 
   **Requirement**: At least one of `iscc_code` or `units` must be provided (validated at runtime).
 
@@ -11,7 +14,7 @@ description: |
 properties:
   iscc_id:
     type: string
-    description: Globally unique digital asset identifier (ISCC-ID)
+    description: Globally unique digital asset identifier (ISCC-ID). Required when adding assets, optional for search queries.
     pattern: "^ISCC:[A-Z2-7]{16,}$"
     example: "ISCC:MAIGIIFJRDGEQQAA"
   iscc_code:

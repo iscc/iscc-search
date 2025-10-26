@@ -10,8 +10,8 @@ from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
     from iscc_vdb.schema import IsccAddResult  # noqa: F401
+    from iscc_vdb.schema import IsccAsset  # noqa: F401
     from iscc_vdb.schema import IsccIndex  # noqa: F401
-    from iscc_vdb.schema import IsccItem  # noqa: F401
     from iscc_vdb.schema import IsccSearchResult  # noqa: F401
 
 
@@ -26,7 +26,7 @@ class IsccIndexProtocol(Protocol):
     This protocol defines the core operations that all ISCC index implementations
     must support:
     - Index lifecycle: create, get, list, delete
-    - Item operations: add, search
+    - Asset operations: add, search
     - Resource cleanup: close
 
     All index implementations should handle the protocol's exception contract:
@@ -41,9 +41,9 @@ class IsccIndexProtocol(Protocol):
         List all available indexes with metadata.
 
         Scans the backend storage and returns metadata for all existing indexes.
-        The metadata includes index name, item count, and storage size.
+        The metadata includes index name, asset count, and storage size.
 
-        :return: List of IsccIndex objects with name, items, and size
+        :return: List of IsccIndex objects with name, assets, and size
         """
         ...
 
@@ -53,11 +53,11 @@ class IsccIndexProtocol(Protocol):
         Create a new named index.
 
         Initializes a new index with the specified name. The index starts empty
-        with 0 items. If the backend requires initialization (creating directories,
+        with 0 assets. If the backend requires initialization (creating directories,
         database tables, etc.), this method handles it.
 
-        :param index: IsccIndex with name (items and size fields are ignored)
-        :return: Created IsccIndex with initial metadata (items=0, size=0)
+        :param index: IsccIndex with name (assets and size fields are ignored)
+        :return: Created IsccIndex with initial metadata (assets=0, size=0)
         :raises ValueError: If name is invalid (doesn't match pattern ^[a-z][a-z0-9]*$)
         :raises FileExistsError: If index with this name already exists
         """
@@ -69,7 +69,7 @@ class IsccIndexProtocol(Protocol):
         Get index metadata by name.
 
         Retrieves current metadata for the specified index, including
-        the number of items and storage size. This is useful for monitoring
+        the number of assets and storage size. This is useful for monitoring
         index growth and health.
 
         :param name: Index name (must match pattern ^[a-z][a-z0-9]*$)
@@ -92,49 +92,49 @@ class IsccIndexProtocol(Protocol):
         """
         ...
 
-    def add_items(self, index_name, items):
-        # type: (str, list[IsccItem]) -> list[IsccAddResult]
+    def add_assets(self, index_name, assets):
+        # type: (str, list[IsccAsset]) -> list[IsccAddResult]
         """
-        Add items to index.
+        Add assets to index.
 
-        Adds multiple ISCC items to the specified index. Each item contains
-        an ISCC-ID and ISCC-UNITs for similarity indexing. Items with missing
+        Adds multiple ISCC assets to the specified index. Each asset contains
+        an ISCC-ID and ISCC-UNITs for similarity indexing. Assets with missing
         ISCC-IDs will have them auto-generated.
 
         Implementations should:
-        - Store item metadata for later retrieval
+        - Store asset metadata for later retrieval
         - Index ISCC-UNITs by type for similarity search
         - Handle duplicates gracefully (update vs create)
-        - Return status for each item
+        - Return status for each asset
 
         :param index_name: Target index name
-        :param items: List of IsccItem objects to add
-        :return: List of IsccAddResult with status for each item
+        :param assets: List of IsccAsset objects to add
+        :return: List of IsccAddResult with status for each asset
         :raises FileNotFoundError: If index doesn't exist
-        :raises ValueError: If items contain invalid ISCC codes
+        :raises ValueError: If assets contain invalid ISCC codes
         """
         ...
 
-    def search_items(self, index_name, query, limit=100):
-        # type: (str, IsccItem, int) -> IsccSearchResult
+    def search_assets(self, index_name, query, limit=100):
+        # type: (str, IsccAsset, int) -> IsccSearchResult
         """
-        Search for similar items in index.
+        Search for similar assets in index.
 
-        Performs similarity search using the query item's ISCC-UNITs.
+        Performs similarity search using the query asset's ISCC-UNITs.
         Results are aggregated across all unit types and returned sorted
         by relevance (highest scores first).
 
         The returned IsccSearchResult includes:
-        - query: The original query item (may have auto-generated iscc_id)
+        - query: The original query asset (may have auto-generated iscc_id)
         - metric: The distance metric used (nphd, hamming, bitlength)
         - matches: List of IsccMatch objects with scores and per-unit breakdowns
 
         :param index_name: Target index name
-        :param query: IsccItem to search for (either iscc_code or units required)
+        :param query: IsccAsset to search for (either iscc_code or units required)
         :param limit: Maximum number of results to return (default: 100)
         :return: IsccSearchResult with query, metric, and list of matches
         :raises FileNotFoundError: If index doesn't exist
-        :raises ValueError: If query item is invalid
+        :raises ValueError: If query asset is invalid
         """
         ...
 

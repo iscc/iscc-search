@@ -23,7 +23,7 @@ class MemoryIndex:
     Storage structure:
         _indexes = {
             "index_name": {
-                "items": {iscc_id: IsccItem, ...},
+                "assets": {iscc_id: IsccAsset, ...},
                 "metadata": {}
             },
             ...
@@ -35,7 +35,7 @@ class MemoryIndex:
         """
         Initialize MemoryIndex.
 
-        Creates empty in-memory storage for indexes and items.
+        Creates empty in-memory storage for indexes and assets.
         """
         self._indexes = {}  # type: dict[str, dict]
 
@@ -51,7 +51,7 @@ class MemoryIndex:
             indexes.append(
                 IsccIndex(
                     name=name,
-                    items=len(data["items"]),
+                    assets=len(data["assets"]),
                     size=0,  # Memory indexes don't track size
                 )
             )
@@ -62,7 +62,7 @@ class MemoryIndex:
         """
         Create new in-memory index.
 
-        :param index: IsccIndex with name (items and size ignored)
+        :param index: IsccIndex with name (assets and size ignored)
         :return: Created IsccIndex with initial metadata
         :raises ValueError: If name is invalid
         :raises FileExistsError: If index already exists
@@ -77,8 +77,8 @@ class MemoryIndex:
         if index.name in self._indexes:
             raise FileExistsError(f"Index '{index.name}' already exists")
 
-        self._indexes[index.name] = {"items": {}, "metadata": {}}
-        return IsccIndex(name=index.name, items=0, size=0)
+        self._indexes[index.name] = {"assets": {}, "metadata": {}}
+        return IsccIndex(name=index.name, assets=0, size=0)
 
     def get_index(self, name):
         # type: (str) -> IsccIndex
@@ -93,7 +93,7 @@ class MemoryIndex:
             raise FileNotFoundError(f"Index '{name}' not found")
 
         data = self._indexes[name]
-        return IsccIndex(name=name, items=len(data["items"]), size=0)
+        return IsccIndex(name=name, assets=len(data["assets"]), size=0)
 
     def delete_index(self, name):
         # type: (str) -> None
@@ -108,19 +108,19 @@ class MemoryIndex:
 
         del self._indexes[name]
 
-    def add_items(self, index_name, items):
-        # type: (str, list[IsccItem]) -> list[IsccAddResult]
+    def add_assets(self, index_name, assets):
+        # type: (str, list[IsccAsset]) -> list[IsccAddResult]
         """
-        Add items to in-memory index.
+        Add assets to in-memory index.
 
-        Items are stored by iscc_id. If an item with the same iscc_id already
+        Assets are stored by iscc_id. If an asset with the same iscc_id already
         exists, it's updated (not duplicated).
 
         :param index_name: Target index name
-        :param items: List of IsccItem objects to add
-        :return: List of IsccAddResult with status for each item
+        :param assets: List of IsccAsset objects to add
+        :return: List of IsccAddResult with status for each asset
         :raises FileNotFoundError: If index doesn't exist
-        :raises ValueError: If items contain invalid ISCC codes
+        :raises ValueError: If assets contain invalid ISCC codes
         """
         if index_name not in self._indexes:
             raise FileNotFoundError(f"Index '{index_name}' not found")
@@ -128,36 +128,36 @@ class MemoryIndex:
         results = []
         index_data = self._indexes[index_name]
 
-        for item in items:
-            # Validate that item has required fields
-            if item.iscc_id is None:
-                raise ValueError("Item must have iscc_id field")
+        for asset in assets:
+            # Validate that asset has required fields
+            if asset.iscc_id is None:
+                raise ValueError("Asset must have iscc_id field")
 
-            # Check if item already exists
-            status = Status.updated if item.iscc_id in index_data["items"] else Status.created
+            # Check if asset already exists
+            status = Status.updated if asset.iscc_id in index_data["assets"] else Status.created
 
-            # Store/update item
-            index_data["items"][item.iscc_id] = item
+            # Store/update asset
+            index_data["assets"][asset.iscc_id] = asset
 
-            results.append(IsccAddResult(iscc_id=item.iscc_id, status=status))
+            results.append(IsccAddResult(iscc_id=asset.iscc_id, status=status))
 
         return results
 
-    def search_items(self, index_name, query, limit=100):
-        # type: (str, IsccItem, int) -> IsccSearchResult
+    def search_assets(self, index_name, query, limit=100):
+        # type: (str, IsccAsset, int) -> IsccSearchResult
         """
-        Search for similar items (simple exact match for testing).
+        Search for similar assets (simple exact match for testing).
 
         This is a simplified implementation that performs exact matching
         on iscc_code. For production use, a real similarity search backend
         like usearch should be used.
 
         :param index_name: Target index name
-        :param query: IsccItem to search for
+        :param query: IsccAsset to search for
         :param limit: Maximum number of results
         :return: IsccSearchResult with matches
         :raises FileNotFoundError: If index doesn't exist
-        :raises ValueError: If query item is invalid
+        :raises ValueError: If query asset is invalid
         """
         if index_name not in self._indexes:
             raise FileNotFoundError(f"Index '{index_name}' not found")
@@ -166,22 +166,22 @@ class MemoryIndex:
         match_list = []
         index_data = self._indexes[index_name]
 
-        for item in index_data["items"].values():
-            # Match by iscc_code if both query and item have it
-            if query.iscc_code and item.iscc_code:
-                if item.iscc_code == query.iscc_code:
+        for asset in index_data["assets"].values():
+            # Match by iscc_code if both query and asset have it
+            if query.iscc_code and asset.iscc_code:
+                if asset.iscc_code == query.iscc_code:
                     match_list.append(
                         IsccMatch(
-                            iscc_id=item.iscc_id,  # type: ignore
+                            iscc_id=asset.iscc_id,  # type: ignore
                             score=1.0,
                             matches={},
                         )
                     )
             # Match by iscc_id if query has it
-            elif query.iscc_id and item.iscc_id == query.iscc_id:
+            elif query.iscc_id and asset.iscc_id == query.iscc_id:
                 match_list.append(
                     IsccMatch(
-                        iscc_id=item.iscc_id,  # type: ignore
+                        iscc_id=asset.iscc_id,  # type: ignore
                         score=1.0,
                         matches={},
                     )

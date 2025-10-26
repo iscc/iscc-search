@@ -3,7 +3,7 @@
 import pytest
 from iscc_vdb.indexes.memory import MemoryIndex
 from iscc_vdb.protocol import IsccIndexProtocol
-from iscc_vdb.schema import IsccAddResult, IsccIndex, IsccItem, IsccSearchResult, Metric, Status
+from iscc_vdb.schema import IsccAddResult, IsccAsset, IsccIndex, IsccSearchResult, Metric, Status
 
 
 def test_memory_index_implements_protocol():
@@ -25,7 +25,7 @@ def test_create_index_success():
     result = index.create_index(IsccIndex(name="testindex"))
 
     assert result.name == "testindex"
-    assert result.items == 0
+    assert result.assets == 0
     assert result.size == 0
 
     # Verify index appears in list
@@ -78,7 +78,7 @@ def test_get_index_success():
 
     result = index.get_index("testindex")
     assert result.name == "testindex"
-    assert result.items == 0
+    assert result.assets == 0
     assert result.size == 0
 
 
@@ -136,23 +136,23 @@ def test_delete_index_not_found():
         index.delete_index("nonexistent")
 
 
-def test_add_items_success(sample_iscc_ids, sample_content_units):
-    """Test adding items to index."""
+def test_add_assets_success(sample_iscc_ids, sample_content_units):
+    """Test adding assets to index."""
     index = MemoryIndex()
     index.create_index(IsccIndex(name="testindex"))
 
-    items = [
-        IsccItem(
+    assets = [
+        IsccAsset(
             iscc_id=sample_iscc_ids[0],
             units=[sample_content_units[0], sample_content_units[1]],
         ),
-        IsccItem(
+        IsccAsset(
             iscc_id=sample_iscc_ids[1],
             units=[sample_content_units[2], sample_content_units[3]],
         ),
     ]
 
-    results = index.add_items("testindex", items)
+    results = index.add_assets("testindex", assets)
 
     assert len(results) == 2
     assert all(isinstance(r, IsccAddResult) for r in results)
@@ -163,56 +163,56 @@ def test_add_items_success(sample_iscc_ids, sample_content_units):
 
     # Verify index metadata updated
     idx_info = index.get_index("testindex")
-    assert idx_info.items == 2
+    assert idx_info.assets == 2
 
 
-def test_add_items_duplicate(sample_iscc_ids, sample_content_units):
-    """Test that adding duplicate items updates instead of creating."""
+def test_add_assets_duplicate(sample_iscc_ids, sample_content_units):
+    """Test that adding duplicate assets updates instead of creating."""
     index = MemoryIndex()
     index.create_index(IsccIndex(name="testindex"))
 
-    item = IsccItem(
+    asset = IsccAsset(
         iscc_id=sample_iscc_ids[0],
         units=[sample_content_units[0], sample_content_units[1]],
     )
 
     # Add first time
-    results1 = index.add_items("testindex", [item])
+    results1 = index.add_assets("testindex", [asset])
     assert results1[0].status == Status.created
 
     # Add again (same iscc_id)
-    results2 = index.add_items("testindex", [item])
+    results2 = index.add_assets("testindex", [asset])
     assert results2[0].status == Status.updated
 
-    # Verify only one item in index
+    # Verify only one asset in index
     idx_info = index.get_index("testindex")
-    assert idx_info.items == 1
+    assert idx_info.assets == 1
 
 
-def test_add_items_index_not_found(sample_iscc_ids):
-    """Test that adding items to non-existent index raises FileNotFoundError."""
+def test_add_assets_index_not_found(sample_iscc_ids):
+    """Test that adding assets to non-existent index raises FileNotFoundError."""
     index = MemoryIndex()
 
-    item = IsccItem(iscc_id=sample_iscc_ids[0])
+    asset = IsccAsset(iscc_id=sample_iscc_ids[0])
 
     with pytest.raises(FileNotFoundError, match="Index 'nonexistent' not found"):
-        index.add_items("nonexistent", [item])
+        index.add_assets("nonexistent", [asset])
 
 
-def test_add_items_missing_iscc_id(sample_content_units):
-    """Test that adding items without iscc_id raises ValueError."""
+def test_add_assets_missing_iscc_id(sample_content_units):
+    """Test that adding assets without iscc_id raises ValueError."""
     index = MemoryIndex()
     index.create_index(IsccIndex(name="testindex"))
 
-    # Item without iscc_id (but with minimum 2 units required by schema)
-    item = IsccItem(units=[sample_content_units[0], sample_content_units[1]])
+    # Asset without iscc_id (but with minimum 2 units required by schema)
+    asset = IsccAsset(units=[sample_content_units[0], sample_content_units[1]])
 
-    with pytest.raises(ValueError, match="Item must have iscc_id field"):
-        index.add_items("testindex", [item])
+    with pytest.raises(ValueError, match="Asset must have iscc_id field"):
+        index.add_assets("testindex", [asset])
 
 
-def test_search_items_by_iscc_code(sample_iscc_ids, sample_iscc_codes):
-    """Test searching items by iscc_code."""
+def test_search_assets_by_iscc_code(sample_iscc_ids, sample_iscc_codes):
+    """Test searching assets by iscc_code."""
     index = MemoryIndex()
     index.create_index(IsccIndex(name="testindex"))
 
@@ -220,22 +220,22 @@ def test_search_items_by_iscc_code(sample_iscc_ids, sample_iscc_codes):
     code1 = sample_iscc_codes[0]
     code2 = sample_iscc_codes[1]
 
-    # Add items
-    items = [
-        IsccItem(
+    # Add assets
+    assets = [
+        IsccAsset(
             iscc_id=sample_iscc_ids[0],
             iscc_code=code1,
         ),
-        IsccItem(
+        IsccAsset(
             iscc_id=sample_iscc_ids[1],
             iscc_code=code2,
         ),
     ]
-    index.add_items("testindex", items)
+    index.add_assets("testindex", assets)
 
     # Search for matching iscc_code
-    query = IsccItem(iscc_code=code1)
-    result = index.search_items("testindex", query)
+    query = IsccAsset(iscc_code=code1)
+    result = index.search_assets("testindex", query)
 
     assert isinstance(result, IsccSearchResult)
     assert result.query == query
@@ -245,25 +245,25 @@ def test_search_items_by_iscc_code(sample_iscc_ids, sample_iscc_codes):
     assert result.matches[0].score == 1.0
 
 
-def test_search_items_by_iscc_id(sample_iscc_ids):
-    """Test searching items by iscc_id."""
+def test_search_assets_by_iscc_id(sample_iscc_ids):
+    """Test searching assets by iscc_id."""
     index = MemoryIndex()
     index.create_index(IsccIndex(name="testindex"))
 
-    # Add items
-    item = IsccItem(iscc_id=sample_iscc_ids[0])
-    index.add_items("testindex", [item])
+    # Add assets
+    asset = IsccAsset(iscc_id=sample_iscc_ids[0])
+    index.add_assets("testindex", [asset])
 
     # Search by iscc_id
-    query = IsccItem(iscc_id=sample_iscc_ids[0])
-    result = index.search_items("testindex", query)
+    query = IsccAsset(iscc_id=sample_iscc_ids[0])
+    result = index.search_assets("testindex", query)
 
     assert len(result.matches) == 1
     assert result.matches[0].iscc_id == sample_iscc_ids[0]
 
 
-def test_search_items_no_matches(sample_iscc_ids, sample_iscc_codes):
-    """Test searching when no items match."""
+def test_search_assets_no_matches(sample_iscc_ids, sample_iscc_codes):
+    """Test searching when no assets match."""
     index = MemoryIndex()
     index.create_index(IsccIndex(name="testindex"))
 
@@ -271,47 +271,47 @@ def test_search_items_no_matches(sample_iscc_ids, sample_iscc_codes):
     code1 = sample_iscc_codes[0]
     code2 = sample_iscc_codes[1]
 
-    # Add items with code1
-    item = IsccItem(
+    # Add assets with code1
+    asset = IsccAsset(
         iscc_id=sample_iscc_ids[0],
         iscc_code=code1,
     )
-    index.add_items("testindex", [item])
+    index.add_assets("testindex", [asset])
 
     # Search for non-matching code2
-    query = IsccItem(iscc_code=code2)
-    result = index.search_items("testindex", query)
+    query = IsccAsset(iscc_code=code2)
+    result = index.search_assets("testindex", query)
 
     assert len(result.matches) == 0
 
 
-def test_search_items_limit(sample_iscc_ids, sample_iscc_codes):
+def test_search_assets_limit(sample_iscc_ids, sample_iscc_codes):
     """Test that search respects limit parameter."""
     index = MemoryIndex()
     index.create_index(IsccIndex(name="testindex"))
 
-    # Use same iscc_code for all items
+    # Use same iscc_code for all assets
     code = sample_iscc_codes[0]
 
-    # Add 10 items with same iscc_code but different iscc_ids
-    items = [IsccItem(iscc_id=sample_iscc_ids[i], iscc_code=code) for i in range(10)]
-    index.add_items("testindex", items)
+    # Add 10 assets with same iscc_code but different iscc_ids
+    assets = [IsccAsset(iscc_id=sample_iscc_ids[i], iscc_code=code) for i in range(10)]
+    index.add_assets("testindex", assets)
 
     # Search with limit
-    query = IsccItem(iscc_code=code)
-    result = index.search_items("testindex", query, limit=5)
+    query = IsccAsset(iscc_code=code)
+    result = index.search_assets("testindex", query, limit=5)
 
     assert len(result.matches) == 5
 
 
-def test_search_items_index_not_found(sample_iscc_codes):
+def test_search_assets_index_not_found(sample_iscc_codes):
     """Test that searching non-existent index raises FileNotFoundError."""
     index = MemoryIndex()
 
-    query = IsccItem(iscc_code=sample_iscc_codes[0])
+    query = IsccAsset(iscc_code=sample_iscc_codes[0])
 
     with pytest.raises(FileNotFoundError, match="Index 'nonexistent' not found"):
-        index.search_items("nonexistent", query)
+        index.search_assets("nonexistent", query)
 
 
 def test_close():
@@ -341,25 +341,25 @@ def test_multiple_indexes_isolation(sample_iscc_ids, sample_iscc_codes):
     code1 = sample_iscc_codes[0]
     code2 = sample_iscc_codes[1]
 
-    # Add items to index1
-    item1 = IsccItem(iscc_id=sample_iscc_ids[0], iscc_code=code1)
-    index.add_items("index1", [item1])
+    # Add assets to index1
+    asset1 = IsccAsset(iscc_id=sample_iscc_ids[0], iscc_code=code1)
+    index.add_assets("index1", [asset1])
 
-    # Add items to index2
-    item2 = IsccItem(iscc_id=sample_iscc_ids[1], iscc_code=code2)
-    index.add_items("index2", [item2])
+    # Add assets to index2
+    asset2 = IsccAsset(iscc_id=sample_iscc_ids[1], iscc_code=code2)
+    index.add_assets("index2", [asset2])
 
     # Verify isolation
-    result1 = index.search_items("index1", IsccItem(iscc_code=code1))
+    result1 = index.search_assets("index1", IsccAsset(iscc_code=code1))
     assert len(result1.matches) == 1
     assert result1.matches[0].iscc_id == sample_iscc_ids[0]
 
-    result2 = index.search_items("index2", IsccItem(iscc_code=code2))
+    result2 = index.search_assets("index2", IsccAsset(iscc_code=code2))
     assert len(result2.matches) == 1
     assert result2.matches[0].iscc_id == sample_iscc_ids[1]
 
     # Cross-search should return no results
-    result_cross = index.search_items("index1", IsccItem(iscc_code=code2))
+    result_cross = index.search_assets("index1", IsccAsset(iscc_code=code2))
     assert len(result_cross.matches) == 0
 
 
@@ -369,35 +369,35 @@ def test_metadata_field(sample_iscc_ids, sample_iscc_codes):
     index.create_index(IsccIndex(name="testindex"))
 
     code = sample_iscc_codes[0]
-    item = IsccItem(
+    asset = IsccAsset(
         iscc_id=sample_iscc_ids[0],
         iscc_code=code,
         metadata={"source": "test", "tags": ["tag1", "tag2"]},
     )
-    index.add_items("testindex", [item])
+    index.add_assets("testindex", [asset])
 
     # Search and verify metadata is preserved
-    query = IsccItem(iscc_code=code)
-    result = index.search_items("testindex", query)
+    query = IsccAsset(iscc_code=code)
+    result = index.search_assets("testindex", query)
 
-    # Note: The search returns matches but we can't directly access item metadata
+    # Note: The search returns matches but we can't directly access asset metadata
     # from matches. This is expected - matches contain iscc_id, score, and matches dict.
-    # To verify metadata preservation, we'd need a get_item method.
+    # To verify metadata preservation, we'd need a get_asset method.
     assert len(result.matches) == 1
 
 
-def test_search_items_no_matching_iscc_id(sample_iscc_ids):
+def test_search_assets_no_matching_iscc_id(sample_iscc_ids):
     """Test searching by iscc_id when no match exists (covers elif branch)."""
     index = MemoryIndex()
     index.create_index(IsccIndex(name="testindex"))
 
-    # Add an item
-    item = IsccItem(iscc_id=sample_iscc_ids[0])
-    index.add_items("testindex", [item])
+    # Add an asset
+    asset = IsccAsset(iscc_id=sample_iscc_ids[0])
+    index.add_assets("testindex", [asset])
 
     # Search by different iscc_id (no iscc_code)
-    query = IsccItem(iscc_id=sample_iscc_ids[1])
-    result = index.search_items("testindex", query)
+    query = IsccAsset(iscc_id=sample_iscc_ids[1])
+    result = index.search_assets("testindex", query)
 
     # Should not match
     assert len(result.matches) == 0

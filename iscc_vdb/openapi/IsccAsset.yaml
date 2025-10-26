@@ -1,9 +1,9 @@
 $schema: "https://json-schema.org/draft/2020-12/schema"
-$id: "http://purl.org/iscc/schema/iscc-item.json"
-title: "IsccItem"
+$id: "http://purl.org/iscc/schema/iscc-asset.json"
+title: "IsccAsset"
 type: object
 description: |
-  ISCC data for indexing. When creating an item, iscc_id is optional (will be generated if missing).
+  ISCC asset data for indexing. When creating an asset, iscc_id is optional (will be generated if missing).
 
   **Requirement**: At least one of `iscc_code` or `units` must be provided (validated at runtime).
 

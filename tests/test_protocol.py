@@ -1,7 +1,7 @@
 """Test ISCC Index Protocol definition and runtime checking."""
 
 from iscc_vdb.protocol import IsccIndexProtocol
-from iscc_vdb.schema import IsccAddResult, IsccIndex, IsccItem, IsccSearchResult, Metric
+from iscc_vdb.schema import IsccAddResult, IsccAsset, IsccIndex, IsccSearchResult, Metric
 
 
 def test_protocol_is_runtime_checkable():
@@ -25,12 +25,12 @@ def test_protocol_is_runtime_checkable():
             # type: (str) -> None
             pass
 
-        def add_items(self, index_name, items):
-            # type: (str, list[IsccItem]) -> list[IsccAddResult]
+        def add_assets(self, index_name, assets):
+            # type: (str, list[IsccAsset]) -> list[IsccAddResult]
             return []
 
-        def search_items(self, index_name, query, limit=100):
-            # type: (str, IsccItem, int) -> IsccSearchResult
+        def search_assets(self, index_name, query, limit=100):
+            # type: (str, IsccAsset, int) -> IsccSearchResult
             return IsccSearchResult(query=query, metric=Metric.bitlength, matches=[])
 
         def close(self):
@@ -81,23 +81,23 @@ def test_protocol_accepts_complete_implementation():
 
     class CompleteIndex:
         def list_indexes(self):
-            return [IsccIndex(name="test", items=0, size=0)]
+            return [IsccIndex(name="test", assets=0, size=0)]
 
         def create_index(self, index):
-            return IsccIndex(name=index.name, items=0, size=0)
+            return IsccIndex(name=index.name, assets=0, size=0)
 
         def get_index(self, name):
-            return IsccIndex(name=name, items=100, size=10)
+            return IsccIndex(name=name, assets=100, size=10)
 
         def delete_index(self, name):
             return None
 
-        def add_items(self, index_name, items):
+        def add_assets(self, index_name, assets):
             return [IsccAddResult(iscc_id="ISCC:MAIGIIFJRDGEQQAA", status="created")]
 
-        def search_items(self, index_name, query, limit=100):
+        def search_assets(self, index_name, query, limit=100):
             return IsccSearchResult(
-                query=IsccItem(iscc_id="ISCC:MAIGIIFJRDGEQQAA", units=["ISCC:AADYCMZIOY36XXGZ"]),
+                query=IsccAsset(iscc_id="ISCC:MAIGIIFJRDGEQQAA", units=["ISCC:AADYCMZIOY36XXGZ"]),
                 metric=Metric.nphd,
                 matches=[],
             )
@@ -125,10 +125,10 @@ def test_protocol_method_signatures():
         def delete_index(self, name):
             pass
 
-        def add_items(self, index_name, items):
+        def add_assets(self, index_name, assets):
             return []
 
-        def search_items(self, index_name, query, limit=100):
+        def search_assets(self, index_name, query, limit=100):
             return IsccSearchResult(query=query, metric=Metric.bitlength, matches=[])
 
         def close(self):
@@ -142,8 +142,8 @@ def test_protocol_method_signatures():
     assert hasattr(test_index, "create_index")
     assert hasattr(test_index, "get_index")
     assert hasattr(test_index, "delete_index")
-    assert hasattr(test_index, "add_items")
-    assert hasattr(test_index, "search_items")
+    assert hasattr(test_index, "add_assets")
+    assert hasattr(test_index, "search_assets")
     assert hasattr(test_index, "close")
 
 
@@ -163,10 +163,10 @@ def test_protocol_with_wrong_method_names():
         def delete(self, name):  # Wrong name (should be delete_index)
             pass
 
-        def add(self, index_name, items):  # Wrong name (should be add_items)
+        def add(self, index_name, assets):  # Wrong name (should be add_assets)
             return []
 
-        def search(self, index_name, query, limit=100):  # Wrong name (should be search_items)
+        def search(self, index_name, query, limit=100):  # Wrong name (should be search_assets)
             return []
 
         def cleanup(self):  # Wrong name (should be close)
@@ -198,10 +198,10 @@ def test_protocol_partial_implementation():
         def delete_index(self, name):
             pass
 
-        def add_items(self, index_name, items):
+        def add_assets(self, index_name, assets):
             return []
 
-        def search_items(self, index_name, query, limit=100):
+        def search_assets(self, index_name, query, limit=100):
             return IsccSearchResult(query=query, metric=Metric.bitlength, matches=[])
 
         # Missing close() method
@@ -225,10 +225,10 @@ def test_protocol_with_extra_methods():
         def delete_index(self, name):
             pass
 
-        def add_items(self, index_name, items):
+        def add_assets(self, index_name, assets):
             return []
 
-        def search_items(self, index_name, query, limit=100):
+        def search_assets(self, index_name, query, limit=100):
             return IsccSearchResult(query=query, metric=Metric.bitlength, matches=[])
 
         def close(self):

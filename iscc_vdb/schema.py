@@ -28,7 +28,7 @@ class IsccIndex(BaseModel):
             pattern="^[a-z][a-z0-9]*$",
         ),
     ]
-    items: Annotated[
+    assets: Annotated[
         int | None,
         Field(description="Number of ISCCs in the index (server-generated, read-only)", examples=[150000], ge=0),
     ] = None
@@ -43,7 +43,7 @@ class Unit(RootModel[str]):
     ]
 
 
-class IsccItem(BaseModel):
+class IsccAsset(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -106,7 +106,7 @@ class IsccAddResult(BaseModel):
     iscc_id: Annotated[
         str,
         Field(
-            description="The ISCC-ID for the added item (auto-generated if not provided in request)",
+            description="The ISCC-ID for the added asset (auto-generated if not provided in request)",
             examples=["ISCC:MAIGIIFJRDGEQQAA"],
             pattern="^ISCC:[A-Z2-7]{16,}$",
         ),
@@ -114,7 +114,7 @@ class IsccAddResult(BaseModel):
     status: Annotated[
         Status,
         Field(
-            description='Outcome of the add operation. "created" means item was newly added to the index,\n"updated" means item already existed (duplicate skipped via dupdata=False).\n',
+            description='Outcome of the add operation. "created" means asset was newly added to the index,\n"updated" means asset already existed (duplicate skipped via dupdata=False).\n',
             examples=["created"],
         ),
     ]
@@ -159,7 +159,7 @@ class IsccSearchResult(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    query: Annotated[IsccItem, Field(description="The original query item (may include auto-generated iscc_id)")]
+    query: Annotated[IsccAsset, Field(description="The original query asset (may include auto-generated iscc_id)")]
     metric: Annotated[
         Metric,
         Field(

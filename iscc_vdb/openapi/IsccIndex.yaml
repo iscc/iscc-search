@@ -13,7 +13,7 @@ properties:
     minLength: 1
     maxLength: 32
     example: "default"
-  items:
+  assets:
     type: integer
     description: Number of ISCCs in the index (server-generated, read-only)
     minimum: 0
@@ -27,5 +27,5 @@ properties:
     example: 42
 example:
   name: "production"
-  items: 250000
+  assets: 250000
   size: 68

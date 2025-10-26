@@ -13,5 +13,5 @@ properties:
 examples:
   - detail: "Index 'myindex' not found"
   - detail:
-      - "Invalid ISCC format in item 0"
-      - "Invalid ISCC format in item 2"
+      - "Invalid ISCC format in asset 0"
+      - "Invalid ISCC format in asset 2"

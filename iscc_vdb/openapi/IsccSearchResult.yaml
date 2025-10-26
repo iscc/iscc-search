@@ -3,7 +3,7 @@ $id: "http://purl.org/iscc/schema/iscc-search-result.json"
 title: "IsccSearchResult"
 type: object
 description: |
-  Search result for a single query item. Contains the original query, matched ISCCs,
+  Search result for a single query asset. Contains the original query, matched ISCCs,
   and metric metadata that describes how to interpret the numeric scores.
 required:
   - query
@@ -11,8 +11,8 @@ required:
   - matches
 properties:
   query:
-    $ref: "./IsccItem.yaml"
-    description: The original query item (may include auto-generated iscc_id)
+    $ref: "./IsccAsset.yaml"
+    description: The original query asset (may include auto-generated iscc_id)
   metric:
     type: string
     description: |

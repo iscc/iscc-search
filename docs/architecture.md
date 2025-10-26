@@ -39,8 +39,8 @@ in-memory).
 │                      │ - create_index │  Runtime checkable             │
 │                      │ - get_index    │  Type-safe                     │
 │                      │ - delete_index │                                │
-│                      │ - add_items    │                                │
-│                      │ - search_items │                                │
+│                      │ - add_assets   │                                │
+│                      │ - search_assets│                                │
 │                      │ - close        │                                │
 │                      └───────┬────────┘                                │
 │                              │                                         │
@@ -137,7 +137,7 @@ iscc_vdb/
 │
 ├── protocol.py              # IsccIndexProtocol definition
 ├── settings.py              # Pydantic settings and index factory
-├── models.py                # Existing data models (IsccItem, etc.)
+├── models.py                # Existing data models (IsccAsset, etc.)
 ├── schema.py                # Generated Pydantic models from OpenAPI
 │
 ├── cli/
@@ -172,7 +172,7 @@ iscc_vdb/
 
 ```python
 from typing import Protocol, runtime_checkable
-from iscc_vdb.schema import IsccIndex, IsccItem, IsccAddResult, IsccSearchResult
+from iscc_vdb.schema import IsccIndex, IsccAsset, IsccAddResult, IsccSearchResult
 
 @runtime_checkable
 class IsccIndexProtocol(Protocol):
@@ -187,7 +187,7 @@ class IsccIndexProtocol(Protocol):
         """
         List all available indexes with metadata.
 
-        :return: List of IsccIndex objects with name, items, and size
+        :return: List of IsccIndex objects with name, assets, and size
         """
         ...
 
@@ -195,8 +195,8 @@ class IsccIndexProtocol(Protocol):
         """
         Create a new named index.
 
-        :param index: IsccIndex with name (items and size ignored)
-        :return: Created IsccIndex with initial metadata (items=0, size=0)
+        :param index: IsccIndex with name (assets and size ignored)
+        :return: Created IsccIndex with initial metadata (assets=0, size=0)
         :raises ValueError: If name is invalid
         :raises FileExistsError: If index already exists
         """
@@ -221,32 +221,32 @@ class IsccIndexProtocol(Protocol):
         """
         ...
 
-    def add_items(
+    def add_assets(
         self,
         index_name: str,
-        items: list[IsccItem]
+        assets: list[IsccAsset]
     ) -> list[IsccAddResult]:
         """
-        Add items to index.
+        Add assets to index.
 
         :param index_name: Target index name
-        :param items: List of IsccItem objects to add
-        :return: List of IsccAddResult with status for each item
+        :param assets: List of IsccAsset objects to add
+        :return: List of IsccAddResult with status for each asset
         :raises FileNotFoundError: If index doesn't exist
         """
         ...
 
-    def search_items(
+    def search_assets(
         self,
         index_name: str,
-        query: IsccItem,
+        query: IsccAsset,
         limit: int = 100
     ) -> IsccSearchResult:
         """
-        Search for similar items in index.
+        Search for similar assets in index.
 
         :param index_name: Target index name
-        :param query: IsccItem to search for
+        :param query: IsccAsset to search for
         :param limit: Maximum number of results
         :return: IsccSearchResult with query, metric, and list of matches
         :raises FileNotFoundError: If index doesn't exist
@@ -355,7 +355,7 @@ def get_index() -> IsccIndexProtocol:
 ```python
 from pathlib import Path
 from iscc_vdb.protocol import IsccIndexProtocol
-from iscc_vdb.schema import IsccIndex, IsccItem, IsccAddResult
+from iscc_vdb.schema import IsccIndex, IsccAsset, IsccAddResult
 
 class UsearchIndex:
     """
@@ -406,7 +406,7 @@ class UsearchIndex:
         store.put_metadata("__created__", time.time())
         store.close()
 
-        return IsccIndex(name=index.name, items=0, size=0)
+        return IsccIndex(name=index.name, assets=0, size=0)
 
     def get_index(self, name: str) -> IsccIndex:
         """Get index metadata."""
@@ -431,36 +431,36 @@ class UsearchIndex:
         import shutil
         shutil.rmtree(index_path)
 
-    def add_items(self, index_name: str, items: list[IsccItem]) -> list[IsccAddResult]:
+    def add_assets(self, index_name: str, assets: list[IsccAsset]) -> list[IsccAddResult]:
         """
-        Add items to index.
+        Add assets to index.
 
         - Store in LMDB
         - Extract ISCC-UNITs
         - Add to per-UNIT-TYPE usearch indexes
-        - Return status for each item
+        - Return status for each asset
         """
         idx = self._get_or_load_index(index_name)
 
-        # Convert to IsccItem objects and add to store
-        iscc_items = [IsccItem.from_dict(item) for item in items]
+        # Convert to IsccAsset objects and add to store
+        iscc_assets = [IsccAsset.from_dict(asset) for asset in assets]
 
         # Store in LMDB
         store = idx["store"]
         results = []
 
-        for item in iscc_items:
-            iscc_id_int = int(IsccID(item.id_data))
+        for asset in iscc_assets:
+            iscc_id_int = int(IsccID(asset.id_data))
 
-            # Check if item exists
+            # Check if asset exists
             existing = store.get(iscc_id_int)
             status = "updated" if existing else "created"
 
             # Store entry
-            store.add([iscc_id_int], [item.dict])
+            store.add([iscc_id_int], [asset.dict])
 
             # Index units in usearch
-            for unit_str in item.units:
+            for unit_str in asset.units:
                 unit = IsccUnit(unit_str)
                 unit_type = unit.unit_type
 
@@ -473,18 +473,18 @@ class UsearchIndex:
                 # Add to usearch
                 unit_idx.add(iscc_id_int, unit.body)
 
-            # Add result for this item
+            # Add result for this asset
             results.append(IsccAddResult(
-                iscc_id=item.iscc_id,
+                iscc_id=asset.iscc_id,
                 status=status
             ))
 
         return results
 
-    def search_items(
+    def search_assets(
         self,
         index_name: str,
-        query: IsccItem,
+        query: IsccAsset,
         limit: int = 100
     ) -> IsccSearchResult:
         """
@@ -494,12 +494,12 @@ class UsearchIndex:
 
         idx = self._get_or_load_index(index_name)
 
-        query_item = IsccItem.from_dict(query)
+        query_asset = IsccAsset.from_dict(query)
 
         # Aggregate matches across all unit types
         matches = {}  # iscc_id -> {unit_type -> score}
 
-        for unit_str in query_item.units:
+        for unit_str in query_asset.units:
             unit = IsccUnit(unit_str)
             unit_type = unit.unit_type
 
@@ -562,7 +562,7 @@ class UsearchIndex:
 import psycopg2
 from psycopg2.pool import SimpleConnectionPool
 from iscc_vdb.protocol import IsccIndexProtocol
-from iscc_vdb.schema import IsccIndex, IsccItem, IsccAddResult
+from iscc_vdb.schema import IsccIndex, IsccAsset, IsccAddResult
 
 class PostgresIndex:
     """
@@ -570,7 +570,7 @@ class PostgresIndex:
 
     Database schema:
     - indexes: Catalog of all indexes (name, created_at, etc.)
-    - {index_name}_entries: Items with ISCC-IDs and metadata
+    - {index_name}_entries: Assets with ISCC-IDs and metadata
     - {index_name}_units_{unit_type}: Per-UNIT-TYPE vectors with pgvector indexes
     """
 
@@ -603,9 +603,9 @@ class PostgresIndex:
                 cur.execute("SELECT name FROM indexes ORDER BY name")
                 indexes = []
                 for (name,) in cur.fetchall():
-                    # Get item count
+                    # Get asset count
                     cur.execute(f"SELECT COUNT(*) FROM {name}_entries")
-                    items = cur.fetchone()[0]
+                    assets = cur.fetchone()[0]
 
                     # Get approximate size
                     cur.execute(f"""
@@ -616,7 +616,7 @@ class PostgresIndex:
 
                     indexes.append(IsccIndex(
                         name=name,
-                        items=items,
+                        assets=assets,
                         size=size_mb
                     ))
             self.pool.putconn(conn)
@@ -652,20 +652,20 @@ class PostgresIndex:
                 conn.commit()
             self.pool.putconn(conn)
 
-        return IsccIndex(name=index.name, items=0, size=0)
+        return IsccIndex(name=index.name, assets=0, size=0)
 
     def close(self) -> None:
         """Close connection pool."""
         self.pool.closeall()
 
-    # ... similar implementations for get_index, delete_index, add_items, search_items
+    # ... similar implementations for get_index, delete_index, add_assets, search_assets
 ```
 
 ### Memory Index (`indexes/memory/index.py`)
 
 ```python
 from iscc_vdb.protocol import IsccIndexProtocol
-from iscc_vdb.schema import IsccIndex, IsccItem, IsccAddResult
+from iscc_vdb.schema import IsccIndex, IsccAsset, IsccAddResult
 
 class MemoryIndex:
     """
@@ -679,7 +679,7 @@ class MemoryIndex:
         """
         Initialize MemoryIndex.
         """
-        self._indexes = {}  # name -> {items: [], metadata: {}}
+        self._indexes = {}  # name -> {assets: [], metadata: {}}
 
     def list_indexes(self) -> list[IsccIndex]:
         """List all in-memory indexes."""
@@ -687,7 +687,7 @@ class MemoryIndex:
         for name, data in self._indexes.items():
             indexes.append(IsccIndex(
                 name=name,
-                items=len(data["items"]),
+                assets=len(data["assets"]),
                 size=0  # Memory indexes don't track size
             ))
         return indexes
@@ -698,10 +698,10 @@ class MemoryIndex:
             raise FileExistsError(f"Index '{index.name}' already exists")
 
         self._indexes[index.name] = {
-            "items": [],
+            "assets": [],
             "metadata": {}
         }
-        return IsccIndex(name=index.name, items=0, size=0)
+        return IsccIndex(name=index.name, assets=0, size=0)
 
     def get_index(self, name: str) -> IsccIndex:
         """Get index metadata."""
@@ -711,7 +711,7 @@ class MemoryIndex:
         data = self._indexes[name]
         return IsccIndex(
             name=name,
-            items=len(data["items"]),
+            assets=len(data["assets"]),
             size=0
         )
 
@@ -722,28 +722,28 @@ class MemoryIndex:
 
         del self._indexes[name]
 
-    def add_items(self, index_name: str, items: list[IsccItem]) -> list[IsccAddResult]:
-        """Add items to in-memory index."""
+    def add_assets(self, index_name: str, assets: list[IsccAsset]) -> list[IsccAddResult]:
+        """Add assets to in-memory index."""
         if index_name not in self._indexes:
             raise FileNotFoundError(f"Index '{index_name}' not found")
 
         results = []
-        existing_ids = {item.iscc_id for item in self._indexes[index_name]["items"]}
+        existing_ids = {asset.iscc_id for asset in self._indexes[index_name]["assets"]}
 
-        for item in items:
-            status = "updated" if item.iscc_id in existing_ids else "created"
-            self._indexes[index_name]["items"].append(item)
-            results.append(IsccAddResult(iscc_id=item.iscc_id, status=status))
+        for asset in assets:
+            status = "updated" if asset.iscc_id in existing_ids else "created"
+            self._indexes[index_name]["assets"].append(asset)
+            results.append(IsccAddResult(iscc_id=asset.iscc_id, status=status))
 
         return results
 
-    def search_items(
+    def search_assets(
         self,
         index_name: str,
-        query: IsccItem,
+        query: IsccAsset,
         limit: int = 100
     ) -> IsccSearchResult:
-        """Search for similar items (simple exact match for testing)."""
+        """Search for similar assets (simple exact match for testing)."""
         from iscc_vdb.schema import IsccSearchResult, IsccMatch, Metric
 
         if index_name not in self._indexes:
@@ -751,11 +751,11 @@ class MemoryIndex:
 
         # Simple implementation for testing
         match_list = []
-        for item in self._indexes[index_name]["items"]:
-            if item.iscc_code == query.iscc_code:
+        for asset in self._indexes[index_name]["assets"]:
+            if asset.iscc_code == query.iscc_code:
                 match_list.append(
                     IsccMatch(
-                        iscc_id=item.iscc_id,
+                        iscc_id=asset.iscc_id,
                         score=1.0,
                         matches={},
                     )
@@ -811,7 +811,7 @@ app = create_app()
 
 ```python
 from fastapi import APIRouter, Request, HTTPException, status
-from iscc_vdb.schema import IsccIndex, IsccItem, IsccAddResult, IsccSearchResult
+from iscc_vdb.schema import IsccIndex, IsccAsset, IsccAddResult, IsccSearchResult
 from iscc_vdb.protocol import IsccIndexProtocol
 
 router = APIRouter()
@@ -871,12 +871,12 @@ def delete_index(name: str, request: Request):
             detail=f"Index '{name}' not found"
         )
 
-@router.post("/indexes/{name}/items", response_model=list[IsccAddResult], status_code=status.HTTP_201_CREATED)
-def add_items(name: str, items: list[IsccItem], request: Request):
-    """Add items to index."""
+@router.post("/indexes/{name}/assets", response_model=list[IsccAddResult], status_code=status.HTTP_201_CREATED)
+def add_assets(name: str, assets: list[IsccAsset], request: Request):
+    """Add assets to index."""
     idx = get_index_impl(request)
     try:
-        results = idx.add_items(name, items)
+        results = idx.add_assets(name, assets)
         return results
     except FileNotFoundError:
         raise HTTPException(
@@ -885,16 +885,16 @@ def add_items(name: str, items: list[IsccItem], request: Request):
         )
 
 @router.post("/indexes/{name}/search", response_model=IsccSearchResult)
-def search_items(
+def search_assets(
     name: str,
-    query: IsccItem,
+    query: IsccAsset,
     limit: int = 100,
     request: Request = None
 ):
-    """Search for similar items."""
+    """Search for similar assets."""
     idx = get_index_impl(request)
     try:
-        return idx.search_items(name, query, limit)
+        return idx.search_assets(name, query, limit)
     except FileNotFoundError:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -908,7 +908,7 @@ def search_items(
 import typer
 from pathlib import Path
 from iscc_vdb.settings import get_index
-from iscc_vdb.schema import IsccIndex, IsccItem
+from iscc_vdb.schema import IsccIndex, IsccAsset
 
 app = typer.Typer(name="iscc-vdb", help="ISCC Vector Database CLI")
 
@@ -923,7 +923,7 @@ def list():
         return
 
     for idx in indexes:
-        typer.echo(f"{idx.name}: {idx.items} items, {idx.size} MB")
+        typer.echo(f"{idx.name}: {idx.assets} assets, {idx.size} MB")
 
     index.close()
 
@@ -964,7 +964,7 @@ def delete(name: str):
 
 @app.command()
 def add(index_name: str, directory: Path):
-    """Add items from directory to index."""
+    """Add assets from directory to index."""
     index = get_index()
 
     # Scan for *.iscc.json files
@@ -976,20 +976,20 @@ def add(index_name: str, directory: Path):
         index.close()
         return
 
-    # Load items
-    items = []
-    from iscc_vdb.cli.utils import load_iscc_items
+    # Load assets
+    assets = []
+    from iscc_vdb.cli.utils import load_iscc_assets
     for json_file in json_files:
         try:
-            item = load_iscc_items(json_file)
-            items.append(item)
+            asset = load_iscc_assets(json_file)
+            assets.append(asset)
         except Exception as e:
             typer.echo(f"Error loading {json_file}: {e}", err=True)
 
     # Add to index
     try:
-        added = index.add_items(index_name, items)
-        typer.echo(f"Added {added} items to {index_name}")
+        added = index.add_assets(index_name, assets)
+        typer.echo(f"Added {added} assets to {index_name}")
     except FileNotFoundError as e:
         typer.echo(f"Error: {e}", err=True)
         raise typer.Exit(1)
@@ -1002,13 +1002,13 @@ def search(
     iscc_code: str,
     limit: int = typer.Option(100, "--limit", "-n")
 ):
-    """Search index for similar items."""
+    """Search index for similar assets."""
     index = get_index()
 
     try:
-        from iscc_vdb.schema import IsccItem
-        query = IsccItem(iscc_code=iscc_code)
-        result = index.search_items(index_name, query, limit)
+        from iscc_vdb.schema import IsccAsset
+        query = IsccAsset(iscc_code=iscc_code)
+        result = index.search_assets(index_name, query, limit)
 
         # Convert Pydantic model to JSON
         import json
@@ -1112,7 +1112,7 @@ iscc-vdb search test "ISCC:..."
 
 1. Define `IsccIndexProtocol` in `protocol.py`
 2. Create `settings.py` with Pydantic settings and index factory
-3. Update OpenAPI spec with item endpoints
+3. Update OpenAPI spec with asset endpoints
 4. Regenerate `schema.py` from OpenAPI
 
 ### Phase 2: Usearch Index

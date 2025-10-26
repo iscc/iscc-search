@@ -114,13 +114,14 @@ class MemoryIndex:
         Add assets to in-memory index.
 
         Assets are stored by iscc_id. If an asset with the same iscc_id already
-        exists, it's updated (not duplicated).
+        exists, it's updated (not duplicated). The iscc_id field must be provided
+        by the client when adding assets.
 
         :param index_name: Target index name
-        :param assets: List of IsccAsset objects to add
+        :param assets: List of IsccAsset objects to add (must include iscc_id)
         :return: List of IsccAddResult with status for each asset
         :raises FileNotFoundError: If index doesn't exist
-        :raises ValueError: If assets contain invalid ISCC codes
+        :raises ValueError: If asset is missing required iscc_id field
         """
         if index_name not in self._indexes:
             raise FileNotFoundError(f"Index '{index_name}' not found")
@@ -129,9 +130,9 @@ class MemoryIndex:
         index_data = self._indexes[index_name]
 
         for asset in assets:
-            # Validate that asset has required fields
+            # Validate that asset has required iscc_id for add operations
             if asset.iscc_id is None:
-                raise ValueError("Asset must have iscc_id field")
+                raise ValueError("Asset must have iscc_id field when adding to index")
 
             # Check if asset already exists
             status = Status.updated if asset.iscc_id in index_data["assets"] else Status.created

@@ -1,6 +1,6 @@
 """Test FastAPI server for ISCC-VDB API."""
 
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 from fastapi.testclient import TestClient
 from iscc_vdb.server import app, custom_docs, root
 
@@ -112,3 +112,19 @@ if __name__ == '__main__':
     )
     # Check that the subprocess completed successfully
     assert result.returncode == 0, f"Module execution failed: {result.stderr}"
+
+
+def test_lifespan_shutdown():
+    """Test that lifespan context manager properly closes index on shutdown."""
+    from iscc_vdb.indexes.memory import MemoryIndex
+
+    # Create a mock index with a close method we can track
+    mock_index = MagicMock(spec=MemoryIndex)
+
+    # Use TestClient context manager to trigger lifespan shutdown
+    with TestClient(app) as client:
+        # Override with our mock
+        client.app.state.index = mock_index
+
+    # Verify close was called during shutdown
+    mock_index.close.assert_called_once()

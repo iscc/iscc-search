@@ -1,6 +1,8 @@
 """Test settings management for ISCC-VDB."""
 
-from iscc_vdb.settings import VdbSettings, vdb_settings
+from iscc_vdb.settings import VdbSettings, vdb_settings, get_index
+from iscc_vdb.protocol import IsccIndexProtocol
+from iscc_vdb.indexes.memory import MemoryIndex
 
 
 def test_vdb_settings_default_initialization():
@@ -96,3 +98,41 @@ def test_vdb_settings_extra_fields_ignored():
     # Should not raise error due to extra='ignore'
     settings = VdbSettings(unknown_field="value")
     assert not hasattr(settings, "unknown_field")
+
+
+def test_get_index_default():
+    """Test get_index() factory function with default settings."""
+    index = get_index()
+    assert isinstance(index, IsccIndexProtocol)
+    assert isinstance(index, MemoryIndex)
+
+
+def test_get_index_memory_uri():
+    """Test get_index() factory with memory:// URI."""
+    import iscc_vdb.settings
+
+    original_uri = iscc_vdb.settings.vdb_settings.indexes_uri
+    try:
+        # Override settings temporarily
+        iscc_vdb.settings.vdb_settings.indexes_uri = "memory://"
+        index = get_index()
+        assert isinstance(index, MemoryIndex)
+    finally:
+        # Restore original
+        iscc_vdb.settings.vdb_settings.indexes_uri = original_uri
+
+
+def test_get_index_custom_path():
+    """Test get_index() factory with custom path (falls back to MemoryIndex for now)."""
+    import iscc_vdb.settings
+
+    original_uri = iscc_vdb.settings.vdb_settings.indexes_uri
+    try:
+        # Override settings temporarily
+        iscc_vdb.settings.vdb_settings.indexes_uri = "/tmp/custom_path"
+        index = get_index()
+        # Currently falls back to MemoryIndex
+        assert isinstance(index, MemoryIndex)
+    finally:
+        # Restore original
+        iscc_vdb.settings.vdb_settings.indexes_uri = original_uri

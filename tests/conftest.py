@@ -2,6 +2,7 @@
 
 import iscc_core as ic
 import pytest
+from fastapi.testclient import TestClient
 
 
 @pytest.fixture
@@ -221,3 +222,98 @@ def sample_iscc_codes():
         iscc_code = ic.gen_iscc_code_v0([f"ISCC:{data_unit}", f"ISCC:{instance_unit}"], wide=True)["iscc"]
         codes.append(iscc_code)
     return codes
+
+
+# Server testing fixtures
+
+
+@pytest.fixture
+def memory_index_instance():
+    # type: () -> typing.Any
+    """
+    Create a fresh MemoryIndex instance for testing.
+
+    Provides an isolated, in-memory index that doesn't require persistence.
+    Ideal for fast, isolated server tests.
+
+    :return: MemoryIndex instance
+    """
+    from iscc_vdb.indexes.memory import MemoryIndex
+
+    return MemoryIndex()
+
+
+@pytest.fixture
+def test_client():
+    # type: () -> TestClient
+    """
+    Create TestClient with app configured to use MemoryIndex.
+
+    Provides a FastAPI TestClient for making HTTP requests to the API.
+    Uses a fresh MemoryIndex for each test to ensure isolation.
+
+    :return: FastAPI TestClient instance
+    """
+    from iscc_vdb.server import app
+    from iscc_vdb.indexes.memory import MemoryIndex
+
+    # Override app.state.index with fresh MemoryIndex for testing
+    app.state.index = MemoryIndex()
+
+    return TestClient(app)
+
+
+@pytest.fixture
+def sample_assets(sample_iscc_ids, sample_iscc_codes, sample_content_units):
+    # type: (list[str], list[str], list[str]) -> list[typing.Any]
+    """
+    Generate list of IsccAsset objects with valid ISCC data for testing.
+
+    Creates assets with iscc_id, iscc_code, units, and metadata fields populated
+    from existing ISCC fixtures.
+
+    :param sample_iscc_ids: Fixture providing ISCC-IDs
+    :param sample_iscc_codes: Fixture providing ISCC-CODEs
+    :param sample_content_units: Fixture providing ISCC-UNITs
+    :return: List of IsccAsset objects
+    """
+    from iscc_vdb.schema import IsccAsset
+
+    assets = []
+    for i in range(5):
+        # Provide at least 2 units (schema requires min_length=2)
+        asset = IsccAsset(
+            iscc_id=sample_iscc_ids[i],
+            iscc_code=sample_iscc_codes[i],
+            units=[
+                sample_content_units[i % len(sample_content_units)],
+                sample_content_units[(i + 1) % len(sample_content_units)],
+            ],
+            metadata={"index": i, "title": f"Test Asset {i}"},
+        )
+        assets.append(asset)
+    return assets
+
+
+@pytest.fixture
+def populated_index(memory_index_instance, sample_assets):
+    # type: (typing.Any, list[typing.Any]) -> typing.Any
+    """
+    Create a MemoryIndex pre-populated with sample assets.
+
+    Provides an index with a default index named "testindex" containing
+    sample assets. Useful for testing search and retrieval operations.
+
+    :param memory_index_instance: Fresh MemoryIndex instance
+    :param sample_assets: Sample IsccAsset objects
+    :return: MemoryIndex with data
+    """
+    from iscc_vdb.schema import IsccIndex
+
+    # Create test index
+    memory_index_instance.create_index(IsccIndex(name="testindex"))
+
+    # Add sample assets
+    memory_index_instance.add_assets("testindex", sample_assets)
+
+    return memory_index_instance

@@ -205,3 +205,19 @@ def edge_case_units():
         "all_zeros": f"ISCC:{ic.encode_component(ic.MT.META, ic.ST.NONE, ic.VS.V0, 64, zeros_bytes)}",
         "all_ones": f"ISCC:{ic.encode_component(ic.MT.META, ic.ST.NONE, ic.VS.V0, 64, ones_bytes)}",
     }
+
+
+@pytest.fixture
+def sample_iscc_codes():
+    # type: () -> list[str]
+    """Generate valid ISCC-CODEs for testing (with 256-bit Data + Instance units)."""
+    codes = []
+    for i in range(10):
+        # Generate 256-bit Data-Code and Instance-Code units
+        data_unit = ic.Code.rnd(ic.MT.DATA, bits=256)
+        instance_unit = ic.Code.rnd(ic.MT.INSTANCE, bits=256)
+
+        # Generate ISCC-CODE from Data + Instance (wide format for 256-bit)
+        iscc_code = ic.gen_iscc_code_v0([f"ISCC:{data_unit}", f"ISCC:{instance_unit}"], wide=True)["iscc"]
+        codes.append(iscc_code)
+    return codes

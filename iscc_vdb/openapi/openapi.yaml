@@ -28,9 +28,54 @@ paths:
                 - name: "default"
                   items: 150000
                   size: 42
-                - name: "production"
-                  items: 250000
-                  size: 68
+    post:
+      summary: Create a new index
+      description: Creates a new ISCC index with the specified name. The index is initialized empty with 0 items.
+      operationId: createIndex
+      tags:
+        - indexes
+      requestBody:
+        required: true
+        description: Index configuration with unique name
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IsccIndex'
+            example:
+              name: "myindex"
+      responses:
+        '201':
+          description: Index successfully created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IsccIndex'
+              example:
+                name: "myindex"
+                items: 0
+                size: 0
+        '400':
+          description: Invalid request (e.g., invalid name format)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  detail:
+                    type: string
+              example:
+                detail: "Invalid index name format"
+        '409':
+          description: Index with this name already exists
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  detail:
+                    type: string
+              example:
+                detail: "Index 'myindex' already exists"
 
 components:
   schemas:

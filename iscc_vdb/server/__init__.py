@@ -4,7 +4,6 @@ from pathlib import Path
 import yaml
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
-from fastapi.openapi.docs import get_swagger_ui_html
 
 
 # Load OpenAPI spec from YAML file
@@ -35,14 +34,27 @@ app = FastAPI(
 def custom_docs():
     # type: () -> HTMLResponse
     """
-    Render custom interactive API documentation using Swagger UI.
+    Render modern interactive API documentation using Scalar.
 
-    :return: HTML response with Swagger UI
+    :return: HTML response with Scalar UI
     """
-    return get_swagger_ui_html(
-        openapi_url="/openapi.yaml",
-        title=f"{app.title} - Documentation",
-    )
+    html = f"""
+    <!doctype html>
+    <html>
+      <head>
+        <title>{app.title} - Documentation</title>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+      </head>
+      <body>
+        <script
+          id="api-reference"
+          data-url="/openapi.yaml"></script>
+        <script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference"></script>
+      </body>
+    </html>
+    """
+    return HTMLResponse(content=html)
 
 
 @app.get("/openapi.yaml", include_in_schema=False)

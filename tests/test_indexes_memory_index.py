@@ -431,11 +431,11 @@ def test_metadata_field(sample_iscc_ids, sample_iscc_codes):
     # Search and verify metadata is preserved
     query = IsccAsset(iscc_code=code)
     result = index.search_assets("testindex", query)
-
-    # Note: The search returns matches but we can't directly access asset metadata
-    # from matches. This is expected - matches contain iscc_id, score, and matches dict.
-    # To verify metadata preservation, we'd need a get_asset method.
     assert len(result.matches) == 1
+
+    # Retrieve the asset and verify metadata is preserved
+    retrieved = index.get_asset("testindex", sample_iscc_ids[0])
+    assert retrieved.metadata == {"source": "test", "tags": ["tag1", "tag2"]}
 
 
 def test_search_assets_no_matching_iscc_id(sample_iscc_ids):

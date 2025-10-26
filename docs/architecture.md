@@ -2,9 +2,10 @@
 
 ## Overview
 
-ISCC-VDB implements a clean, protocol-based architecture that supports multiple storage backends through a
-unified interface. The system uses Python's `typing.Protocol` to define a backend abstraction that enables both
-CLI and REST API frontends to work seamlessly with different storage implementations.
+ISCC-VDB implements a clean, protocol-based architecture that supports multiple index implementations through a
+unified interface. The system uses Python's `typing.Protocol` to define an index abstraction that enables both
+CLI and REST API frontends to work seamlessly with different storage implementations (usearch, postgres,
+in-memory).
 
 ## High-Level Architecture
 
@@ -48,21 +49,21 @@ CLI and REST API frontends to work seamlessly with different storage implementat
                                │ implements
                                │
 ┌──────────────────────────────┼─────────────────────────────────────────┐
-│                      BACKEND LAYER                                     │
+│                      INDEX LAYER                                       │
 ├──────────────────────────────┼─────────────────────────────────────────┤
 │                              │                                         │
 │    ┌─────────────────────────┼─────────────────────────┐               │
 │    │                         │                         │               │
 │    ▼                         ▼                         ▼               │
 │  ┌──────────────────┐  ┌──────────────────┐  ┌──────────────────┐      │
-│  │ Usearch Backend  │  │ Postgres Backend │  │ HTTP Client      │      │
-│  │ (backends/       │  │ (backends/       │  │ Backend          │      │
-│  │  usearch/)       │  │  postgres/)      │  │ (backends/       │      │
-│  │                  │  │                  │  │  client/)        │      │
-│  │ Unified index:   │  │ Unified index:   │  │                  │      │
-│  │ - LMDB store     │  │ - PG tables      │  │ REST client      │      │
-│  │ - Per-UNIT       │  │ - pgvector       │  │ wrapping remote  │      │
-│  │   usearch indexes│  │   indexes        │  │ ISCC-VDB API     │      │
+│  │ Usearch Index    │  │ Postgres Index   │  │ Memory Index     │      │
+│  │ (indexes/        │  │ (indexes/        │  │ (indexes/        │      │
+│  │  usearch/)       │  │  postgres/)      │  │  memory/)        │      │
+│  │                  │  │                  │  │                  │      │
+│  │ Unified index:   │  │ Unified index:   │  │ In-memory index: │      │
+│  │ - LMDB store     │  │ - PG tables      │  │ - Dict-based     │      │
+│  │ - Per-UNIT       │  │ - pgvector       │  │ - No persistence │      │
+│  │   usearch indexes│  │   indexes        │  │ - Fast testing   │      │
 │  └──────────────────┘  └──────────────────┘  └──────────────────┘      │
 │                                                                        │
 └────────────────────────────────────────────────────────────────────────┘
@@ -72,12 +73,13 @@ CLI and REST API frontends to work seamlessly with different storage implementat
 
 ### 1. Protocol-Based Abstraction
 
-The architecture uses Python's `typing.Protocol` to define the backend interface. This provides:
+The architecture uses Python's `typing.Protocol` to define the index interface. This provides:
 
-- **Structural subtyping**: Backends don't inherit from a base class; they just implement the required methods
-- **Static type checking**: Type checkers can verify backend implementations
+- **Structural subtyping**: Index implementations don't inherit from a base class; they just implement the
+    required methods
+- **Static type checking**: Type checkers can verify index implementations
 - **Runtime validation**: `@runtime_checkable` enables runtime type checking
-- **Flexibility**: Easy to add new backends without modifying existing code
+- **Flexibility**: Easy to add new index implementations without modifying existing code
 
 ### 2. Synchronous API
 
@@ -88,36 +90,43 @@ All operations are synchronous for simplicity:
 - **Simpler testing**: Straightforward test setup without async fixtures
 - **Postgres flexibility**: Can use psycopg2 (sync) initially, upgrade to asyncpg later if needed
 
-### 3. URI-Based Configuration
+### 3. Pydantic Settings-Based Configuration
 
-Single `ISCC_VDB_INDEXES_URI` environment variable determines backend:
+Single `ISCC_VDB_INDEXES_URI` environment variable determines index implementation:
 
-- **Directory path**: `ISCC_VDB_INDEXES_URI=/path/to/index_data` → UsearchBackend
-- **Postgres DSN**: `ISCC_VDB_INDEXES_URI=postgresql://user:pass@host/db` → PostgresBackend
-- **HTTP URL**: `ISCC_VDB_INDEXES_URI=http://localhost:8000` → HttpClientBackend
+- **Directory path**: `ISCC_VDB_INDEXES_URI=/path/to/index_data` → UsearchIndex
+- **Postgres DSN**: `ISCC_VDB_INDEXES_URI=postgresql://user:pass@host/db` → PostgresIndex
+- **memory://**: `ISCC_VDB_INDEXES_URI=memory://` → MemoryIndex (in-memory, no persistence)
+- **Default**: Uses `platformdirs` to determine OS-appropriate user data directory
 
-Simple URI parsing determines which backend to instantiate.
+Configuration uses Pydantic Settings for:
 
-### 4. Package-Per-Backend
+- Type validation and coercion
+- Environment variable loading with `ISCC_VDB_` prefix
+- `.env` file support
+- Runtime override capability
+- Clear documentation of all settings
 
-Each backend is a self-contained package:
+### 4. Package-Per-Index
+
+Each index implementation is a self-contained package:
 
 ```
-backends/
-├── __init__.py          # Backend factory and protocol definition
+indexes/
+├── __init__.py          # Index factory and protocol definition
 ├── usearch/
-│   ├── __init__.py      # UsearchBackend public API
-│   ├── backend.py       # Main backend implementation
+│   ├── __init__.py      # UsearchIndex public API
+│   ├── index.py         # Main index implementation
 │   ├── store.py         # LMDB storage layer (from existing store.py)
-│   └── indexes.py       # Usearch index management
+│   └── unit.py          # Usearch unit index management
 ├── postgres/
-│   ├── __init__.py      # PostgresBackend public API
-│   ├── backend.py       # Main backend implementation
+│   ├── __init__.py      # PostgresIndex public API
+│   ├── index.py         # Main index implementation
 │   ├── schema.py        # Database schema definitions
 │   └── queries.py       # SQL queries and operations
-└── client/
-    ├── __init__.py      # HttpClientBackend public API
-    └── backend.py       # HTTP client implementation
+└── memory/
+    ├── __init__.py      # MemoryIndex public API
+    └── index.py         # In-memory index implementation
 ```
 
 ## Module Structure
@@ -127,7 +136,7 @@ iscc_vdb/
 ├── __init__.py
 │
 ├── protocol.py              # IsccIndexProtocol definition
-├── config.py                # Configuration and backend factory
+├── settings.py              # Pydantic settings and index factory
 ├── models.py                # Existing data models (IsccItem, etc.)
 ├── schema.py                # Generated Pydantic models from OpenAPI
 │
@@ -143,18 +152,18 @@ iscc_vdb/
 │   ├── routes.py           # API route handlers
 │   └── errors.py           # Error handlers and exceptions
 │
-├── backends/
-│   ├── __init__.py         # Backend factory
-│   ├── usearch/            # Local LMDB + Usearch backend
-│   ├── postgres/           # Postgres + pgvector backend
-│   └── client/             # HTTP client backend
+├── indexes/
+│   ├── __init__.py         # Index factory
+│   ├── usearch/            # Local LMDB + Usearch index
+│   ├── postgres/           # Postgres + pgvector index
+│   └── memory/             # In-memory index (for testing)
 │
 ├── metrics.py               # NPHD metric implementation
 ├── nphd.py                  # NphdIndex for usearch
 ├── iscc.py                  # ISCC utilities
-├── lookup.py                # Lookup index (may be refactored into usearch backend)
-├── store.py                 # LMDB store (may be refactored into usearch backend)
-└── unit.py                  # Unit index (may be refactored into usearch backend)
+├── lookup.py                # Lookup index (may be refactored into usearch index)
+├── store.py                 # LMDB store (may be refactored into usearch index)
+└── unit.py                  # Unit index (may be refactored into usearch index)
 ```
 
 ## Core Components
@@ -254,65 +263,101 @@ class IsccIndexProtocol(Protocol):
         ...
 ```
 
-### Configuration (`config.py`)
+### Settings and Configuration (`settings.py`)
 
 ```python
-import os
 from pathlib import Path
 from urllib.parse import urlparse
+from pydantic import Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
+import iscc_vdb
 
-def get_index_uri() -> str:
+class VdbSettings(BaseSettings):
     """
-    Get INDEX_URI from environment or use default.
+    Application settings for ISCC-VDB.
 
-    :return: INDEX_URI string
+    Settings can be configured via:
+    - Environment variables (prefixed with ISCC_VDB_)
+    - .env file in the working directory
+    - Direct instantiation with parameters
+    - Runtime override using the override() method
     """
-    default = str(Path.home() / ".iscc-vdb" / "default.mdb")
-    return os.getenv("INDEX_URI", default)
 
-def get_backend() -> IsccIndexProtocol:
+    indexes_uri: str = Field(
+        iscc_vdb.dirs.user_data_dir,
+        description="Location where index data is stored (local file path or DSN)",
+    )
+
+    model_config = SettingsConfigDict(
+        env_prefix="ISCC_VDB_",
+        env_file_encoding="utf-8",
+        case_sensitive=True,
+        extra="ignore",
+        validate_assignment=True,
+    )
+
+    def override(self, update=None):
+        # type: (dict|None) -> VdbSettings
+        """
+        Returns an updated and validated deep copy of the current settings instance.
+
+        :param update: Dictionary of field names and values to override.
+        :return: New VdbSettings instance with updated and validated fields.
+        """
+        update = update or {}
+        settings = self.model_copy(deep=True)
+        for field, value in update.items():
+            setattr(settings, field, value)
+        return settings
+
+
+# Global settings instance
+vdb_settings = VdbSettings()
+
+
+def get_index() -> IsccIndexProtocol:
     """
-    Factory function to create backend from INDEX_URI.
+    Factory function to create index from settings.
 
-    Parses INDEX_URI to determine backend type:
-    - file:// or path → UsearchBackend
-    - postgresql:// → PostgresBackend
-    - http:// or https:// → HttpClientBackend
+    Parses indexes_uri to determine index type:
+    - file:// or path → UsearchIndex
+    - postgresql:// → PostgresIndex
+    - memory:// → MemoryIndex
 
-    :return: Backend instance implementing IsccIndexProtocol
+    :return: Index instance implementing IsccIndexProtocol
     :raises ValueError: If URI scheme is not supported
     """
-    uri = get_index_uri()
+    uri = vdb_settings.indexes_uri
     parsed = urlparse(uri)
 
     if parsed.scheme in ("", "file"):
         # Local file path
-        from iscc_vdb.backends.usearch import UsearchBackend
+        from iscc_vdb.indexes.usearch import UsearchIndex
         path = parsed.path if parsed.scheme == "file" else uri
-        return UsearchBackend(Path(path))
+        return UsearchIndex(Path(path))
 
     elif parsed.scheme in ("postgresql", "postgres"):
         # Postgres connection
-        from iscc_vdb.backends.postgres import PostgresBackend
-        return PostgresBackend(uri)
+        from iscc_vdb.indexes.postgres import PostgresIndex
+        return PostgresIndex(uri)
 
-    elif parsed.scheme in ("http", "https"):
-        # Remote HTTP API
-        from iscc_vdb.backends.client import HttpClientBackend
-        return HttpClientBackend(uri)
+    elif parsed.scheme == "memory":
+        # In-memory index
+        from iscc_vdb.indexes.memory import MemoryIndex
+        return MemoryIndex()
 
     else:
-        raise ValueError(f"Unsupported INDEX_URI scheme: {parsed.scheme}")
+        raise ValueError(f"Unsupported ISCC_VDB_INDEXES_URI scheme: {parsed.scheme}")
 ```
 
-### Usearch Backend (`backends/usearch/backend.py`)
+### Usearch Index (`indexes/usearch/index.py`)
 
 ```python
 from pathlib import Path
 from iscc_vdb.protocol import IsccIndexProtocol
 from iscc_vdb.schema import IsccIndex, IsccItem
 
-class UsearchBackend:
+class UsearchIndex:
     """
     Unified ISCC index using LMDB + per-UNIT-TYPE usearch indexes.
 
@@ -329,7 +374,7 @@ class UsearchBackend:
 
     def __init__(self, base_path: Path):
         """
-        Initialize UsearchBackend.
+        Initialize UsearchIndex.
 
         :param base_path: Base directory for all indexes
         """
@@ -356,7 +401,7 @@ class UsearchBackend:
         index_path.mkdir(parents=True)
 
         # Initialize LMDB store
-        from iscc_vdb.backends.usearch.store import IsccStore
+        from iscc_vdb.indexes.usearch.store import IsccStore
         store = IsccStore(index_path / "store.mdb")
         store.put_metadata("__created__", time.time())
         store.close()
@@ -489,7 +534,7 @@ class UsearchBackend:
         self._indexes.clear()
 ```
 
-### Postgres Backend (`backends/postgres/backend.py`)
+### Postgres Index (`indexes/postgres/index.py`)
 
 ```python
 import psycopg2
@@ -497,7 +542,7 @@ from psycopg2.pool import SimpleConnectionPool
 from iscc_vdb.protocol import IsccIndexProtocol
 from iscc_vdb.schema import IsccIndex, IsccItem
 
-class PostgresBackend:
+class PostgresIndex:
     """
     Unified ISCC index using Postgres + pgvector.
 
@@ -509,7 +554,7 @@ class PostgresBackend:
 
     def __init__(self, connection_string: str):
         """
-        Initialize PostgresBackend with connection pool.
+        Initialize PostgresIndex with connection pool.
 
         :param connection_string: Postgres DSN
         """
@@ -594,76 +639,114 @@ class PostgresBackend:
     # ... similar implementations for get_index, delete_index, add_items, search_items
 ```
 
-### HTTP Client Backend (`backends/client/backend.py`)
+### Memory Index (`indexes/memory/index.py`)
 
 ```python
-import requests
 from iscc_vdb.protocol import IsccIndexProtocol
 from iscc_vdb.schema import IsccIndex, IsccItem
 
-class HttpClientBackend:
+class MemoryIndex:
     """
-    HTTP client implementing IsccIndexProtocol.
+    In-memory index implementing IsccIndexProtocol.
 
-    Allows CLI to work with remote ISCC-VDB API servers.
+    Stores all data in memory using dictionaries. No persistence.
+    Useful for testing and development.
     """
 
-    def __init__(self, base_url: str):
+    def __init__(self):
         """
-        Initialize HTTP client.
-
-        :param base_url: Base URL of ISCC-VDB API server
+        Initialize MemoryIndex.
         """
-        self.base_url = base_url.rstrip("/")
-        self.session = requests.Session()
+        self._indexes = {}  # name -> {items: [], metadata: {}}
 
     def list_indexes(self) -> list[IsccIndex]:
-        """GET /indexes"""
-        resp = self.session.get(f"{self.base_url}/indexes")
-        resp.raise_for_status()
-        return [IsccIndex(**item) for item in resp.json()]
+        """List all in-memory indexes."""
+        indexes = []
+        for name, data in self._indexes.items():
+            indexes.append(IsccIndex(
+                name=name,
+                items=len(data["items"]),
+                size=0  # Memory indexes don't track size
+            ))
+        return indexes
 
     def create_index(self, index: IsccIndex) -> IsccIndex:
-        """POST /indexes"""
-        resp = self.session.post(
-            f"{self.base_url}/indexes",
-            json={"name": index.name}
-        )
-        if resp.status_code == 409:
+        """Create new in-memory index."""
+        if index.name in self._indexes:
             raise FileExistsError(f"Index '{index.name}' already exists")
-        resp.raise_for_status()
-        return IsccIndex(**resp.json())
+
+        self._indexes[index.name] = {
+            "items": [],
+            "metadata": {}
+        }
+        return IsccIndex(name=index.name, items=0, size=0)
+
+    def get_index(self, name: str) -> IsccIndex:
+        """Get index metadata."""
+        if name not in self._indexes:
+            raise FileNotFoundError(f"Index '{name}' not found")
+
+        data = self._indexes[name]
+        return IsccIndex(
+            name=name,
+            items=len(data["items"]),
+            size=0
+        )
+
+    def delete_index(self, name: str) -> None:
+        """Delete in-memory index."""
+        if name not in self._indexes:
+            raise FileNotFoundError(f"Index '{name}' not found")
+
+        del self._indexes[name]
 
     def add_items(self, index_name: str, items: list[IsccItem]) -> int:
-        """POST /indexes/{name}/items"""
-        resp = self.session.post(
-            f"{self.base_url}/indexes/{index_name}/items",
-            json=[item.dict() for item in items]
-        )
-        if resp.status_code == 404:
+        """Add items to in-memory index."""
+        if index_name not in self._indexes:
             raise FileNotFoundError(f"Index '{index_name}' not found")
-        resp.raise_for_status()
-        return resp.json()["added"]
+
+        self._indexes[index_name]["items"].extend(items)
+        return len(items)
+
+    def search_items(
+        self,
+        index_name: str,
+        query: IsccItem,
+        limit: int = 100
+    ) -> list[dict]:
+        """Search for similar items (simple exact match for testing)."""
+        if index_name not in self._indexes:
+            raise FileNotFoundError(f"Index '{index_name}' not found")
+
+        # Simple implementation for testing
+        results = []
+        for item in self._indexes[index_name]["items"]:
+            if item.iscc_code == query.iscc_code:
+                results.append({
+                    "iscc_id": item.iscc_id,
+                    "score": 1.0,
+                    "matches": {},
+                    "entry": item.dict()
+                })
+        return results[:limit]
 
     def close(self) -> None:
-        """Close session."""
-        self.session.close()
-
-    # ... similar implementations for other methods
+        """No-op for in-memory index."""
+        pass
 ```
 
 ### FastAPI Server (`server/app.py`)
 
 ```python
 from fastapi import FastAPI, Request
-from iscc_vdb.config import get_backend
+from iscc_vdb.settings import get_index
 from iscc_vdb.server import routes
 
 def create_app() -> FastAPI:
     """
     Create FastAPI application.
 
-    Backend is determined by INDEX_URI environment variable.
+    Index implementation is determined by ISCC_VDB_INDEXES_URI environment variable.
     """
     app = FastAPI(
         title="ISCC-VDB API",
@@ -671,15 +754,15 @@ def create_app() -> FastAPI:
         description="Scalable Nearest Neighbor Search Multi-Index for ISCC"
     )
 
-    # Initialize backend from INDEX_URI
-    app.state.backend = get_backend()
+    # Initialize index from settings
+    app.state.index = get_index()
 
     # Include routes
     app.include_router(routes.router)
 
     @app.on_event("shutdown")
     def shutdown():
-        app.state.backend.close()
+        app.state.index.close()
 
     return app
 
@@ -696,15 +779,15 @@ from iscc_vdb.protocol import IsccIndexProtocol
 
 router = APIRouter()
 
-def get_backend(request: Request) -> IsccIndexProtocol:
-    """Get backend from app state."""
-    return request.app.state.backend
+def get_index_impl(request: Request) -> IsccIndexProtocol:
+    """Get index implementation from app state."""
+    return request.app.state.index
 
 @router.get("/indexes", response_model=list[IsccIndex])
 def list_indexes(request: Request):
     """List all indexes."""
-    backend = get_backend(request)
-    return backend.list_indexes()
+    index = get_index_impl(request)
+    return index.list_indexes()
 
 @router.post(
     "/indexes",
@@ -713,9 +796,9 @@ def list_indexes(request: Request):
 )
 def create_index(index: IsccIndex, request: Request):
     """Create a new index."""
-    backend = get_backend(request)
+    idx = get_index_impl(request)
     try:
-        return backend.create_index(index)
+        return idx.create_index(index)
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -730,9 +813,9 @@ def create_index(index: IsccIndex, request: Request):
 @router.get("/indexes/{name}", response_model=IsccIndex)
 def get_index(name: str, request: Request):
     """Get index metadata."""
-    backend = get_backend(request)
+    idx = get_index_impl(request)
     try:
-        return backend.get_index(name)
+        return idx.get_index(name)
     except FileNotFoundError:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -742,9 +825,9 @@ def get_index(name: str, request: Request):
 @router.delete("/indexes/{name}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_index(name: str, request: Request):
     """Delete an index."""
-    backend = get_backend(request)
+    idx = get_index_impl(request)
     try:
-        backend.delete_index(name)
+        idx.delete_index(name)
     except FileNotFoundError:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -754,9 +837,9 @@ def delete_index(name: str, request: Request):
 @router.post("/indexes/{name}/items")
 def add_items(name: str, items: list[IsccItem], request: Request):
     """Add items to index."""
-    backend = get_backend(request)
+    idx = get_index_impl(request)
     try:
-        added = backend.add_items(name, items)
+        added = idx.add_items(name, items)
         return {"added": added}
     except FileNotFoundError:
         raise HTTPException(
@@ -772,9 +855,9 @@ def search_items(
     request: Request = None
 ):
     """Search for similar items."""
-    backend = get_backend(request)
+    idx = get_index_impl(request)
     try:
-        return backend.search_items(name, query, limit)
+        return idx.search_items(name, query, limit)
     except FileNotFoundError:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -787,7 +870,7 @@ def search_items(
 ```python
 import typer
 from pathlib import Path
-from iscc_vdb.config import get_backend
+from iscc_vdb.settings import get_index
 from iscc_vdb.schema import IsccIndex, IsccItem
 
 app = typer.Typer(name="iscc-vdb", help="ISCC Vector Database CLI")
@@ -795,8 +878,8 @@ app = typer.Typer(name="iscc-vdb", help="ISCC Vector Database CLI")
 @app.command()
 def list():
     """List all indexes."""
-    backend = get_backend()
-    indexes = backend.list_indexes()
+    index = get_index()
+    indexes = index.list_indexes()
 
     if not indexes:
         typer.echo("No indexes found")
@@ -805,47 +888,47 @@ def list():
     for idx in indexes:
         typer.echo(f"{idx.name}: {idx.items} items, {idx.size} MB")
 
-    backend.close()
+    index.close()
 
 @app.command()
 def create(name: str):
     """Create a new index."""
-    backend = get_backend()
+    index = get_index()
 
     try:
-        result = backend.create_index(IsccIndex(name=name))
+        result = index.create_index(IsccIndex(name=name))
         typer.echo(f"Created index: {result.name}")
     except FileExistsError as e:
         typer.echo(f"Error: {e}", err=True)
         raise typer.Exit(1)
     finally:
-        backend.close()
+        index.close()
 
 @app.command()
 def delete(name: str):
     """Delete an index."""
-    backend = get_backend()
+    index = get_index()
 
     # Confirm deletion
     confirm = typer.confirm(f"Delete index '{name}' and all its data?")
     if not confirm:
         typer.echo("Cancelled")
-        backend.close()
+        index.close()
         return
 
     try:
-        backend.delete_index(name)
+        index.delete_index(name)
         typer.echo(f"Deleted index: {name}")
     except FileNotFoundError as e:
         typer.echo(f"Error: {e}", err=True)
         raise typer.Exit(1)
     finally:
-        backend.close()
+        index.close()
 
 @app.command()
 def add(index_name: str, directory: Path):
     """Add items from directory to index."""
-    backend = get_backend()
+    index = get_index()
 
     # Scan for *.iscc.json files
     json_files = list(directory.rglob("*.iscc.json"))
@@ -853,7 +936,7 @@ def add(index_name: str, directory: Path):
 
     if not json_files:
         typer.echo("No files to add")
-        backend.close()
+        index.close()
         return
 
     # Load items
@@ -868,13 +951,13 @@ def add(index_name: str, directory: Path):
 
     # Add to index
     try:
-        added = backend.add_items(index_name, items)
+        added = index.add_items(index_name, items)
         typer.echo(f"Added {added} items to {index_name}")
     except FileNotFoundError as e:
         typer.echo(f"Error: {e}", err=True)
         raise typer.Exit(1)
     finally:
-        backend.close()
+        index.close()
 
 @app.command()
 def search(
@@ -883,11 +966,11 @@ def search(
     limit: int = typer.Option(100, "--limit", "-n")
 ):
     """Search index for similar items."""
-    backend = get_backend()
+    index = get_index()
 
     try:
         query = IsccItem(iscc_code=iscc_code)
-        results = backend.search_items(index_name, query, limit)
+        results = index.search_items(index_name, query, limit)
 
         import json
         typer.echo(json.dumps(results, indent=2))
@@ -895,7 +978,7 @@ def search(
         typer.echo(f"Error: {e}", err=True)
         raise typer.Exit(1)
     finally:
-        backend.close()
+        index.close()
 
 if __name__ == "__main__":
     app()
@@ -903,11 +986,11 @@ if __name__ == "__main__":
 
 ## Usage Examples
 
-### Local Index (Usearch Backend)
+### Local Index (Usearch)
 
 ```bash
-# Set INDEX_URI to local path (or use default ~/.iscc-vdb/default.mdb)
-export INDEX_URI=/path/to/myindex.mdb
+# Set ISCC_VDB_INDEXES_URI to local path (or use default from platformdirs)
+export ISCC_VDB_INDEXES_URI=/path/to/index_data
 
 # CLI commands
 iscc-vdb create myindex
@@ -916,67 +999,72 @@ iscc-vdb search myindex "ISCC:..."
 iscc-vdb list
 iscc-vdb delete myindex
 
-# Start API server with local backend
+# Start API server with local usearch index
 uvicorn iscc_vdb.server.app:app --host 0.0.0.0 --port 8000
 ```
 
-### Postgres Backend
+### Postgres Index
 
 ```bash
-# Set INDEX_URI to Postgres connection string
-export INDEX_URI=postgresql://user:password@localhost/isccdb
+# Set ISCC_VDB_INDEXES_URI to Postgres connection string
+export ISCC_VDB_INDEXES_URI=postgresql://user:password@localhost/isccdb
 
 # CLI works the same
 iscc-vdb create myindex
 iscc-vdb add myindex /data/
 iscc-vdb search myindex "ISCC:..."
 
-# Start API server with Postgres backend
+# Start API server with Postgres index
 uvicorn iscc_vdb.server.app:app --host 0.0.0.0 --port 8000
 ```
 
-### Remote API Access (HTTP Client Backend)
+### Memory Index (Testing)
 
 ```bash
-# Set INDEX_URI to remote API server
-export INDEX_URI=http://api.example.com
+# Set ISCC_VDB_INDEXES_URI to memory:// for in-memory index
+export ISCC_VDB_INDEXES_URI=memory://
 
-# CLI transparently uses remote backend
-iscc-vdb list
+# CLI works with in-memory storage (no persistence)
+iscc-vdb create myindex
+iscc-vdb add myindex /data/
 iscc-vdb search myindex "ISCC:..."
+
+# Start API server with in-memory index (for testing)
+uvicorn iscc_vdb.server.app:app --host 0.0.0.0 --port 8000
 ```
 
 ### Mixed Deployment
 
 ```bash
-# Server A: API with Postgres backend (shared database)
-# INDEX_URI=postgresql://shared-db/iscc
+# Server A: API with Postgres index (shared database)
+# ISCC_VDB_INDEXES_URI=postgresql://shared-db/iscc
 uvicorn iscc_vdb.server.app:app --host 0.0.0.0 --port 8000
 
-# Server B: API with same Postgres backend (horizontal scaling)
-# INDEX_URI=postgresql://shared-db/iscc
+# Server B: API with same Postgres index (horizontal scaling)
+# ISCC_VDB_INDEXES_URI=postgresql://shared-db/iscc
 uvicorn iscc_vdb.server.app:app --host 0.0.0.0 --port 8001
 
-# Developer workstation: CLI with local backend
-# INDEX_URI=/home/user/.iscc-vdb/local.mdb
+# Developer workstation: CLI with local usearch index
+# ISCC_VDB_INDEXES_URI=/home/user/iscc-indexes
 iscc-vdb add myindex /data/
 
-# CI/CD pipeline: CLI with remote API
-# INDEX_URI=http://api.example.com
-iscc-vdb search production "ISCC:..."
+# Testing environment: CLI with in-memory index
+# ISCC_VDB_INDEXES_URI=memory://
+iscc-vdb search test "ISCC:..."
 ```
 
 ## Key Benefits
 
-1. **Clean Abstraction**: Protocol-based design enables backend swapping without changing frontend code
-2. **Simple Configuration**: Single INDEX_URI variable determines entire deployment topology
-3. **Modular Packages**: Each backend is self-contained and independently testable
+1. **Clean Abstraction**: Protocol-based design enables index swapping without changing frontend code
+2. **Simple Configuration**: Single `ISCC_VDB_INDEXES_URI` variable determines entire deployment topology
+3. **Modular Packages**: Each index implementation is self-contained and independently testable
 4. **Synchronous Simplicity**: No async complexity, straightforward implementation
-5. **Zero Code Duplication**: CLI and API share identical backend implementations
-6. **Type Safety**: Protocol ensures compile-time verification of backend implementations
-7. **Flexible Deployment**: Local, remote, shared database, or hybrid configurations
-8. **Easy Testing**: Mock the protocol for unit tests, use different backends for integration tests
-9. **Future-Proof**: Add new backends without modifying existing code
+5. **Zero Code Duplication**: CLI and API share identical index implementations
+6. **Type Safety**: Protocol + Pydantic ensures compile-time and runtime validation
+7. **Flexible Deployment**: Local, postgres, in-memory, or hybrid configurations
+8. **Easy Testing**: Mock the protocol for unit tests, use different indexes for integration tests (especially
+    MemoryIndex)
+9. **Future-Proof**: Add new index implementations without modifying existing code
 10. **Developer Friendly**: Clear separation of concerns, easy to understand and extend
 
 ## Implementation Strategy
@@ -984,16 +1072,16 @@ iscc-vdb search production "ISCC:..."
 ### Phase 1: Foundation
 
 1. Define `IsccIndexProtocol` in `protocol.py`
-2. Create `config.py` with URI parsing and backend factory
+2. Create `settings.py` with Pydantic settings and index factory
 3. Update OpenAPI spec with item endpoints
 4. Regenerate `schema.py` from OpenAPI
 
-### Phase 2: Usearch Backend
+### Phase 2: Usearch Index
 
-1. Create `backends/usearch/` package structure
-2. Move/refactor existing `store.py`, `lookup.py`, `unit.py` into backend
-3. Implement `UsearchBackend` with protocol methods
-4. Write unit tests for backend
+1. Create `indexes/usearch/` package structure
+2. Move/refactor existing `store.py`, `lookup.py`, `unit.py` into index package
+3. Implement `UsearchIndex` with protocol methods
+4. Write unit tests for index
 
 ### Phase 3: Server Package
 
@@ -1009,17 +1097,17 @@ iscc-vdb search production "ISCC:..."
 3. Add utilities for file loading, formatting
 4. Write CLI tests
 
-### Phase 5: Additional Backends
+### Phase 5: Additional Indexes
 
-1. Implement `PostgresBackend` in `backends/postgres/`
-2. Implement `HttpClientBackend` in `backends/client/`
-3. Write backend-specific tests
+1. Implement `PostgresIndex` in `indexes/postgres/`
+2. Implement `MemoryIndex` in `indexes/memory/`
+3. Write index-specific tests
 4. Update documentation
 
 ### Phase 6: Polish
 
 1. Add comprehensive documentation
-2. Create deployment guides for each backend
+2. Create deployment guides for each index implementation
 3. Add performance benchmarks
 4. Optimize based on profiling
 
@@ -1028,27 +1116,29 @@ iscc-vdb search production "ISCC:..."
 ### Unit Tests
 
 - Mock `IsccIndexProtocol` for frontend tests (CLI, API routes)
-- Test each backend in isolation with its own storage
-- Test protocol conformance for each backend implementation
+- Test each index implementation in isolation with its own storage
+- Test protocol conformance for each index implementation
 
 ### Integration Tests
 
-- Test full stack with UsearchBackend (file-based, no external dependencies)
-- Test full stack with PostgresBackend (requires test database)
-- Test CLI → API → Backend workflows
+- Test full stack with UsearchIndex (file-based, no external dependencies)
+- Test full stack with PostgresIndex (requires test database)
+- Test full stack with MemoryIndex (fast, in-memory, ideal for testing)
+- Test CLI → API → Index workflows
 
 ### End-to-End Tests
 
-- Test deployment scenarios (local, remote, postgres)
-- Test mixed configurations (CLI to remote API)
+- Test deployment scenarios (local, postgres, in-memory)
+- Test mixed configurations (different indexes for different environments)
 - Performance tests with real datasets
 
 ## Future Extensions
 
-- **Redis Backend**: In-memory index for hot data
-- **S3 Backend**: Cloud storage for massive archives
-- **Hybrid Backend**: Combine multiple backends with routing logic
+- **Redis Index**: Distributed in-memory index for hot data
+- **S3 Index**: Cloud storage for massive archives
+- **Hybrid Index**: Combine multiple index implementations with routing logic
+- **HTTP Client Index**: Remote API client for distributed deployments
 - **Async Support**: Add async variants of protocol methods
 - **Batch Operations**: Optimize bulk add/search operations
-- **Index Replication**: Sync indexes across backends
+- **Index Replication**: Sync indexes across implementations
 - **Access Control**: Add authentication/authorization layer

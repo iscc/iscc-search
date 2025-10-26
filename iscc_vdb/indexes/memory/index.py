@@ -8,6 +8,7 @@ scenarios where persistence isn't needed.
 
 import re
 from iscc_vdb.schema import IsccAddResult, IsccIndex, IsccMatch, IsccSearchResult, Metric, Status
+from iscc_vdb.indexes import common
 
 
 INDEX_NAME_PATTERN = re.compile(r"^[a-z][a-z0-9]*$")
@@ -174,22 +175,29 @@ class MemoryIndex:
         on iscc_code. For production use, a real similarity search backend
         like usearch should be used.
 
+        Accepts query with either iscc_code or units (or both). If only units
+        are provided, iscc_code is automatically derived for matching.
+
         :param index_name: Target index name
-        :param query: IsccAsset to search for
+        :param query: IsccAsset with iscc_code or units (or both)
         :param limit: Maximum number of results
         :return: IsccSearchResult with matches
         :raises FileNotFoundError: If index doesn't exist
-        :raises ValueError: If query asset is invalid
+        :raises ValueError: If query has neither iscc_code nor units
         """
         if index_name not in self._indexes:
             raise FileNotFoundError(f"Index '{index_name}' not found")
+
+        # Normalize query to ensure it has units (derive from iscc_code if needed)
+        # This ensures consistent behavior across backends
+        query = common.normalize_query_asset(query)
 
         # Simple implementation: exact match on iscc_code if available
         match_list = []
         index_data = self._indexes[index_name]
 
         for asset in index_data["assets"].values():
-            # Match by iscc_code if both query and asset have it
+            # Match by iscc_code (query always has iscc_code after normalization)
             if query.iscc_code and asset.iscc_code:
                 if asset.iscc_code == query.iscc_code:
                     match_list.append(
@@ -199,15 +207,6 @@ class MemoryIndex:
                             matches={},
                         )
                     )
-            # Match by iscc_id if query has it
-            elif query.iscc_id and asset.iscc_id == query.iscc_id:
-                match_list.append(
-                    IsccMatch(
-                        iscc_id=asset.iscc_id,  # type: ignore
-                        score=1.0,
-                        matches={},
-                    )
-                )
 
         return IsccSearchResult(
             query=query,

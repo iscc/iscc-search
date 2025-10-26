@@ -12,7 +12,7 @@ import re
 import json
 import iscc_core as ic
 from iscc_vdb.schema import IsccAsset
-from iscc_vdb.models import IsccUnit
+from iscc_vdb.models import IsccUnit, IsccCode
 
 
 # Validation patterns
@@ -189,3 +189,37 @@ def validate_iscc_id(iscc_id):
     mt, _realm, _vs, _len, _body = ic.decode_header(code_bytes)
     if mt != ic.MT.ID:
         raise ValueError(f"Invalid ISCC-ID main type: {mt} (expected {ic.MT.ID})")
+
+
+def normalize_query_asset(query):
+    # type: (IsccAsset) -> IsccAsset
+    """
+    Normalize query asset to ensure it has units for search.
+
+    Indexes should use units for similarity search because they may contain
+    more bits than the compressed iscc_code representation. This function
+    ensures query assets always have units by:
+
+    1. If query has units → use them directly (may have more bits)
+    2. If query has no units but has iscc_code → derive units from code
+    3. If query has neither → raise error
+
+    :param query: Query asset (may have iscc_code or units or both)
+    :return: Query asset with units guaranteed to be present
+    :raises ValueError: If query has neither iscc_code nor units
+    """
+    # Already has units - prefer them (may have more bits than code)
+    if query.units:
+        return query
+
+    # No units but has iscc_code - derive units from code
+    if query.iscc_code:
+        # Decompose ISCC-CODE into ISCC-UNITs
+        code = IsccCode(query.iscc_code)
+        units = [str(unit) for unit in code.units]
+
+        # Return new asset with derived units
+        return query.model_copy(update={"units": units})
+
+    # Neither units nor iscc_code - cannot search
+    raise ValueError("Query asset must have either 'iscc_code' or 'units' for search")

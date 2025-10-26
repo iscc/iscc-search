@@ -169,10 +169,10 @@ def test_search_assets_basic(lmdb_index, sample_assets):
 
 
 def test_search_assets_no_units(lmdb_index, sample_iscc_ids):
-    """Test search without units raises error."""
+    """Test search without units or iscc_code raises error."""
     query = IsccAsset(iscc_id=sample_iscc_ids[0])
 
-    with pytest.raises(ValueError, match="must have units"):
+    with pytest.raises(ValueError, match="must have either 'iscc_code' or 'units'"):
         lmdb_index.search_assets(query)
 
 

@@ -3,6 +3,8 @@ $id: "http://purl.org/iscc/schema/iscc-index.json"
 title: "IsccIndex"
 type: object
 description: A named index for searching and matching ISCCs
+required:
+  - name
 properties:
   name:
     type: string
@@ -13,13 +15,15 @@ properties:
     example: "default"
   items:
     type: integer
-    description: Number of ISCCs in the index
+    description: Number of ISCCs in the index (server-generated, read-only)
     minimum: 0
+    readOnly: true
     example: 150000
   size:
     type: integer
-    description: Size of index in megabytes
+    description: Size of index in megabytes (server-generated, read-only)
     minimum: 0
+    readOnly: true
     example: 42
 example:
   name: "production"

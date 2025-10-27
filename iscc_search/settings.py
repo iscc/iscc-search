@@ -1,8 +1,8 @@
 """
-Settings management for ISCC-VDB.
+Settings management for ISCC-Search.
 
 Provides configuration management using Pydantic settings with support for:
-- Environment variables with ISCC_VDB_ prefix
+- Environment variables with ISCC_SEARCH_ prefix
 - .env file loading
 - Runtime settings override
 - Type validation and defaults
@@ -15,18 +15,18 @@ import iscc_search
 
 
 __all__ = [
-    "VdbSettings",
-    "vdb_settings",
+    "SearchSettings",
+    "search_settings",
     "get_index",
 ]
 
 
-class VdbSettings(BaseSettings):
+class SearchSettings(BaseSettings):
     """
-    Application settings for ISCC-VDB.
+    Application settings for ISCC-Search.
 
     Settings can be configured via:
-    - Environment variables (prefixed with ISCC_VDB_)
+    - Environment variables (prefixed with ISCC_SEARCH_)
     - .env file in the working directory
     - Direct instantiation with parameters
     - Runtime override using the override() method
@@ -41,7 +41,7 @@ class VdbSettings(BaseSettings):
     )
 
     model_config = SettingsConfigDict(
-        env_prefix="ISCC_VDB_",
+        env_prefix="ISCC_SEARCH_",
         env_file_encoding="utf-8",
         case_sensitive=True,
         extra="ignore",
@@ -49,12 +49,12 @@ class VdbSettings(BaseSettings):
     )
 
     def override(self, update=None):
-        # type: (dict|None) -> VdbSettings
+        # type: (dict|None) -> SearchSettings
         """
         Returns an updated and validated deep copy of the current settings instance.
 
         :param update: Dictionary of field names and values to override.
-        :return: New VdbSettings instance with updated and validated fields.
+        :return: New SearchSettings instance with updated and validated fields.
         """
 
         update = update or {}  # sets {} if update is None
@@ -66,7 +66,7 @@ class VdbSettings(BaseSettings):
         return settings
 
 
-vdb_settings = VdbSettings()
+search_settings = SearchSettings()
 
 
 def get_index():
@@ -88,7 +88,7 @@ def get_index():
     from iscc_search.protocol import IsccIndexProtocol  # noqa: F401
     import os
 
-    uri = vdb_settings.indexes_uri
+    uri = search_settings.indexes_uri
 
     # Handle memory:// scheme
     if uri == "memory://" or uri.startswith("memory://"):
@@ -116,7 +116,7 @@ def get_index():
     # Reject unsupported URI schemes to prevent silent data loss
     supported = ["memory://", "file path", "file://"]
     raise ValueError(
-        f"Unsupported ISCC_VDB_INDEXES_URI: '{uri}'. "
+        f"Unsupported ISCC_SEARCH_INDEXES_URI: '{uri}'. "
         f"Currently supported schemes: {', '.join(supported)}. "
         f"PostgreSQL URIs are not yet implemented."
     )

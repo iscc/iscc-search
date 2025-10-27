@@ -1,9 +1,9 @@
-# ISCC-VDB Architecture
+# ISCC-Search Architecture
 
 ## Overview
 
-ISCC-VDB implements a clean, protocol-based architecture that supports multiple index implementations through a
-unified interface. The system uses Python's `typing.Protocol` to define an index abstraction that enables both
+ISCC-Search implements a clean, protocol-based architecture that supports multiple index implementations through
+a unified interface. The system uses Python's `typing.Protocol` to define an index abstraction that enables both
 CLI and REST API frontends to work seamlessly with different storage implementations.
 
 **Current Implementation Status**:
@@ -100,19 +100,19 @@ All operations are synchronous for simplicity:
 
 ### 3. Pydantic Settings-Based Configuration
 
-Single `ISCC_VDB_INDEXES_URI` environment variable determines index implementation:
+Single `ISCC_SEARCH_INDEXES_URI` environment variable determines index implementation:
 
-- **memory://**: `ISCC_VDB_INDEXES_URI=memory://` → MemoryIndex (in-memory, no persistence) **[IMPLEMENTED]**
-- **Directory path**: `ISCC_VDB_INDEXES_URI=/path/to/index_data` → LmdbIndexManager (file-based persistence)
+- **memory://**: `ISCC_SEARCH_INDEXES_URI=memory://` → MemoryIndex (in-memory, no persistence) **[IMPLEMENTED]**
+- **Directory path**: `ISCC_SEARCH_INDEXES_URI=/path/to/index_data` → LmdbIndexManager (file-based persistence)
     **[IMPLEMENTED]**
-- **Postgres DSN**: `ISCC_VDB_INDEXES_URI=postgresql://user:pass@host/db` → PostgresIndex **[PLANNED]**
+- **Postgres DSN**: `ISCC_SEARCH_INDEXES_URI=postgresql://user:pass@host/db` → PostgresIndex **[PLANNED]**
 - **Default**: Uses `platformdirs` to determine OS-appropriate user data directory → LmdbIndexManager
     **[IMPLEMENTED]**
 
 Configuration uses Pydantic Settings for:
 
 - Type validation and coercion
-- Environment variable loading with `ISCC_VDB_` prefix
+- Environment variable loading with `ISCC_SEARCH_` prefix
 - `.env` file support
 - Runtime override capability
 - Clear documentation of all settings
@@ -222,10 +222,10 @@ All methods are synchronous. Backends may use threading/connection pools interna
 
 ### Settings and Configuration (`settings.py`)
 
-**VdbSettings**: Pydantic settings class with:
+**SearchSettings**: Pydantic settings class with:
 
 - `indexes_uri` - Location for index data (path or DSN), defaults to OS user data directory
-- Environment variable support (`ISCC_VDB_` prefix)
+- Environment variable support (`ISCC_SEARCH_` prefix)
 - `.env` file support
 - `override()` method for runtime configuration changes
 
@@ -318,8 +318,8 @@ All methods are synchronous. Backends may use threading/connection pools interna
 ### LMDB Index (Production)
 
 ```bash
-# Set ISCC_VDB_INDEXES_URI to local path (or use default from platformdirs)
-export ISCC_VDB_INDEXES_URI=/path/to/index_data
+# Set ISCC_SEARCH_INDEXES_URI to local path (or use default from platformdirs)
+export ISCC_SEARCH_INDEXES_URI=/path/to/index_data
 
 # CLI commands
 iscc-search create myindex
@@ -335,8 +335,8 @@ uvicorn iscc_search.server.app:app --host 0.0.0.0 --port 8000
 ### Memory Index (Testing)
 
 ```bash
-# Set ISCC_VDB_INDEXES_URI to memory:// for in-memory index
-export ISCC_VDB_INDEXES_URI=memory://
+# Set ISCC_SEARCH_INDEXES_URI to memory:// for in-memory index
+export ISCC_SEARCH_INDEXES_URI=memory://
 
 # CLI works with in-memory storage (no persistence)
 iscc-search create myindex
@@ -350,8 +350,8 @@ uvicorn iscc_search.server.app:app --host 0.0.0.0 --port 8000
 ### Postgres Index (Future)
 
 ```bash
-# Set ISCC_VDB_INDEXES_URI to Postgres connection string
-export ISCC_VDB_INDEXES_URI=postgresql://user:password@localhost/isccdb
+# Set ISCC_SEARCH_INDEXES_URI to Postgres connection string
+export ISCC_SEARCH_INDEXES_URI=postgresql://user:password@localhost/isccdb
 
 # CLI and server work the same way across all backends
 iscc-search create myindex
@@ -361,7 +361,7 @@ uvicorn iscc_search.server.app:app --host 0.0.0.0 --port 8000
 ## Key Benefits
 
 1. **Clean Abstraction**: Protocol-based design enables index swapping without changing frontend code
-2. **Simple Configuration**: Single `ISCC_VDB_INDEXES_URI` variable determines entire deployment topology
+2. **Simple Configuration**: Single `ISCC_SEARCH_INDEXES_URI` variable determines entire deployment topology
 3. **Modular Packages**: Each index implementation is self-contained and independently testable
 4. **Synchronous Simplicity**: No async complexity, straightforward implementation
 5. **Zero Code Duplication**: CLI and API share identical index implementations
@@ -376,7 +376,7 @@ uvicorn iscc_search.server.app:app --host 0.0.0.0 --port 8000
 ### Phase 1: Foundation ✓ **COMPLETED**
 
 - Protocol definition (`IsccIndexProtocol`)
-- Settings and configuration (`VdbSettings`, `get_index()`)
+- Settings and configuration (`SearchSettings`, `get_index()`)
 - Schema models from OpenAPI specification
 - Index factory with URI parsing
 

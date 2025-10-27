@@ -1,4 +1,4 @@
-"""Entry point for running ISCC-VDB server as a module."""
+"""Entry point for running ISCC-Search server as a module."""
 
 import uvicorn
 
@@ -6,7 +6,7 @@ import uvicorn
 def main():
     # type: () -> None
     """
-    Start the ISCC-VDB API server.
+    Start the ISCC-Search API server.
 
     Runs uvicorn server with hot reload enabled in development mode.
     """

@@ -8,7 +8,7 @@ import pytest
 import iscc_core as ic
 from iscc_search.schema import IsccAsset, IsccIndex
 from iscc_search.indexes.lmdb import LmdbIndexManager
-from iscc_search.settings import VdbSettings, get_index
+from iscc_search.settings import SearchSettings, get_index
 
 
 @pytest.fixture
@@ -158,13 +158,13 @@ def test_update_asset_metadata(manager, sample_iscc_ids, sample_content_units):
 def test_settings_integration_file_path(tmp_path):
     """Test get_index() factory with file path in settings."""
     # Set indexes_uri to file path
-    settings = VdbSettings(indexes_uri=str(tmp_path))
+    settings = SearchSettings(indexes_uri=str(tmp_path))
 
     # Override global settings (for this test)
     import iscc_search.settings
 
-    original_settings = iscc_search.settings.vdb_settings
-    iscc_search.settings.vdb_settings = settings
+    original_settings = iscc_search.settings.search_settings
+    iscc_search.settings.search_settings = settings
 
     try:
         # Get index via factory
@@ -177,7 +177,7 @@ def test_settings_integration_file_path(tmp_path):
         idx.close()
     finally:
         # Restore original settings
-        iscc_search.settings.vdb_settings = original_settings
+        iscc_search.settings.search_settings = original_settings
 
 
 def test_persistence_across_manager_instances(tmp_path, sample_assets):

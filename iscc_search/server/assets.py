@@ -1,4 +1,4 @@
-"""Asset management endpoints for ISCC-VDB API."""
+"""Asset management endpoints for ISCC-Search API."""
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from iscc_search.protocol import IsccIndexProtocol

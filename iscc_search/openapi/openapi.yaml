@@ -1,6 +1,6 @@
 openapi: 3.1.0
 info:
-  title: ISCC-VDB API
+  title: ISCC-Search API
   description: A Scalable Nearest Neighbor Search Multi-Index for the International Standard Content Code (ISCC)
   version: 0.1.0
 servers:

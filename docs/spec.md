@@ -1,4 +1,4 @@
-# ISCC-VDB Spec - Draft
+# ISCC-Search Spec - Draft
 
 A Scalable Nearest Neighbor Search Multi-Index for the International Standard Content Code (ISCC)
 
@@ -41,7 +41,7 @@ The ISCC Framework consist of a collection of python libraries and applications 
 
 **Helpful Note**: These repositories are all available on deepwiki
 
-## ISCC-VDB Features
+## ISCC-Search Features
 
 - ISCC-CODEs or extended ISCC-UNITs as bit-vectors for fast similarity search
 - Distance Metric: Normalized Prefix Hamming Distance (NPHD)

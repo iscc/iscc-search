@@ -4,10 +4,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**iscc-search** is a high-performance ISCC similarity search engine for ISCC (International Standard Content Code).
-In active development (v0.0.1), it provides high-performance vector similarity search for variable-length binary ISCC
-vectors using the Normalized Prefix Hamming Distance (NPHD) metric. Built on top of usearch for fast approximate
-nearest neighbor search.
+**iscc-search** is a high-performance ISCC similarity search engine for ISCC (International Standard Content
+Code). In active development (v0.0.1), it provides high-performance vector similarity search for variable-length
+binary ISCC vectors using the Normalized Prefix Hamming Distance (NPHD) metric. Built on top of usearch for fast
+approximate nearest neighbor search.
 
 ## Development Commands
 

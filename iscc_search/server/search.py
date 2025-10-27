@@ -1,4 +1,4 @@
-"""Search endpoints for ISCC-VDB API."""
+"""Search endpoints for ISCC-Search API."""
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from iscc_search.protocol import IsccIndexProtocol

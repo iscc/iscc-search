@@ -1,4 +1,4 @@
-"""FastAPI server for ISCC-VDB API."""
+"""FastAPI server for ISCC-Search API."""
 
 import typing  # noqa: F401
 from contextlib import asynccontextmanager
@@ -45,7 +45,7 @@ def get_index_from_state(request: Request):
 # Create FastAPI app instance with lifespan management
 app = FastAPI(
     lifespan=lifespan,
-    title="ISCC-VDB API",
+    title="ISCC-Search API",
     description="A Scalable Nearest Neighbor Search Multi-Index for the International Standard Content Code (ISCC)",
     version="0.1.0",
     docs_url=None,  # Disable default docs

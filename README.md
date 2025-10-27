@@ -11,8 +11,8 @@
 >
 > The API and features are subject to significant changes. Use at your own risk.
 
-High-performance ISCC similarity search engine for variable-length binary [ISCC](https://iscc.codes) codes with fast
-approximate nearest neighbor search.
+High-performance ISCC similarity search engine for variable-length binary [ISCC](https://iscc.codes) codes with
+fast approximate nearest neighbor search.
 
 - **Github repository**: <https://github.com/iscc/iscc-search/>
 - **Documentation** <https://search.iscc.codes/>

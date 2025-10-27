@@ -1,4 +1,4 @@
-"""Test FastAPI server for ISCC-VDB API."""
+"""Test FastAPI server for ISCC-Search API."""
 
 from unittest.mock import patch, MagicMock
 import pytest
@@ -21,20 +21,20 @@ def client():
     import iscc_search.settings
 
     # Save original URI and set to memory://
-    original_uri = iscc_search.settings.vdb_settings.indexes_uri
-    iscc_search.settings.vdb_settings.indexes_uri = "memory://"
+    original_uri = iscc_search.settings.search_settings.indexes_uri
+    iscc_search.settings.search_settings.indexes_uri = "memory://"
 
     try:
         with TestClient(app) as client:
             yield client
     finally:
         # Restore original URI
-        iscc_search.settings.vdb_settings.indexes_uri = original_uri
+        iscc_search.settings.search_settings.indexes_uri = original_uri
 
 
 def test_app_instance():
     """Test FastAPI app instance is properly configured."""
-    assert app.title == "ISCC-VDB API"
+    assert app.title == "ISCC-Search API"
     assert app.version == "0.1.0"
     assert app.docs_url is None
     assert app.redoc_url is None
@@ -47,7 +47,7 @@ def test_root_endpoint(client):
     response = client.get("/")
     assert response.status_code == 200
     data = response.json()
-    assert data["title"] == "ISCC-VDB API"
+    assert data["title"] == "ISCC-Search API"
     assert data["version"] == "0.1.0"
     assert data["docs"] == "/docs"
     assert "description" in data
@@ -61,7 +61,7 @@ def test_docs_endpoint(client):
 
     html_content = response.text
     assert "<!doctype html>" in html_content.lower()
-    assert "ISCC-VDB API - Documentation" in html_content
+    assert "ISCC-Search API - Documentation" in html_content
     assert "/openapi/openapi.yaml" in html_content
     assert "@scalar/api-reference" in html_content
     assert "api-reference" in html_content
@@ -72,7 +72,7 @@ def test_custom_docs_function():
     result = custom_docs()
     html_content = result.body.decode("utf-8")
     assert "<!doctype html>" in html_content.lower()
-    assert "ISCC-VDB API - Documentation" in html_content
+    assert "ISCC-Search API - Documentation" in html_content
     assert "/openapi/openapi.yaml" in html_content
     assert "telemetry" in html_content
     assert "false" in html_content
@@ -82,7 +82,7 @@ def test_root_function():
     """Test root function directly."""
     result = root()
     assert isinstance(result, dict)
-    assert result["title"] == "ISCC-VDB API"
+    assert result["title"] == "ISCC-Search API"
     assert result["version"] == "0.1.0"
     assert result["docs"] == "/docs"
 
@@ -143,8 +143,8 @@ def test_lifespan_shutdown():
     import iscc_search.settings
 
     # Save and override URI to use memory://
-    original_uri = iscc_search.settings.vdb_settings.indexes_uri
-    iscc_search.settings.vdb_settings.indexes_uri = "memory://"
+    original_uri = iscc_search.settings.search_settings.indexes_uri
+    iscc_search.settings.search_settings.indexes_uri = "memory://"
 
     try:
         # Use TestClient context manager to trigger lifespan events
@@ -163,4 +163,4 @@ def test_lifespan_shutdown():
         mock_index.close.assert_called_once()
     finally:
         # Restore original URI
-        iscc_search.settings.vdb_settings.indexes_uri = original_uri
+        iscc_search.settings.search_settings.indexes_uri = original_uri

@@ -6,8 +6,8 @@ Tests serialization, ISCC parsing, validation, and error handling.
 
 import pytest
 import iscc_core as ic
-from iscc_vdb.schema import IsccAsset
-from iscc_vdb.indexes import common
+from iscc_search.schema import IsccAsset
+from iscc_search.indexes import common
 
 
 def test_serialize_deserialize_asset_roundtrip(sample_assets):
@@ -289,7 +289,7 @@ def test_normalize_query_asset_with_iscc_code_only(sample_iscc_codes):
 
 def test_normalize_query_asset_with_units_only(sample_iscc_codes):
     """Test normalize_query_asset derives iscc_code from units."""
-    from iscc_vdb.models import IsccCode
+    from iscc_search.models import IsccCode
 
     # Get units from a valid ISCC-CODE
     code_obj = IsccCode(sample_iscc_codes[0])
@@ -307,7 +307,7 @@ def test_normalize_query_asset_with_units_only(sample_iscc_codes):
 
 def test_normalize_query_asset_with_both(sample_iscc_codes):
     """Test normalize_query_asset keeps both when provided."""
-    from iscc_vdb.models import IsccCode
+    from iscc_search.models import IsccCode
 
     # Derive units from code for test data
     code_obj = IsccCode(sample_iscc_codes[0])

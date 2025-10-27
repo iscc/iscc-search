@@ -3,8 +3,8 @@
 import io
 import pytest
 import iscc_core as ic
-from iscc_vdb.lookup import IsccLookupIndex, IsccLookupMatchDict, IsccLookupResultDict
-from iscc_vdb.models import IsccItemDict
+from iscc_search.lookup import IsccLookupIndex, IsccLookupMatchDict, IsccLookupResultDict
+from iscc_search.models import IsccItemDict
 
 
 @pytest.fixture

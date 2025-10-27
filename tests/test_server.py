@@ -3,7 +3,7 @@
 from unittest.mock import patch, MagicMock
 import pytest
 from fastapi.testclient import TestClient
-from iscc_vdb.server import app, custom_docs, root
+from iscc_search.server import app, custom_docs, root
 
 
 @pytest.fixture
@@ -18,18 +18,18 @@ def client():
 
     :return: FastAPI TestClient instance
     """
-    import iscc_vdb.settings
+    import iscc_search.settings
 
     # Save original URI and set to memory://
-    original_uri = iscc_vdb.settings.vdb_settings.indexes_uri
-    iscc_vdb.settings.vdb_settings.indexes_uri = "memory://"
+    original_uri = iscc_search.settings.vdb_settings.indexes_uri
+    iscc_search.settings.vdb_settings.indexes_uri = "memory://"
 
     try:
         with TestClient(app) as client:
             yield client
     finally:
         # Restore original URI
-        iscc_vdb.settings.vdb_settings.indexes_uri = original_uri
+        iscc_search.settings.vdb_settings.indexes_uri = original_uri
 
 
 def test_app_instance():
@@ -95,12 +95,12 @@ def test_openapi_static_files(client):
 
 def test_main_entry_point():
     """Test main entry point starts uvicorn server."""
-    from iscc_vdb.server.__main__ import main
+    from iscc_search.server.__main__ import main
 
-    with patch("iscc_vdb.server.__main__.uvicorn.run") as mock_run:
+    with patch("iscc_search.server.__main__.uvicorn.run") as mock_run:
         main()
         mock_run.assert_called_once_with(
-            "iscc_vdb.server:app",
+            "iscc_search.server:app",
             host="0.0.0.0",
             port=8000,
             reload=True,
@@ -125,7 +125,7 @@ sys.modules['uvicorn'] = MagicMock(run=mock_run)
 
 # Now execute the __main__ module which will call uvicorn.run
 if __name__ == '__main__':
-    import iscc_vdb.server.__main__
+    import iscc_search.server.__main__
 """
     result = subprocess.run(
         [sys.executable, "-c", code],
@@ -139,12 +139,12 @@ if __name__ == '__main__':
 
 def test_lifespan_shutdown():
     """Test that lifespan context manager properly closes index on shutdown."""
-    from iscc_vdb.indexes.memory import MemoryIndex
-    import iscc_vdb.settings
+    from iscc_search.indexes.memory import MemoryIndex
+    import iscc_search.settings
 
     # Save and override URI to use memory://
-    original_uri = iscc_vdb.settings.vdb_settings.indexes_uri
-    iscc_vdb.settings.vdb_settings.indexes_uri = "memory://"
+    original_uri = iscc_search.settings.vdb_settings.indexes_uri
+    iscc_search.settings.vdb_settings.indexes_uri = "memory://"
 
     try:
         # Use TestClient context manager to trigger lifespan events
@@ -163,4 +163,4 @@ def test_lifespan_shutdown():
         mock_index.close.assert_called_once()
     finally:
         # Restore original URI
-        iscc_vdb.settings.vdb_settings.indexes_uri = original_uri
+        iscc_search.settings.vdb_settings.indexes_uri = original_uri

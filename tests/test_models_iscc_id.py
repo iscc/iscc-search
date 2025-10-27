@@ -3,7 +3,7 @@
 import iscc_core as ic
 import pytest
 
-from iscc_vdb.models import IsccID
+from iscc_search.models import IsccID
 
 
 def test_init_with_string():

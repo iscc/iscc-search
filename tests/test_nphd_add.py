@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 from numpy.testing import assert_array_equal
 
-from iscc_vdb.nphd import NphdIndex
+from iscc_search.nphd import NphdIndex
 
 
 def test_add_single_vector_returns_key():

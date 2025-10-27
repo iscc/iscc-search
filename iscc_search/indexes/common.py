@@ -11,8 +11,8 @@ Provides reusable functions for:
 import re
 import json
 import iscc_core as ic
-from iscc_vdb.schema import IsccAsset
-from iscc_vdb.models import IsccUnit, IsccCode
+from iscc_search.schema import IsccAsset
+from iscc_search.models import IsccUnit, IsccCode
 
 
 # Validation patterns

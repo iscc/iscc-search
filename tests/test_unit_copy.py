@@ -1,6 +1,6 @@
 """Tests for UnitIndex.copy() method."""
 
-from iscc_vdb.unit import UnitIndex
+from iscc_search.unit import UnitIndex
 
 
 def test_copy_preserves_metadata(large_dataset):

@@ -1,4 +1,4 @@
-# Contributing to `iscc-vdb`
+# Contributing to `iscc-search`
 
 Contributions are welcome, and they are greatly appreciated! Every little bit helps, and credit will always be
 given.
@@ -9,7 +9,7 @@ You can contribute in many ways:
 
 ## Report Bugs
 
-Report bugs at https://github.com/iscc/iscc-vdb/issues
+Report bugs at https://github.com/iscc/iscc-search/issues
 
 If you are reporting a bug, please include:
 
@@ -29,12 +29,12 @@ whoever wants to implement it.
 
 ## Write Documentation
 
-iscc-vdb could always use more documentation, whether as part of the official docs, in docstrings, or even on
+iscc-search could always use more documentation, whether as part of the official docs, in docstrings, or even on
 the web in blog posts, articles, and such.
 
 ## Submit Feedback
 
-The best way to send feedback is to file an issue at https://github.com/iscc/iscc-vdb/issues.
+The best way to send feedback is to file an issue at https://github.com/iscc/iscc-search/issues.
 
 If you are proposing a new feature:
 
@@ -44,22 +44,22 @@ If you are proposing a new feature:
 
 # Get Started!
 
-Ready to contribute? Here's how to set up `iscc-vdb` for local development. Please note this documentation
+Ready to contribute? Here's how to set up `iscc-search` for local development. Please note this documentation
 assumes you already have `uv` and `Git` installed and ready to go.
 
-1. Fork the `iscc-vdb` repo on GitHub.
+1. Fork the `iscc-search` repo on GitHub.
 
 2. Clone your fork locally:
 
 ```bash
 cd <directory_in_which_repo_should_be_created>
-git clone git@github.com:YOUR_NAME/iscc-vdb.git
+git clone git@github.com:YOUR_NAME/iscc-search.git
 ```
 
 1. Now we need to install the environment. Navigate into the directory
 
 ```bash
-cd iscc-vdb
+cd iscc-search
 ```
 
 Then, install and activate the environment with:

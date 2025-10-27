@@ -9,7 +9,7 @@ from numba import njit
 from numpy.typing import NDArray
 from usearch.index import Index, ScalarKind
 
-from iscc_vdb.metrics import create_nphd_metric
+from iscc_search.metrics import create_nphd_metric
 
 # Type aliases for cleaner type comments
 Key = int | None

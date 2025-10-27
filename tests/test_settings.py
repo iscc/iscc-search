@@ -1,7 +1,7 @@
 """Test settings management for ISCC-VDB."""
 
-from iscc_vdb.settings import VdbSettings, vdb_settings, get_index
-from iscc_vdb.indexes.memory import MemoryIndex
+from iscc_search.settings import VdbSettings, vdb_settings, get_index
+from iscc_search.indexes.memory import MemoryIndex
 
 
 def test_vdb_settings_default_initialization():
@@ -101,85 +101,85 @@ def test_vdb_settings_extra_fields_ignored():
 
 def test_get_index_default(tmp_path):
     """Test get_index() factory function with default settings."""
-    import iscc_vdb.settings
-    from iscc_vdb.indexes.lmdb import LmdbIndexManager
+    import iscc_search.settings
+    from iscc_search.indexes.lmdb import LmdbIndexManager
 
-    original_uri = iscc_vdb.settings.vdb_settings.indexes_uri
+    original_uri = iscc_search.settings.vdb_settings.indexes_uri
     try:
         # Override to tmp_path to avoid touching real user data directory
-        iscc_vdb.settings.vdb_settings.indexes_uri = str(tmp_path)
+        iscc_search.settings.vdb_settings.indexes_uri = str(tmp_path)
         # Default URI from platformdirs is a file path, now supported via LMDB
         index = get_index()
         assert isinstance(index, LmdbIndexManager)
         index.close()
     finally:
         # Restore original
-        iscc_vdb.settings.vdb_settings.indexes_uri = original_uri
+        iscc_search.settings.vdb_settings.indexes_uri = original_uri
 
 
 def test_get_index_memory_uri():
     """Test get_index() factory with memory:// URI."""
-    import iscc_vdb.settings
+    import iscc_search.settings
 
-    original_uri = iscc_vdb.settings.vdb_settings.indexes_uri
+    original_uri = iscc_search.settings.vdb_settings.indexes_uri
     try:
         # Override settings temporarily
-        iscc_vdb.settings.vdb_settings.indexes_uri = "memory://"
+        iscc_search.settings.vdb_settings.indexes_uri = "memory://"
         index = get_index()
         assert isinstance(index, MemoryIndex)
     finally:
         # Restore original
-        iscc_vdb.settings.vdb_settings.indexes_uri = original_uri
+        iscc_search.settings.vdb_settings.indexes_uri = original_uri
 
 
 def test_get_index_custom_path(tmp_path):
     """Test get_index() factory with custom file path (now implemented via LMDB)."""
-    import iscc_vdb.settings
-    from iscc_vdb.indexes.lmdb import LmdbIndexManager
+    import iscc_search.settings
+    from iscc_search.indexes.lmdb import LmdbIndexManager
 
-    original_uri = iscc_vdb.settings.vdb_settings.indexes_uri
+    original_uri = iscc_search.settings.vdb_settings.indexes_uri
     try:
         # Override settings temporarily
         custom_path = str(tmp_path / "custom_indexes")
-        iscc_vdb.settings.vdb_settings.indexes_uri = custom_path
+        iscc_search.settings.vdb_settings.indexes_uri = custom_path
         # File paths are now supported via LmdbIndexManager
         index = get_index()
         assert isinstance(index, LmdbIndexManager)
         index.close()
     finally:
         # Restore original
-        iscc_vdb.settings.vdb_settings.indexes_uri = original_uri
+        iscc_search.settings.vdb_settings.indexes_uri = original_uri
 
 
 def test_get_index_unsupported_uri():
     """Test get_index() factory with unsupported URI scheme."""
-    import iscc_vdb.settings
+    import iscc_search.settings
     import pytest
 
-    original_uri = iscc_vdb.settings.vdb_settings.indexes_uri
+    original_uri = iscc_search.settings.vdb_settings.indexes_uri
     try:
         # PostgreSQL URI is not yet supported
-        iscc_vdb.settings.vdb_settings.indexes_uri = "postgresql://user:pass@localhost/isccdb"
+        iscc_search.settings.vdb_settings.indexes_uri = "postgresql://user:pass@localhost/isccdb"
         with pytest.raises(ValueError, match="Unsupported ISCC_VDB_INDEXES_URI"):
             get_index()
     finally:
         # Restore original
-        iscc_vdb.settings.vdb_settings.indexes_uri = original_uri
+        iscc_search.settings.vdb_settings.indexes_uri = original_uri
 
 
 def test_get_index_file_uri(tmp_path):
     """Test get_index() factory with file:// URI scheme."""
-    import iscc_vdb.settings
-    from iscc_vdb.indexes.lmdb import LmdbIndexManager
+    import iscc_search.settings
+    from iscc_search.indexes.lmdb import LmdbIndexManager
 
-    original_uri = iscc_vdb.settings.vdb_settings.indexes_uri
+    original_uri = iscc_search.settings.vdb_settings.indexes_uri
     try:
         # file:// URI should work
         file_uri = f"file://{tmp_path / 'file_uri_test'}"
-        iscc_vdb.settings.vdb_settings.indexes_uri = file_uri
+        iscc_search.settings.vdb_settings.indexes_uri = file_uri
         index = get_index()
         assert isinstance(index, LmdbIndexManager)
         index.close()
     finally:
         # Restore original
-        iscc_vdb.settings.vdb_settings.indexes_uri = original_uri
+        iscc_search.settings.vdb_settings.indexes_uri = original_uri

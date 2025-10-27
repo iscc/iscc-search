@@ -2,7 +2,7 @@
 
 import numpy as np
 
-from iscc_vdb.nphd import NphdIndex
+from iscc_search.nphd import NphdIndex
 
 
 def test_copy_returns_nphd_index():

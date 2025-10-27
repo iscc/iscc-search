@@ -11,7 +11,7 @@ def main():
     Runs uvicorn server with hot reload enabled in development mode.
     """
     uvicorn.run(
-        "iscc_vdb.server:app",
+        "iscc_search.server:app",
         host="0.0.0.0",
         port=8000,
         reload=True,

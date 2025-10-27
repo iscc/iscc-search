@@ -3,7 +3,7 @@
 import os
 import tempfile
 
-from iscc_vdb.unit import UnitIndex
+from iscc_search.unit import UnitIndex
 
 
 def test_restore_from_file(large_dataset):

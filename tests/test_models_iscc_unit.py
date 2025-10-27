@@ -4,7 +4,7 @@ import iscc_core as ic
 import numpy as np
 import pytest
 
-from iscc_vdb.models import IsccUnit
+from iscc_search.models import IsccUnit
 
 
 def test_iscc_unit_init_from_string(sample_meta_units):

@@ -1,9 +1,9 @@
 """Test MemoryIndex implementation."""
 
 import pytest
-from iscc_vdb.indexes.memory import MemoryIndex
-from iscc_vdb.protocol import IsccIndexProtocol
-from iscc_vdb.schema import IsccAddResult, IsccAsset, IsccIndex, IsccSearchResult, Metric, Status
+from iscc_search.indexes.memory import MemoryIndex
+from iscc_search.protocol import IsccIndexProtocol
+from iscc_search.schema import IsccAddResult, IsccAsset, IsccIndex, IsccSearchResult, Metric, Status
 
 
 def test_memory_index_implements_protocol():
@@ -477,7 +477,7 @@ def test_search_assets_no_iscc_code_in_asset(sample_iscc_ids, sample_iscc_codes)
 
 def test_search_assets_by_units_only(sample_iscc_ids, sample_iscc_codes):
     """Test searching assets by units only (no iscc_code in query)."""
-    from iscc_vdb.models import IsccCode
+    from iscc_search.models import IsccCode
 
     index = MemoryIndex()
     index.create_index(IsccIndex(name="testindex"))

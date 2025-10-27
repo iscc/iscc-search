@@ -1,21 +1,21 @@
-# iscc-vdb
+# iscc-search
 
-[![Release](https://img.shields.io/github/v/release/iscc/iscc-vdb)](https://img.shields.io/github/v/release/iscc/iscc-vdb)
-[![Build status](https://img.shields.io/github/actions/workflow/status/iscc/iscc-vdb/main.yml?branch=main)](https://github.com/iscc/iscc-vdb/actions/workflows/main.yml?query=branch%3Amain)
-[![codecov](https://codecov.io/gh/iscc/iscc-vdb/branch/main/graph/badge.svg)](https://codecov.io/gh/iscc/iscc-vdb)
-[![Commit activity](https://img.shields.io/github/commit-activity/m/iscc/iscc-vdb)](https://img.shields.io/github/commit-activity/m/iscc/iscc-vdb)
-[![License](https://img.shields.io/github/license/iscc/iscc-vdb)](https://img.shields.io/github/license/iscc/iscc-vdb)
+[![Release](https://img.shields.io/github/v/release/iscc/iscc-search)](https://img.shields.io/github/v/release/iscc/iscc-search)
+[![Build status](https://img.shields.io/github/actions/workflow/status/iscc/iscc-search/main.yml?branch=main)](https://github.com/iscc/iscc-search/actions/workflows/main.yml?query=branch%3Amain)
+[![codecov](https://codecov.io/gh/iscc/iscc-search/branch/main/graph/badge.svg)](https://codecov.io/gh/iscc/iscc-search)
+[![Commit activity](https://img.shields.io/github/commit-activity/m/iscc/iscc-search)](https://img.shields.io/github/commit-activity/m/iscc/iscc-search)
+[![License](https://img.shields.io/github/license/iscc/iscc-search)](https://img.shields.io/github/license/iscc/iscc-search)
 
 > [!WARNING]
 > **This project is in early development and not ready for production use.**
 >
 > The API and features are subject to significant changes. Use at your own risk.
 
-High-performance embedded vector database for variable-length binary [ISCC](https://iscc.codes) codes with fast
+High-performance ISCC similarity search engine for variable-length binary [ISCC](https://iscc.codes) codes with fast
 approximate nearest neighbor search.
 
-- **Github repository**: <https://github.com/iscc/iscc-vdb/>
-- **Documentation** <https://vdb.iscc.codes/>
+- **Github repository**: <https://github.com/iscc/iscc-search/>
+- **Documentation** <https://search.iscc.codes/>
 
 ## Features
 
@@ -36,21 +36,21 @@ querying ISCC codes at scale.
 ## Installation
 
 ```bash
-pip install iscc-vdb
+pip install iscc-search
 ```
 
 For development installation:
 
 ```bash
-git clone https://github.com/iscc/iscc-vdb.git
-cd iscc-vdb
+git clone https://github.com/iscc/iscc-search.git
+cd iscc-search
 uv sync
 ```
 
 ## Quick Start
 
 ```python
-from iscc_vdb import NphdIndex
+from iscc_search import NphdIndex
 import numpy as np
 
 # Create index for up to 256-bit vectors
@@ -167,6 +167,8 @@ Contributions are welcome! Please ensure:
 - Code is formatted (`uv run poe format`)
 - Coverage remains at 100%
 - Changes are documented
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
 
 ______________________________________________________________________
 

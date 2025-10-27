@@ -9,10 +9,10 @@ postgres, memory) to be used interchangeably through a unified interface.
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
-    from iscc_vdb.schema import IsccAddResult  # noqa: F401
-    from iscc_vdb.schema import IsccAsset  # noqa: F401
-    from iscc_vdb.schema import IsccIndex  # noqa: F401
-    from iscc_vdb.schema import IsccSearchResult  # noqa: F401
+    from iscc_search.schema import IsccAddResult  # noqa: F401
+    from iscc_search.schema import IsccAsset  # noqa: F401
+    from iscc_search.schema import IsccIndex  # noqa: F401
+    from iscc_search.schema import IsccSearchResult  # noqa: F401
 
 
 @runtime_checkable

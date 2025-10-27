@@ -2,7 +2,7 @@
 
 import pytest
 
-from iscc_vdb.store import IsccStore
+from iscc_search.store import IsccStore
 
 
 @pytest.fixture

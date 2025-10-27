@@ -97,7 +97,7 @@ Index Entry:
 
 ### IsccStore Class
 
-**Module:** `iscc_vdb/store.py`
+**Module:** `iscc_search/store.py`
 
 The `IsccStore` class provides durable LMDB-backed storage for ISCC entries and metadata. It serves as the
 primary source of truth, with UnitIndex and InstanceIndex acting as derived indexes for search.
@@ -647,31 +647,31 @@ All Python API methods exposed as CLI commands:
 
 ```bash
 # Add single entry with auto-generated ISCC-ID
-iscc-vdb add --iscc-code "ISCC:KAC..."
+iscc-search add --iscc-code "ISCC:KAC..."
 
 # Add entry with explicit ISCC-ID
-iscc-vdb add --iscc-id "ISCC:IAA..." --iscc-code "ISCC:KAC..."
+iscc-search add --iscc-id "ISCC:IAA..." --iscc-code "ISCC:KAC..."
 
 # Add entry with pre-decomposed units
-iscc-vdb add --units "ISCC:GAA..." "ISCC:EAA..." "ISCC:IAA..."
+iscc-search add --units "ISCC:GAA..." "ISCC:EAA..." "ISCC:IAA..."
 
 # Add from JSON file (batch)
-iscc-vdb add --file entries.json
+iscc-search add --file entries.json
 
 # Get entry
-iscc-vdb get "ISCC:IAACBFKZG52UU"
+iscc-search get "ISCC:IAACBFKZG52UU"
 
 # Search
-iscc-vdb search --iscc-code "ISCC:KAC..." --count 10
-iscc-vdb search --units "ISCC:GAA..." "ISCC:EAA..." --count 5 --exact
+iscc-search search --iscc-code "ISCC:KAC..." --count 10
+iscc-search search --units "ISCC:GAA..." "ISCC:EAA..." --count 5 --exact
 
 # Remove
-iscc-vdb remove "ISCC:IAACBFKZG52UU"
+iscc-search remove "ISCC:IAACBFKZG52UU"
 
 # Index management
-iscc-vdb save
-iscc-vdb rebuild  # Rebuild indexes from primary storage
-iscc-vdb info  # Show index stats (size, unit_types, etc.)
+iscc-search save
+iscc-search rebuild  # Rebuild indexes from primary storage
+iscc-search info  # Show index stats (size, unit_types, etc.)
 ```
 
 ## REST API Interface

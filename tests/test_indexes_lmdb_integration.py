@@ -6,9 +6,9 @@ Tests end-to-end workflows, settings integration, and real-world scenarios.
 
 import pytest
 import iscc_core as ic
-from iscc_vdb.schema import IsccAsset, IsccIndex
-from iscc_vdb.indexes.lmdb import LmdbIndexManager
-from iscc_vdb.settings import VdbSettings, get_index
+from iscc_search.schema import IsccAsset, IsccIndex
+from iscc_search.indexes.lmdb import LmdbIndexManager
+from iscc_search.settings import VdbSettings, get_index
 
 
 @pytest.fixture
@@ -161,10 +161,10 @@ def test_settings_integration_file_path(tmp_path):
     settings = VdbSettings(indexes_uri=str(tmp_path))
 
     # Override global settings (for this test)
-    import iscc_vdb.settings
+    import iscc_search.settings
 
-    original_settings = iscc_vdb.settings.vdb_settings
-    iscc_vdb.settings.vdb_settings = settings
+    original_settings = iscc_search.settings.vdb_settings
+    iscc_search.settings.vdb_settings = settings
 
     try:
         # Get index via factory
@@ -177,7 +177,7 @@ def test_settings_integration_file_path(tmp_path):
         idx.close()
     finally:
         # Restore original settings
-        iscc_vdb.settings.vdb_settings = original_settings
+        iscc_search.settings.vdb_settings = original_settings
 
 
 def test_persistence_across_manager_instances(tmp_path, sample_assets):

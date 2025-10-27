@@ -5,9 +5,9 @@ Tests full protocol compliance, index lifecycle management, and multi-index scen
 """
 
 import pytest
-from iscc_vdb.schema import IsccIndex, IsccAsset
-from iscc_vdb.indexes.lmdb import LmdbIndexManager
-from iscc_vdb.protocol import IsccIndexProtocol
+from iscc_search.schema import IsccIndex, IsccAsset
+from iscc_search.indexes.lmdb import LmdbIndexManager
+from iscc_search.protocol import IsccIndexProtocol
 
 
 @pytest.fixture

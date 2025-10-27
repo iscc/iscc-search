@@ -14,7 +14,7 @@ import tempfile
 from pathlib import Path
 from collections import defaultdict
 import iscc_core as ic
-from iscc_vdb.instance import InstanceIndex
+from iscc_search.instance import InstanceIndex
 
 
 def generate_test_data(count, bit_lengths=(64, 128, 192, 256)):

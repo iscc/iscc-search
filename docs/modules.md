@@ -1,3 +1,3 @@
-::: iscc_vdb.metrics
+::: iscc_search.metrics
 
-::: iscc_vdb.nphd
+::: iscc_search.nphd

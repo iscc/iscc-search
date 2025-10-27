@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 from usearch.index import Index, MetricKind, ScalarKind
 
-from iscc_vdb.metrics import MAX_BYTES, create_nphd_metric
+from iscc_search.metrics import MAX_BYTES, create_nphd_metric
 
 
 def test_nphd_identical_vectors():

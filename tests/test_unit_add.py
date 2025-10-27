@@ -2,7 +2,7 @@
 
 import iscc_core as ic
 
-from iscc_vdb import UnitIndex
+from iscc_search import UnitIndex
 
 
 def test_add_single_unit_with_auto_key(sample_meta_units):

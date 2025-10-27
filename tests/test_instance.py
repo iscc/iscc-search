@@ -2,7 +2,7 @@
 
 import pytest
 import iscc_core as ic
-from iscc_vdb.instance import InstanceIndex
+from iscc_search.instance import InstanceIndex
 
 
 @pytest.fixture

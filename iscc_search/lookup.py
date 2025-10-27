@@ -22,7 +22,7 @@ from typing import TypedDict
 import lmdb
 import iscc_core as ic
 from loguru import logger
-from iscc_vdb.models import IsccItem, IsccUnit
+from iscc_search.models import IsccItem, IsccUnit
 
 
 class IsccLookupMatchDict(TypedDict):

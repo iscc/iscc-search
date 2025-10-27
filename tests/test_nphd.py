@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from iscc_vdb.nphd import NphdIndex, pad_vectors, unpad_vectors
+from iscc_search.nphd import NphdIndex, pad_vectors, unpad_vectors
 
 
 def test_pad_vectors_single():

@@ -4,8 +4,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**iscc-vdb** is an Embedded Vector Database for ISCC (International Standard Content Code). In active
-development (v0.0.1), it provides high-performance vector similarity search for variable-length binary ISCC
+**iscc-search** is a high-performance ISCC similarity search engine for ISCC (International Standard Content Code).
+In active development (v0.0.1), it provides high-performance vector similarity search for variable-length binary ISCC
 vectors using the Normalized Prefix Hamming Distance (NPHD) metric. Built on top of usearch for fast approximate
 nearest neighbor search.
 
@@ -38,7 +38,7 @@ uv run poe all              # Format, test, and all checks
 
 The project structure follows standard Python packaging conventions:
 
-- `iscc_vdb/` - Main package directory
+- `iscc_search/` - Main package directory
     - `nphd.py` - NphdIndex class for ANNS with variable-length binary vectors
     - `metrics.py` - Custom NPHD metric implementation using Numba
 - `tests/` - Test files using pytest
@@ -51,13 +51,13 @@ The project structure follows standard Python packaging conventions:
 
 ### Core Components
 
-**NphdIndex** (`iscc_vdb/nphd.py`): Main index class that wraps usearch Index with:
+**NphdIndex** (`iscc_search/nphd.py`): Main index class that wraps usearch Index with:
 
 - Automatic vector padding/unpadding for variable-length ISCC vectors
 - NPHD metric configuration (binary vectors with length signal byte)
 - Supports 64-256 bit vectors (configurable via `max_dim` parameter)
 
-**Custom NPHD Metric** (`iscc_vdb/metrics.py`):
+**Custom NPHD Metric** (`iscc_search/metrics.py`):
 
 - Compiled Numba function for fast NPHD calculation
 - Handles variable-length vectors via length signal in first byte

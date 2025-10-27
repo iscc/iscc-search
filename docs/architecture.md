@@ -23,10 +23,10 @@ CLI and REST API frontends to work seamlessly with different storage implementat
 │  │   CLI Package       │              │  Server Package      │         │
 │  │   (cli/)            │              │  (server/)           │         │
 │  │                     │              │                      │         │
-│  │  - iscc-vdb index   │              │  - FastAPI app       │         │
-│  │  - iscc-vdb add     │              │  - Route handlers    │         │
-│  │  - iscc-vdb search  │              │  - Error handling    │         │
-│  │  - iscc-vdb delete  │              │  - Sync endpoints    │         │
+│  │  - iscc-search index   │              │  - FastAPI app       │         │
+│  │  - iscc-search add     │              │  - Route handlers    │         │
+│  │  - iscc-search search  │              │  - Error handling    │         │
+│  │  - iscc-search delete  │              │  - Sync endpoints    │         │
 │  └──────────┬──────────┘              └──────────┬───────────┘         │
 │             │                                    │                     │
 │             └────────────────┬───────────────────┘                     │
@@ -142,7 +142,7 @@ indexes/
 ## Module Structure
 
 ```
-iscc_vdb/
+iscc_search/
 ├── __init__.py
 │
 ├── protocol.py              # IsccIndexProtocol definition
@@ -322,14 +322,14 @@ All methods are synchronous. Backends may use threading/connection pools interna
 export ISCC_VDB_INDEXES_URI=/path/to/index_data
 
 # CLI commands
-iscc-vdb create myindex
-iscc-vdb add myindex /data/
-iscc-vdb search myindex "ISCC:..."
-iscc-vdb list
-iscc-vdb delete myindex
+iscc-search create myindex
+iscc-search add myindex /data/
+iscc-search search myindex "ISCC:..."
+iscc-search list
+iscc-search delete myindex
 
 # Start API server with LMDB backend
-uvicorn iscc_vdb.server.app:app --host 0.0.0.0 --port 8000
+uvicorn iscc_search.server.app:app --host 0.0.0.0 --port 8000
 ```
 
 ### Memory Index (Testing)
@@ -339,12 +339,12 @@ uvicorn iscc_vdb.server.app:app --host 0.0.0.0 --port 8000
 export ISCC_VDB_INDEXES_URI=memory://
 
 # CLI works with in-memory storage (no persistence)
-iscc-vdb create myindex
-iscc-vdb add myindex /data/
-iscc-vdb search myindex "ISCC:..."
+iscc-search create myindex
+iscc-search add myindex /data/
+iscc-search search myindex "ISCC:..."
 
 # Start API server with in-memory index (for testing)
-uvicorn iscc_vdb.server.app:app --host 0.0.0.0 --port 8000
+uvicorn iscc_search.server.app:app --host 0.0.0.0 --port 8000
 ```
 
 ### Postgres Index (Future)
@@ -354,8 +354,8 @@ uvicorn iscc_vdb.server.app:app --host 0.0.0.0 --port 8000
 export ISCC_VDB_INDEXES_URI=postgresql://user:password@localhost/isccdb
 
 # CLI and server work the same way across all backends
-iscc-vdb create myindex
-uvicorn iscc_vdb.server.app:app --host 0.0.0.0 --port 8000
+iscc-search create myindex
+uvicorn iscc_search.server.app:app --host 0.0.0.0 --port 8000
 ```
 
 ## Key Benefits

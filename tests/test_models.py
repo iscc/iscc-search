@@ -5,7 +5,7 @@ import time
 import iscc_core as ic
 import pytest
 
-from iscc_vdb.models import new_iscc_id, split_iscc_sequence
+from iscc_search.models import new_iscc_id, split_iscc_sequence
 
 
 def test_new_iscc_id_returns_bytes():

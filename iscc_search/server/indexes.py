@@ -1,9 +1,9 @@
 """Index management endpoints for ISCC-VDB API."""
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from iscc_vdb.protocol import IsccIndexProtocol
-from iscc_vdb.schema import IsccIndex
-from iscc_vdb.server import get_index_from_state
+from iscc_search.protocol import IsccIndexProtocol
+from iscc_search.schema import IsccIndex
+from iscc_search.server import get_index_from_state
 
 
 router = APIRouter(tags=["indexes"])

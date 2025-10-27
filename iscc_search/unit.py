@@ -11,8 +11,8 @@ import iscc_core as ic
 import numpy as np
 from usearch.index import Index
 
-from iscc_vdb.nphd import NphdIndex
-from iscc_vdb.models import IsccID, IsccUnit
+from iscc_search.nphd import NphdIndex
+from iscc_search.models import IsccID, IsccUnit
 
 
 @dataclass

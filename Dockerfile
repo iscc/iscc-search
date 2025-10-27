@@ -18,4 +18,4 @@ COPY . /app
 # Sync the project
 RUN uv sync --frozen
 
-CMD [ "python", "iscc_vdb/foo.py" ]
+CMD [ "python", "iscc_search/foo.py" ]

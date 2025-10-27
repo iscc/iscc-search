@@ -1,7 +1,7 @@
 """Test ISCC Index Protocol definition and runtime checking."""
 
-from iscc_vdb.protocol import IsccIndexProtocol
-from iscc_vdb.schema import IsccAddResult, IsccAsset, IsccIndex, IsccSearchResult, Metric
+from iscc_search.protocol import IsccIndexProtocol
+from iscc_search.schema import IsccAddResult, IsccAsset, IsccIndex, IsccSearchResult, Metric
 
 
 def test_protocol_is_runtime_checkable():

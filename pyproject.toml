@@ -1,7 +1,7 @@
 [project]
-name = "iscc-vdb"
+name = "iscc-search"
 version = "0.0.1"
-description = "Embedded Vector Database for ISCC"
+description = "High-performance ISCC similarity search engine"
 authors = [{ name = "Titusz Pan", email = "tp@py7.de" }]
 readme = "README.md"
 keywords = ['python']
@@ -59,11 +59,11 @@ dependencies = [
 
 [project.urls]
 Homepage = "https://iscc.io"
-Repository = "https://github.com/iscc/iscc-vdb"
-Documentation = "https://vdb.iscc.codes"
+Repository = "https://github.com/iscc/iscc-search"
+Documentation = "https://search.iscc.codes"
 
 [project.scripts]
-iscc-vdb = "iscc_vdb.cli:cli"
+iscc-search = "iscc_search.cli:cli"
 
 [dependency-groups]
 dev = [
@@ -89,7 +89,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["iscc_vdb"]
+packages = ["iscc_search"]
 
 [tool.hatch.metadata]
 allow-direct-references = true
@@ -113,13 +113,13 @@ fail_under = 100
 
 [tool.coverage.run]
 branch = true
-source = ["iscc_vdb"]
-omit = ["iscc_vdb/cli.py", "iscc_vdb/schema.py"]
+source = ["iscc_search"]
+omit = ["iscc_search/cli.py", "iscc_search/schema.py"]
 
 [tool.datamodel-codegen]
-input = "iscc_vdb/openapi/openapi.yaml"
+input = "iscc_search/openapi/openapi.yaml"
 input-file-type = "openapi"
-output = "iscc_vdb/schema.py"
+output = "iscc_search/schema.py"
 output-model-type = "pydantic_v2.BaseModel"
 disable-timestamp = true
 target-python-version = "3.12"
@@ -135,7 +135,7 @@ formatters = []
 
 
 [tool.poe.tasks]
-build-schema = { shell = "uv run datamodel-codegen && uv run ruff format iscc_vdb/schema.py", help = "Build code from openapi.yaml schemas" }
+build-schema = { shell = "uv run datamodel-codegen && uv run ruff format iscc_search/schema.py", help = "Build code from openapi.yaml schemas" }
 format-code = { shell = "uv run ruff format .", help = "Format code files" }
 format-markdown = { shell = "uv run mdformat --end-of-line lf --wrap 112 --number *.md docs", help = "Format markdown files" }
 precommit = { shell = "uv run prek run"}

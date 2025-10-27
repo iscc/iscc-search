@@ -7,8 +7,8 @@ scenarios where persistence isn't needed.
 """
 
 import re
-from iscc_vdb.schema import IsccAddResult, IsccIndex, IsccMatch, IsccSearchResult, Metric, Status
-from iscc_vdb.indexes import common
+from iscc_search.schema import IsccAddResult, IsccIndex, IsccMatch, IsccSearchResult, Metric, Status
+from iscc_search.indexes import common
 
 
 INDEX_NAME_PATTERN = re.compile(r"^[a-z][a-z0-9]*$")

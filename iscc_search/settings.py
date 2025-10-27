@@ -11,7 +11,7 @@ Provides configuration management using Pydantic settings with support for:
 from urllib.parse import urlparse
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
-import iscc_vdb
+import iscc_search
 
 
 __all__ = [
@@ -36,7 +36,7 @@ class VdbSettings(BaseSettings):
     """
 
     indexes_uri: str = Field(
-        iscc_vdb.dirs.user_data_dir,
+        iscc_search.dirs.user_data_dir,
         description="Location where index data is stored (local file path or DSN)",
     )
 
@@ -85,14 +85,14 @@ def get_index():
     :return: Index instance implementing IsccIndexProtocol
     :raises ValueError: If URI scheme is not supported
     """
-    from iscc_vdb.protocol import IsccIndexProtocol  # noqa: F401
+    from iscc_search.protocol import IsccIndexProtocol  # noqa: F401
     import os
 
     uri = vdb_settings.indexes_uri
 
     # Handle memory:// scheme
     if uri == "memory://" or uri.startswith("memory://"):
-        from iscc_vdb.indexes.memory import MemoryIndex
+        from iscc_search.indexes.memory import MemoryIndex
 
         return MemoryIndex()
 
@@ -100,7 +100,7 @@ def get_index():
     # Check if it's an absolute path before parsing as URI
     if os.path.isabs(uri) or "://" not in uri:
         # It's a file path (absolute or relative)
-        from iscc_vdb.indexes.lmdb import LmdbIndexManager
+        from iscc_search.indexes.lmdb import LmdbIndexManager
 
         return LmdbIndexManager(uri)
 
@@ -109,7 +109,7 @@ def get_index():
 
     if parsed.scheme == "file":
         # file:// URI
-        from iscc_vdb.indexes.lmdb import LmdbIndexManager
+        from iscc_search.indexes.lmdb import LmdbIndexManager
 
         return LmdbIndexManager(parsed.path)
 

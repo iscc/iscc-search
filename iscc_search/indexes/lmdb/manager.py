@@ -9,9 +9,9 @@ Implements IsccIndexProtocol for use as backend in CLI and server.
 
 import os
 from pathlib import Path
-from iscc_vdb.schema import IsccIndex
-from iscc_vdb.indexes.lmdb.index import LmdbIndex
-from iscc_vdb.indexes import common
+from iscc_search.schema import IsccIndex
+from iscc_search.indexes.lmdb.index import LmdbIndex
+from iscc_search.indexes import common
 
 
 class LmdbIndexManager:

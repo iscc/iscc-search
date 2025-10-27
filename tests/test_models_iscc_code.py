@@ -2,7 +2,7 @@
 
 import iscc_core as ic
 from io import BytesIO
-from iscc_vdb.models import IsccCode, IsccUnit
+from iscc_search.models import IsccCode, IsccUnit
 
 
 def test_iscc_code_init_with_string():

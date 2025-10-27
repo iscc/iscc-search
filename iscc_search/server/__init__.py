@@ -6,8 +6,8 @@ from pathlib import Path
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
-from iscc_vdb.settings import get_index
-from iscc_vdb.protocol import IsccIndexProtocol  # noqa: F401
+from iscc_search.settings import get_index
+from iscc_search.protocol import IsccIndexProtocol  # noqa: F401
 
 
 @asynccontextmanager
@@ -103,7 +103,7 @@ def root():
 
 
 # Include API routers
-from iscc_vdb.server import indexes, assets, search  # noqa: E402
+from iscc_search.server import indexes, assets, search  # noqa: E402
 
 app.include_router(indexes.router)
 app.include_router(assets.router)

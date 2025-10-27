@@ -5,7 +5,7 @@ import numpy as np
 import pytest
 from numpy.testing import assert_array_equal
 
-from iscc_vdb.unit import UnitIndex
+from iscc_search.unit import UnitIndex
 
 
 def test_search_single_iscc_unit_returns_matches(sample_iscc_ids, sample_meta_units):

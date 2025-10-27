@@ -2,7 +2,7 @@
 
 import iscc_core as ic
 
-from iscc_vdb import UnitIndex
+from iscc_search import UnitIndex
 
 
 def test_unit_index_init_default():

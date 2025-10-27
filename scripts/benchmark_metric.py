@@ -11,7 +11,7 @@ import time
 import numpy as np
 from usearch.index import Index, MetricKind, ScalarKind
 
-from iscc_vdb.nphd import NphdIndex
+from iscc_search.nphd import NphdIndex
 
 
 def generate_test_vectors(count, nbits):

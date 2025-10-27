@@ -5,7 +5,7 @@ import os
 import tempfile
 
 
-from iscc_vdb.unit import UnitIndex
+from iscc_search.unit import UnitIndex
 
 
 def test_save_to_file_creates_metadata(large_dataset):

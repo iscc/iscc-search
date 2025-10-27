@@ -5,8 +5,8 @@ import tempfile
 
 import pytest
 
-from iscc_vdb.instance import InstanceIndex
-from iscc_vdb.iscc import IsccIndex
+from iscc_search.instance import InstanceIndex
+from iscc_search.iscc import IsccIndex
 
 
 @pytest.fixture

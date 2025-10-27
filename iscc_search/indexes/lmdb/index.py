@@ -13,9 +13,9 @@ import os
 import time
 import lmdb
 from loguru import logger
-from iscc_vdb.schema import IsccAddResult, IsccSearchResult, IsccMatch, Status, Metric
-from iscc_vdb.models import IsccUnit
-from iscc_vdb.indexes import common
+from iscc_search.schema import IsccAddResult, IsccSearchResult, IsccMatch, Status, Metric
+from iscc_search.models import IsccUnit
+from iscc_search.indexes import common
 
 
 class LmdbIndex:

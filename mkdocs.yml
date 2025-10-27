@@ -1,10 +1,10 @@
-site_name: iscc-vdb
-repo_url: https://github.com/iscc/iscc-vdb
-site_url: https://vdb.iscc.codes
-site_description: Embedded Vector Database for ISCC
+site_name: iscc-search
+repo_url: https://github.com/iscc/iscc-search
+site_url: https://search.iscc.codes
+site_description: High-performance ISCC similarity search engine
 site_author: Titusz Pan
 edit_uri: edit/main/docs/
-repo_name: iscc/iscc-vdb
+repo_name: iscc/iscc-search
 copyright: Maintained by <a href="https://iscc.io">ISCC Foundation</a>.
 
 nav:
@@ -15,7 +15,7 @@ plugins:
   - mkdocstrings:
       handlers:
         python:
-          paths: ["iscc_vdb"]
+          paths: ["iscc_search"]
 theme:
   name: material
   feature:
@@ -41,9 +41,9 @@ theme:
 extra:
   social:
     - icon: fontawesome/brands/github
-      link: https://github.com/iscc/iscc-vdb
+      link: https://github.com/iscc/iscc-search
     - icon: fontawesome/brands/python
-      link: https://pypi.org/project/iscc-vdb
+      link: https://pypi.org/project/iscc-search
 
 markdown_extensions:
   - toc:

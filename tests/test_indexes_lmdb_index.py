@@ -7,8 +7,8 @@ realm validation, and auto-resize behavior.
 
 import pytest
 import iscc_core as ic
-from iscc_vdb.schema import IsccAsset, Status
-from iscc_vdb.indexes.lmdb.index import LmdbIndex
+from iscc_search.schema import IsccAsset, Status
+from iscc_search.indexes.lmdb.index import LmdbIndex
 
 
 @pytest.fixture

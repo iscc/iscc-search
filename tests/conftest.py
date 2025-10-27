@@ -238,7 +238,7 @@ def memory_index_instance():
 
     :return: MemoryIndex instance
     """
-    from iscc_vdb.indexes.memory import MemoryIndex
+    from iscc_search.indexes.memory import MemoryIndex
 
     return MemoryIndex()
 
@@ -259,11 +259,11 @@ def backend_index(request, tmp_path):
     backend_type = request.param
 
     if backend_type == "memory":
-        from iscc_vdb.indexes.memory import MemoryIndex
+        from iscc_search.indexes.memory import MemoryIndex
 
         index = MemoryIndex()
     elif backend_type == "lmdb":
-        from iscc_vdb.indexes.lmdb import LmdbIndexManager
+        from iscc_search.indexes.lmdb import LmdbIndexManager
 
         # Use isolated temp directory for each test
         lmdb_path = tmp_path / "lmdb_indexes"
@@ -290,7 +290,7 @@ def test_client(backend_index):
     :param backend_index: Parametrized index backend instance
     :return: FastAPI TestClient instance
     """
-    from iscc_vdb.server import app
+    from iscc_search.server import app
 
     # Override app.state.index with parametrized backend
     app.state.index = backend_index
@@ -312,7 +312,7 @@ def sample_assets(sample_iscc_ids, sample_iscc_codes, sample_content_units):
     :param sample_content_units: Fixture providing ISCC-UNITs
     :return: List of IsccAsset objects
     """
-    from iscc_vdb.schema import IsccAsset
+    from iscc_search.schema import IsccAsset
 
     assets = []
     for i in range(5):
@@ -343,7 +343,7 @@ def populated_index(memory_index_instance, sample_assets):
     :param sample_assets: Sample IsccAsset objects
     :return: MemoryIndex with data
     """
-    from iscc_vdb.schema import IsccIndex
+    from iscc_search.schema import IsccIndex
 
     # Create test index
     memory_index_instance.create_index(IsccIndex(name="testindex"))

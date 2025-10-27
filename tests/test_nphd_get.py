@@ -7,7 +7,7 @@ Verifies that get() returns properly unpadded vectors with correct lengths.
 import numpy as np
 from numpy.testing import assert_array_equal
 
-from iscc_vdb.nphd import NphdIndex
+from iscc_search.nphd import NphdIndex
 
 
 # Tests for NphdIndex.get() with multi=False (single vector per key)

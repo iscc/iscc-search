@@ -2,7 +2,7 @@
 
 import iscc_core as ic
 
-from iscc_vdb.unit import UnitIndex
+from iscc_search.unit import UnitIndex
 
 
 def test_get_single_key_exists_returns_iscc_unit():

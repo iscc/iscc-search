@@ -183,16 +183,17 @@ def test_get_index_lmdb_uri(tmp_path):
 
 
 def test_get_index_usearch_uri():
-    """Test get_index() factory with usearch:// URI scheme raises NotImplementedError."""
+    """Test get_index() factory with usearch:// URI scheme returns UsearchIndexManager."""
     import iscc_search.settings
-    import pytest
+    from iscc_search.indexes.usearch import UsearchIndexManager
 
     original_uri = iscc_search.settings.search_settings.index_uri
     try:
-        # usearch:// URI should raise NotImplementedError
+        # usearch:// URI should return UsearchIndexManager
         iscc_search.settings.search_settings.index_uri = "usearch:///tmp/usearch_test"
-        with pytest.raises(NotImplementedError, match="usearch:// scheme is not yet implemented"):
-            get_index()
+        index = get_index()
+        assert isinstance(index, UsearchIndexManager)
+        index.close()
     finally:
         # Restore original
         iscc_search.settings.search_settings.index_uri = original_uri

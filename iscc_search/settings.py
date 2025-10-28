@@ -35,12 +35,13 @@ class SearchSettings(BaseSettings):
         index_uri: URI specifying index backend and location. Supported schemes:
                    - memory:// → In-memory index (no persistence)
                    - lmdb:///path → LMDB index at directory path
-                   - usearch:///path → Usearch index (not yet implemented)
+                   - usearch:///path → Usearch index with HNSW + LMDB (high-performance)
+                   - postgres:///connection → PostgreSQL index (planned)
     """
 
     index_uri: str = Field(
         iscc_search.dirs.user_data_dir,
-        description="URI specifying index backend (memory://, lmdb://, usearch://)",
+        description="URI specifying index backend (memory://, lmdb://, usearch://, postgres://)",
     )
 
     model_config = SettingsConfigDict(
@@ -81,7 +82,7 @@ def get_index():
     implementation. Supported URI schemes:
     - memory:// → MemoryIndex (in-memory, no persistence)
     - lmdb:///path → LmdbIndexManager (LMDB-backed, production-ready)
-    - usearch:///path → UsearchIndex (not yet implemented)
+    - usearch:///path → UsearchIndexManager (HNSW + LMDB, high-performance)
 
     Future implementations:
     - postgresql:// → PostgresIndex (planned)
@@ -122,16 +123,19 @@ def get_index():
 
         return LmdbIndexManager(path)
 
-    # Handle usearch:// scheme (planned, not yet implemented)
+    # Handle usearch:// scheme
     if parsed.scheme == "usearch":
-        raise NotImplementedError(
-            "usearch:// scheme is not yet implemented. "
-            "UsearchIndex is planned for a future release. "
-            "NphdIndex will be integrated as an internal component of UsearchIndex."
-        )
+        from iscc_search.indexes.usearch import UsearchIndexManager
+
+        # Handle Windows paths: urlparse('/C:/path') → need to strip leading '/'
+        path = parsed.path
+        if sys.platform == "win32" and path.startswith("/") and len(path) > 2 and path[2] == ":":
+            path = path[1:]  # Remove leading '/' from '/C:/path'
+
+        return UsearchIndexManager(path)
 
     # Reject unsupported URI schemes
-    supported = ["memory://", "lmdb://", "usearch:// (planned)"]
+    supported = ["memory://", "lmdb://", "usearch://", "postgres:// (planned)"]
     raise ValueError(
         f"Unsupported ISCC_SEARCH_INDEX_URI scheme: '{uri}'. "
         f"Supported schemes: {', '.join(supported)}. "

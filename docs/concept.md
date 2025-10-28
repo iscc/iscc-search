@@ -33,6 +33,23 @@ similar content.
 ISCC-SEARCH implements custom indexing techniques that are tailored to the structure of the ISCC and enable web
 scale content based reverse search.
 
+## The ISCC-SEARCH Solution
+
+ISCC-SEARCH addresses the challenge of reverse content discovery at web scale. Traditional approaches to
+similarity search struggle with:
+
+- Variable-length codes (64-256 bits) that must be matched efficiently
+- Multiple unit types requiring specialized indexing strategies
+- Prefix compatibility requirements for shorter/longer codes
+- Need for both exact (INSTANCE) and similarity (other units) matching
+
+ISCC-SEARCH implements custom indexing techniques optimized for ISCC structure, providing:
+
+- Unified interface across multiple storage backends
+- Bidirectional prefix matching for variable-length codes
+- Parallel search across unit-specific indexes with aggregated ranking
+- Sub-millisecond query performance at scale
+
 ## ISCC Indexing Requirements
 
 An ISCC index provides a unified interface for searching and matching ISCCs. This project provides multiple

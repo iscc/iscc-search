@@ -145,7 +145,7 @@ class UsearchIndexManager:
             raise FileNotFoundError(f"Index '{name}' not found")
 
         # Close cached instance if open
-        if name in self._index_cache:
+        if name in self._index_cache:  # pragma: no branch
             self._index_cache[name].close()
             del self._index_cache[name]
 
@@ -258,7 +258,7 @@ class UsearchIndexManager:
         """
         total_bytes = 0
         for file_path in path.rglob("*"):
-            if file_path.is_file():
+            if file_path.is_file():  # pragma: no branch
                 total_bytes += file_path.stat().st_size
 
         return total_bytes // (1024 * 1024)

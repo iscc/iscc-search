@@ -130,7 +130,7 @@ def get_index():
         # Handle Windows paths: urlparse('/C:/path') → need to strip leading '/'
         path = parsed.path
         if sys.platform == "win32" and path.startswith("/") and len(path) > 2 and path[2] == ":":
-            path = path[1:]  # Remove leading '/' from '/C:/path'
+            path = path[1:]  # pragma: no cover - Windows-specific path handling
 
         return UsearchIndexManager(path)
 

@@ -174,6 +174,12 @@ class UsearchIndex:
                 # Batch add to NphdIndex (outside transaction)
                 for unit_type, (keys, vectors) in nphd_batches.items():
                     nphd_index = self._get_or_create_nphd_index(unit_type)
+
+                    # Check for existing keys and remove them first (for updates)
+                    existing_keys = [k for k in keys if nphd_index.contains(k)]
+                    if existing_keys:
+                        nphd_index.remove(existing_keys)
+
                     nphd_index.add(keys, vectors)
                     # Save after add for durability
                     usearch_file = self.path / f"{unit_type}.usearch"

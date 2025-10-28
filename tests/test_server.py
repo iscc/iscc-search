@@ -54,7 +54,7 @@ def test_root_endpoint(client):
 
 
 def test_docs_endpoint(client):
-    """Test custom docs endpoint returns HTML with Scalar UI."""
+    """Test custom docs endpoint returns HTML with Stoplight Elements UI."""
     response = client.get("/docs")
     assert response.status_code == 200
     assert response.headers["content-type"] == "text/html; charset=utf-8"
@@ -63,8 +63,8 @@ def test_docs_endpoint(client):
     assert "<!doctype html>" in html_content.lower()
     assert "ISCC-Search API - Documentation" in html_content
     assert "/openapi/openapi.yaml" in html_content
-    assert "@scalar/api-reference" in html_content
-    assert "api-reference" in html_content
+    assert "@stoplight/elements" in html_content
+    assert "elements-api" in html_content
 
 
 def test_custom_docs_function():
@@ -74,8 +74,8 @@ def test_custom_docs_function():
     assert "<!doctype html>" in html_content.lower()
     assert "ISCC-Search API - Documentation" in html_content
     assert "/openapi/openapi.yaml" in html_content
-    assert "telemetry" in html_content
-    assert "false" in html_content
+    assert "hideExport" in html_content
+    assert "logo" in html_content
 
 
 def test_root_function():

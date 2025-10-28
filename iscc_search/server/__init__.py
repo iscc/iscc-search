@@ -62,9 +62,9 @@ app.mount("/openapi", StaticFiles(directory=str(openapi_dir)), name="openapi")
 def custom_docs():
     # type: () -> HTMLResponse
     """
-    Render modern interactive API documentation using Scalar.
+    Render modern interactive API documentation using Stoplight Elements.
 
-    :return: HTML response with Scalar UI
+    :return: HTML response with Stoplight Elements UI
     """
     html = f"""
     <!doctype html>
@@ -73,13 +73,16 @@ def custom_docs():
         <title>{app.title} - Documentation</title>
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <script src="https://unpkg.com/@stoplight/elements/web-components.min.js"></script>
+        <link rel="stylesheet" href="https://unpkg.com/@stoplight/elements/styles.min.css">
       </head>
       <body>
-        <script
-          id="api-reference"
-          data-url="/openapi/openapi.yaml"
-          data-configuration='{{"telemetry": false, "hideClientButton": true, "hideSearch": true, "defaultOpenAllTags": true, "layout": "classic"}}'></script>
-        <script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference"></script>
+        <elements-api
+          apiDescriptionUrl="/openapi/openapi.yaml"
+          layout="sidebar"
+          hideExport="true"
+          logo="https://avatars.githubusercontent.com/u/47259639?s=400&u=d26d161a5e7391dd7e0011ca3d5b317b93e6ad4d&v=4"
+        />
       </body>
     </html>
     """

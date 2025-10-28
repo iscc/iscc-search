@@ -171,26 +171,41 @@ Best for:
 - Embedded applications
 - Local development with persistent data
 
-### Usearch Index (In Development)
+### Usearch Index
 
-A high-performance index using **Hierarchical Navigable Small World (HNSW)** graphs for fast approximate nearest
-neighbor search. Designed for:
+A high-performance hybrid index combining **LMDB** for metadata and exact matching with **HNSW-based NphdIndex**
+for similarity search. Designed for:
 
 - Large-scale similarity search with millions of vectors
-- Sub-millisecond query latency
-- Memory-mapped operation supporting indexes larger than RAM
-- NPHD-based matching of variable-length codes
+- Sub-millisecond query latency for similarity matching
+- NPHD-based matching of variable-length codes (64-256 bits)
+- Exact INSTANCE matching via LMDB dupsort
+- Persistent storage with automatic save/reload
 
-**Configuration**: `ISCC_SEARCH_INDEX_URI=usearch:///path/to/index_data` (not yet available)
+**Architecture**: Hybrid dual-storage system
 
-**Note**: The underlying NphdIndex implementation exists but will be integrated as an internal component of
-UsearchIndex in a future release.
+- **LMDB**: Stores asset metadata, index configuration, and INSTANCE units for exact duplicate detection
+- **NphdIndex**: Separate `.usearch` files per unit-type (META, CONTENT, DATA) for similarity search
+- **Unified keys**: ISCC-ID body as uint64 consistently across both storage systems
+
+**Configuration**: `ISCC_SEARCH_INDEX_URI=usearch:///path/to/index_data`
+
+**Directory structure**:
+
+```
+index_name/
+├── index.lmdb          # LMDB with __metadata__, __assets__, __instance__ databases
+├── CONTENT_TEXT_V0.usearch    # NphdIndex for CONTENT-TEXT units
+├── DATA_NONE_V0.usearch       # NphdIndex for DATA units
+└── ...                        # Additional unit-type indexes (lazy-created)
+```
 
 Best for:
 
-- High-throughput search applications
-- Scenarios requiring approximate matching beyond exact prefix matches
+- High-throughput search applications requiring both exact and similarity matching
 - Production deployments where performance is critical
+- Applications needing seamless INSTANCE exact-match + similarity search
+- Single-server deployments with embedded database requirements
 
 ### Postgres Index (Planned)
 

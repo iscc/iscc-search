@@ -116,10 +116,13 @@ def get_index():
     if parsed.scheme == "lmdb":
         from iscc_search.indexes.lmdb import LmdbIndexManager
 
-        # Handle Windows paths: urlparse('/C:/path') → need to strip leading '/'
+        # Handle path normalization after URI parsing
         path = parsed.path
         if sys.platform == "win32" and path.startswith("/") and len(path) > 2 and path[2] == ":":
-            path = path[1:]  # Remove leading '/' from '/C:/path'
+            path = path[1:]  # pragma: no cover - Remove leading '/' from '/C:/path' on Windows
+        elif path.startswith("//"):  # pragma: no cover - Unix-specific path handling
+            # Unix paths with double leading slash from URIs like lmdb:////tmp/path
+            path = path[1:]  # Strip one leading '/' to normalize path
 
         return LmdbIndexManager(path)
 
@@ -127,10 +130,13 @@ def get_index():
     if parsed.scheme == "usearch":
         from iscc_search.indexes.usearch import UsearchIndexManager
 
-        # Handle Windows paths: urlparse('/C:/path') → need to strip leading '/'
+        # Handle path normalization after URI parsing
         path = parsed.path
         if sys.platform == "win32" and path.startswith("/") and len(path) > 2 and path[2] == ":":
-            path = path[1:]  # pragma: no cover - Windows-specific path handling
+            path = path[1:]  # pragma: no cover - Remove leading '/' from '/C:/path' on Windows
+        elif path.startswith("//"):  # pragma: no cover - Unix-specific path handling
+            # Unix paths with double leading slash from URIs like usearch:////tmp/path
+            path = path[1:]  # Strip one leading '/' to normalize path
 
         return UsearchIndexManager(path)
 

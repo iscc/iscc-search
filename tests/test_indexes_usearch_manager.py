@@ -174,6 +174,31 @@ def test_delete_index_not_found(manager):
         manager.delete_index("nonexistent")
 
 
+def test_delete_index_with_cached_instance(manager, tmp_path, sample_iscc_ids, sample_content_units):
+    """Test delete_index closes and removes cached index instance."""
+    manager.create_index(IsccIndex(name="cached"))
+
+    # Add asset to populate cache
+    asset = IsccAsset(
+        iscc_id=sample_iscc_ids[0],
+        units=[sample_content_units[0], sample_content_units[1]],
+    )
+    manager.add_assets("cached", [asset])
+
+    # Verify index is in cache
+    assert "cached" in manager._index_cache
+
+    # Delete should close and remove from cache
+    manager.delete_index("cached")
+
+    # Verify removed from cache
+    assert "cached" not in manager._index_cache
+
+    # Verify directory deleted
+    index_dir = tmp_path / "cached"
+    assert not index_dir.exists()
+
+
 def test_add_assets_basic(manager, sample_iscc_ids, sample_content_units):
     """Test adding assets to index."""
     manager.create_index(IsccIndex(name="test"))

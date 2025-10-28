@@ -21,15 +21,15 @@ def client():
     import iscc_search.settings
 
     # Save original URI and set to memory://
-    original_uri = iscc_search.settings.search_settings.indexes_uri
-    iscc_search.settings.search_settings.indexes_uri = "memory://"
+    original_uri = iscc_search.settings.search_settings.index_uri
+    iscc_search.settings.search_settings.index_uri = "memory://"
 
     try:
         with TestClient(app) as client:
             yield client
     finally:
         # Restore original URI
-        iscc_search.settings.search_settings.indexes_uri = original_uri
+        iscc_search.settings.search_settings.index_uri = original_uri
 
 
 def test_app_instance():
@@ -143,8 +143,8 @@ def test_lifespan_shutdown():
     import iscc_search.settings
 
     # Save and override URI to use memory://
-    original_uri = iscc_search.settings.search_settings.indexes_uri
-    iscc_search.settings.search_settings.indexes_uri = "memory://"
+    original_uri = iscc_search.settings.search_settings.index_uri
+    iscc_search.settings.search_settings.index_uri = "memory://"
 
     try:
         # Use TestClient context manager to trigger lifespan events
@@ -163,4 +163,4 @@ def test_lifespan_shutdown():
         mock_index.close.assert_called_once()
     finally:
         # Restore original URI
-        iscc_search.settings.search_settings.indexes_uri = original_uri
+        iscc_search.settings.search_settings.index_uri = original_uri

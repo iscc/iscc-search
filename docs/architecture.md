@@ -100,12 +100,12 @@ All operations are synchronous for simplicity:
 
 ### 3. Pydantic Settings-Based Configuration
 
-Single `ISCC_SEARCH_INDEXES_URI` environment variable determines index implementation:
+Single `ISCC_SEARCH_INDEX_URI` environment variable determines index implementation:
 
-- **memory://**: `ISCC_SEARCH_INDEXES_URI=memory://` → MemoryIndex (in-memory, no persistence) **[IMPLEMENTED]**
-- **Directory path**: `ISCC_SEARCH_INDEXES_URI=/path/to/index_data` → LmdbIndexManager (file-based persistence)
+- **memory://**: `ISCC_SEARCH_INDEX_URI=memory://` → MemoryIndex (in-memory, no persistence) **[IMPLEMENTED]**
+- **Directory path**: `ISCC_SEARCH_INDEX_URI=/path/to/index_data` → LmdbIndexManager (file-based persistence)
     **[IMPLEMENTED]**
-- **Postgres DSN**: `ISCC_SEARCH_INDEXES_URI=postgresql://user:pass@host/db` → PostgresIndex **[PLANNED]**
+- **Postgres DSN**: `ISCC_SEARCH_INDEX_URI=postgresql://user:pass@host/db` → PostgresIndex **[PLANNED]**
 - **Default**: Uses `platformdirs` to determine OS-appropriate user data directory → LmdbIndexManager
     **[IMPLEMENTED]**
 
@@ -224,12 +224,12 @@ All methods are synchronous. Backends may use threading/connection pools interna
 
 **SearchSettings**: Pydantic settings class with:
 
-- `indexes_uri` - Location for index data (path or DSN), defaults to OS user data directory
+- `index_uri` - Location for index data (path or DSN), defaults to OS user data directory
 - Environment variable support (`ISCC_SEARCH_` prefix)
 - `.env` file support
 - `override()` method for runtime configuration changes
 
-**get_index() Factory**: Parses `indexes_uri` and returns appropriate backend:
+**get_index() Factory**: Parses `index_uri` and returns appropriate backend:
 
 - `memory://` → MemoryIndex
 - Directory path → LmdbIndexManager
@@ -318,8 +318,8 @@ All methods are synchronous. Backends may use threading/connection pools interna
 ### LMDB Index (Production)
 
 ```bash
-# Set ISCC_SEARCH_INDEXES_URI to local path (or use default from platformdirs)
-export ISCC_SEARCH_INDEXES_URI=/path/to/index_data
+# Set ISCC_SEARCH_INDEX_URI to local path (or use default from platformdirs)
+export ISCC_SEARCH_INDEX_URI=/path/to/index_data
 
 # CLI commands
 iscc-search create myindex
@@ -335,8 +335,8 @@ uvicorn iscc_search.server.app:app --host 0.0.0.0 --port 8000
 ### Memory Index (Testing)
 
 ```bash
-# Set ISCC_SEARCH_INDEXES_URI to memory:// for in-memory index
-export ISCC_SEARCH_INDEXES_URI=memory://
+# Set ISCC_SEARCH_INDEX_URI to memory:// for in-memory index
+export ISCC_SEARCH_INDEX_URI=memory://
 
 # CLI works with in-memory storage (no persistence)
 iscc-search create myindex
@@ -350,8 +350,8 @@ uvicorn iscc_search.server.app:app --host 0.0.0.0 --port 8000
 ### Postgres Index (Future)
 
 ```bash
-# Set ISCC_SEARCH_INDEXES_URI to Postgres connection string
-export ISCC_SEARCH_INDEXES_URI=postgresql://user:password@localhost/isccdb
+# Set ISCC_SEARCH_INDEX_URI to Postgres connection string
+export ISCC_SEARCH_INDEX_URI=postgresql://user:password@localhost/isccdb
 
 # CLI and server work the same way across all backends
 iscc-search create myindex
@@ -361,7 +361,7 @@ uvicorn iscc_search.server.app:app --host 0.0.0.0 --port 8000
 ## Key Benefits
 
 1. **Clean Abstraction**: Protocol-based design enables index swapping without changing frontend code
-2. **Simple Configuration**: Single `ISCC_SEARCH_INDEXES_URI` variable determines entire deployment topology
+2. **Simple Configuration**: Single `ISCC_SEARCH_INDEX_URI` variable determines entire deployment topology
 3. **Modular Packages**: Each index implementation is self-contained and independently testable
 4. **Synchronous Simplicity**: No async complexity, straightforward implementation
 5. **Zero Code Duplication**: CLI and API share identical index implementations

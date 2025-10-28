@@ -32,10 +32,10 @@ class SearchSettings(BaseSettings):
     - Runtime override using the override() method
 
     Attributes:
-        indexes_uri: Location where index data is stored (local file path, DSN, or URI scheme)
+        index_uri: Location where index data is stored (local file path, DSN, or URI scheme)
     """
 
-    indexes_uri: str = Field(
+    index_uri: str = Field(
         iscc_search.dirs.user_data_dir,
         description="Location where index data is stored (local file path or DSN)",
     )
@@ -74,7 +74,7 @@ def get_index():
     """
     Factory function to create index from settings.
 
-    Parses indexes_uri to determine index type and returns appropriate
+    Parses index_uri to determine index type and returns appropriate
     implementation. Currently supports:
     - memory:// → MemoryIndex (in-memory, no persistence)
     - file:// or path → LmdbIndexManager (LMDB-backed, production-ready)
@@ -88,7 +88,7 @@ def get_index():
     from iscc_search.protocol import IsccIndexProtocol  # noqa: F401
     import os
 
-    uri = search_settings.indexes_uri
+    uri = search_settings.index_uri
 
     # Handle memory:// scheme
     if uri == "memory://" or uri.startswith("memory://"):
@@ -116,7 +116,7 @@ def get_index():
     # Reject unsupported URI schemes to prevent silent data loss
     supported = ["memory://", "file path", "file://"]
     raise ValueError(
-        f"Unsupported ISCC_SEARCH_INDEXES_URI: '{uri}'. "
+        f"Unsupported ISCC_SEARCH_INDEX_URI: '{uri}'. "
         f"Currently supported schemes: {', '.join(supported)}. "
         f"PostgreSQL URIs are not yet implemented."
     )

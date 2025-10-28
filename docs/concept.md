@@ -16,12 +16,13 @@ asset (text, image, audio, video), you generate an ISCC-CODE that captures multi
 Think of it as a machine-readable descriptor optimized for similarity matching.
 
 **ISCC-UNIT**: Individual components that make up an ISCC-CODE. Each unit uses a specialized algorithm:
+
 - **Media-specific units**: Text, image, audio, or video fingerprints
 - **Generic units**: Work with any bitstream regardless of media type
 - **Similarity-preserving**: Most units are binary codes (bit-vectors) that support similarity matching via
-  hamming distance
+    hamming distance
 - **Exact matching**: Instance-Code is the exception - a cryptographic hash (blake3) for exact duplicate
-  detection
+    detection
 
 **ISCC-ID**: A persistent identifier (PID) that answers *who declared what content when and where*. Unlike
 ISCC-CODEs and UNITs (which are deterministic fingerprints), ISCC-IDs are issued by a distributed network of
@@ -81,16 +82,17 @@ ISCC-SEARCH implements custom indexing techniques optimized for ISCC structure, 
 Consider a digital content platform with millions of images:
 
 1. **Content Registration**: User uploads an image → system generates ISCC-CODE with META, CONTENT-IMAGE, DATA,
-   and INSTANCE units → stores with ISCC-ID
+    and INSTANCE units → stores with ISCC-ID
 
 2. **Similarity Search**: New image arrives → generate ISCC-CODE → search finds:
-   - Exact duplicates (INSTANCE match: 100% identical binary)
-   - Edited versions (CONTENT match: 95% perceptual similarity)
-   - Similar images (DATA match: 85% structural similarity)
-   - Related metadata (META match: 80% title/creator similarity)
+
+    - Exact duplicates (INSTANCE match: 100% identical binary)
+    - Edited versions (CONTENT match: 95% perceptual similarity)
+    - Similar images (DATA match: 85% structural similarity)
+    - Related metadata (META match: 80% title/creator similarity)
 
 3. **Result Ranking**: Aggregates scores across unit types, prioritizing stronger signals (INSTANCE > CONTENT >
-   DATA > META)
+    DATA > META)
 
 This bidirectional discovery - finding ISCCs from content and content from ISCCs - is what makes ISCC-ID
 different from traditional PIDs.
@@ -199,4 +201,4 @@ Best for:
 - Scenarios requiring advanced SQL querying capabilities
 
 All index types expose the same API - switch between them by changing a single environment variable
-(`ISCC_SEARCH_INDEXES_URI`).
+(`ISCC_SEARCH_INDEX_URI`).

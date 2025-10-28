@@ -157,8 +157,8 @@ def test_update_asset_metadata(manager, sample_iscc_ids, sample_content_units):
 
 def test_settings_integration_file_path(tmp_path):
     """Test get_index() factory with file path in settings."""
-    # Set indexes_uri to file path
-    settings = SearchSettings(indexes_uri=str(tmp_path))
+    # Set index_uri to file path
+    settings = SearchSettings(index_uri=str(tmp_path))
 
     # Override global settings (for this test)
     import iscc_search.settings

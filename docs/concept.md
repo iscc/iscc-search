@@ -51,6 +51,25 @@ This enables meaningful similarity comparison between:
 Standard Hamming distance doesn't work here because it treats all bit differences equally regardless of vector
 length, producing incorrect similarity scores when comparing codes of different lengths.
 
+## Example Use Case
+
+Consider a digital content platform with millions of images:
+
+1. **Content Registration**: User uploads an image → system generates ISCC-CODE with META, CONTENT-IMAGE, DATA,
+   and INSTANCE units → stores with ISCC-ID
+
+2. **Similarity Search**: New image arrives → generate ISCC-CODE → search finds:
+   - Exact duplicates (INSTANCE match: 100% identical binary)
+   - Edited versions (CONTENT match: 95% perceptual similarity)
+   - Similar images (DATA match: 85% structural similarity)
+   - Related metadata (META match: 80% title/creator similarity)
+
+3. **Result Ranking**: Aggregates scores across unit types, prioritizing stronger signals (INSTANCE > CONTENT >
+   DATA > META)
+
+This bidirectional discovery - finding ISCCs from content and content from ISCCs - is what makes ISCC-ID
+different from traditional PIDs.
+
 ## The ISCC-SEARCH Solution
 
 ISCC-SEARCH addresses the challenge of reverse content discovery at web scale. Traditional approaches to

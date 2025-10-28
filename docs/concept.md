@@ -28,6 +28,21 @@ ISCC-CODEs and UNITs (which are deterministic fingerprints), ISCC-IDs are issued
 ISCC-HUBs. Each ISCC-ID encodes a microsecond timestamp and the identifier of the issuing hub, linking to
 metadata and services.
 
+```mermaid
+graph TB
+    ID[<b>ISCC-ID</b><br/>Persistent Identifier<br/><i>who • what • when • where</i>]
+
+    CODE[<b>ISCC-CODE</b><br/>Multi-component Fingerprint<br/><i>deterministic content descriptor</i>]
+
+    META[<b>META-CODE</b><br/><i>title, creator</i>]
+    CONTENT[<b>CONTENT-CODE</b><br/><i>perceptual similarity</i>]
+    DATA[<b>DATA-CODE</b><br/><i>structural similarity</i>]
+    INSTANCE[<b>INSTANCE-CODE</b><br/><i>exact duplicate</i>]
+
+    ID -.-> |references| CODE
+    CODE --> |composed of| META & CONTENT & DATA & INSTANCE
+```
+
 ### Technical Structure
 
 All ISCCs share a common format: a variable-length **ISCC-HEADER** (minimum 2 bytes) followed by an

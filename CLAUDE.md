@@ -155,3 +155,9 @@ Common pitfalls to avoid:
 - **Virtual Environment**: Assume you are running within an activated virtual environment
 - **Command prefix**: You don't need to prefix commands with `uv run` with an activated virtual environment
 - **Working directory**: Assume your current working directory is the project directory
+
+## Remember
+
+For now ISCC-SEARCH is unreleased work in progress and we do not care about backwards compatibility neither do
+we need to document breaking changes. We are free to change anything at any time if it helps to improve the
+project architecture, desing, maintainability, testability, or implementation.

@@ -243,18 +243,18 @@ def memory_index_instance():
     return MemoryIndex()
 
 
-@pytest.fixture(params=["memory", "lmdb"])
+@pytest.fixture(params=["memory", "lmdb", "usearch"])
 def backend_index(request, tmp_path):
     # type: (typing.Any, typing.Any) -> typing.Any
     """
-    Parametrized fixture providing both index backend implementations.
+    Parametrized fixture providing all index backend implementations.
 
     Creates fresh index instances for each test with proper cleanup.
-    Tests using this fixture will automatically run against both backends.
+    Tests using this fixture will automatically run against all backends.
 
-    :param request: Pytest request object with param ("memory" or "lmdb")
-    :param tmp_path: Pytest temp directory for LMDB storage
-    :return: Index instance (MemoryIndex or LmdbIndexManager)
+    :param request: Pytest request object with param ("memory", "lmdb", or "usearch")
+    :param tmp_path: Pytest temp directory for LMDB and Usearch storage
+    :return: Index instance (MemoryIndex, LmdbIndexManager, or UsearchIndexManager)
     """
     backend_type = request.param
 
@@ -268,6 +268,12 @@ def backend_index(request, tmp_path):
         # Use isolated temp directory for each test
         lmdb_path = tmp_path / "lmdb_indexes"
         index = LmdbIndexManager(lmdb_path)
+    elif backend_type == "usearch":
+        from iscc_search.indexes.usearch import UsearchIndexManager
+
+        # Use isolated temp directory for each test
+        usearch_path = tmp_path / "usearch_indexes"
+        index = UsearchIndexManager(usearch_path)
     else:  # pragma: no cover
         raise ValueError(f"Unknown backend type: {backend_type}")
 
@@ -285,7 +291,8 @@ def test_client(backend_index):
 
     Provides a FastAPI TestClient for making HTTP requests to the API.
     Uses the backend_index fixture which parametrizes over all implementations.
-    This ensures all server tests run against both MemoryIndex and LmdbIndexManager.
+    This ensures all server tests run against MemoryIndex, LmdbIndexManager,
+    and UsearchIndexManager.
 
     :param backend_index: Parametrized index backend instance
     :return: FastAPI TestClient instance

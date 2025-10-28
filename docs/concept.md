@@ -10,8 +10,9 @@ asset. We are distinguishing three broad categories of ISCCs: ISCC-UNITs, ISCC-C
 
 ISCC-CODEs are multi-component fingerprints derived from digital content. The individual components of an
 ISCC-CODE are called ISCC-UNITs. Each ISCC-UNIT uses a different algorithm such that in combination an ISCC-CODE
-identifies a digital asset using a multi-faceted approach. Some ISCC-UNIT algorithms are media-type specific
-such as text, image, audio or video others can work with any bitstream.
+identifies a digital asset using a multi-faceted approach. Some ISCC-UNIT are media-type specific and can only
+identify digital assets of a specific media type, such as text, image, audio, or video. Other UNTS can work with
+any bitstream.
 
 All algorithms, except for one, produce ISCC-UNITs that are similarity preserving binary codes (bit-vectors)
 that can match similar content based on hamming distance. The one exception is the Instance-Code, which is a
@@ -25,31 +26,31 @@ This is where the ISCC-ID comes into play. ISCC-IDs are PIDs that record who dec
 and where to find related metadata and services. ISCC-IDs issued by a distributed network of ISCC-HUBs and can
 be decoded to a microsecond timestamp and an identifier of the issuing HUB.
 
-But how are ISCC-IDs different from other PIDs? The difference is that traditional PIDs are unidirectional. They
-resolve PIDs to metadata, content, and services. The ISCC-ID is bidirectional such that you can discover PID(s)
-for some digital content by means of generating an ISCC-CODE and searching for ISCC-IDs issued for the same
-similar content.
+## The Problem: Bidirectional Content Discovery
 
-ISCC-SEARCH implements custom indexing techniques that are tailored to the structure of the ISCC and enable web
-scale content based reverse search.
+How are ISCC-IDs different from other PIDs? Traditional PIDs are unidirectional - they resolve PIDs to metadata,
+content, and services. The ISCC-ID is bidirectional, enabling you to discover PID(s) for digital content by
+generating an ISCC-CODE and searching for ISCC-IDs issued for the same or similar content.
 
-### The NPHD Distance Metric
+This reverse discovery capability creates unique indexing challenges that traditional approaches struggle to
+address efficiently at web scale.
 
-ISCC-SEARCH uses **Normalized Prefix Hamming Distance (NPHD)** as its core similarity metric. Unlike standard
-Hamming distance, NPHD handles variable-length codes by:
+## The Solution: ISCC-SEARCH
 
-1. **Prefix alignment**: Compares only the common prefix length of two codes
-2. **Length normalization**: Divides bit differences by common prefix length
-3. **Metric properties**: Satisfies all metric axioms (non-negativity, identity, symmetry, triangle inequality)
+ISCC-SEARCH addresses the challenge of reverse content discovery at web scale. Traditional approaches to
+similarity search struggle with:
 
-This enables meaningful similarity comparison between:
+- Variable-length codes (64-256 bits) that must be matched efficiently
+- Multiple unit types requiring specialized indexing strategies
+- Prefix compatibility requirements for shorter/longer codes
+- Need for both exact (INSTANCE) and similarity (other units) matching
 
-- Short 64-bit codes from ISCC-CODEs (embedded in composite codes)
-- Extended 256-bit ISCC-UNITs (standalone, high-precision)
-- Mixed-length codes in the same search operation
+ISCC-SEARCH implements custom indexing techniques optimized for ISCC structure, providing:
 
-Standard Hamming distance doesn't work here because it treats all bit differences equally regardless of vector
-length, producing incorrect similarity scores when comparing codes of different lengths.
+- Unified interface across multiple storage backends
+- Bidirectional prefix matching for variable-length codes
+- Parallel search across unit-specific indexes with aggregated ranking
+- Sub-millisecond query performance at scale
 
 ## Example Use Case
 
@@ -70,24 +71,9 @@ Consider a digital content platform with millions of images:
 This bidirectional discovery - finding ISCCs from content and content from ISCCs - is what makes ISCC-ID
 different from traditional PIDs.
 
-## The ISCC-SEARCH Solution
+## Technical Foundation
 
-ISCC-SEARCH addresses the challenge of reverse content discovery at web scale. Traditional approaches to
-similarity search struggle with:
-
-- Variable-length codes (64-256 bits) that must be matched efficiently
-- Multiple unit types requiring specialized indexing strategies
-- Prefix compatibility requirements for shorter/longer codes
-- Need for both exact (INSTANCE) and similarity (other units) matching
-
-ISCC-SEARCH implements custom indexing techniques optimized for ISCC structure, providing:
-
-- Unified interface across multiple storage backends
-- Bidirectional prefix matching for variable-length codes
-- Parallel search across unit-specific indexes with aggregated ranking
-- Sub-millisecond query performance at scale
-
-## ISCC Indexing Requirements
+### ISCC Indexing Requirements
 
 An ISCC index provides a unified interface for searching and matching ISCCs. This project provides multiple
 index types, each making different tradeoffs in the solution space.
@@ -105,7 +91,27 @@ the same type are extensions of their shorter counterparts such that their commo
 means that, while the statistical probability of unintended collisions is higher with shorter codes, we can
 still match and compare short ISCC-UNITs against long ISCC-UNITS.
 
-## Index Types
+### The NPHD Distance Metric
+
+ISCC-SEARCH uses **Normalized Prefix Hamming Distance (NPHD)** as its core similarity metric. Unlike standard
+Hamming distance, NPHD handles variable-length codes by:
+
+1. **Prefix alignment**: Compares only the common prefix length of two codes
+2. **Length normalization**: Divides bit differences by common prefix length
+3. **Metric properties**: Satisfies all metric axioms (non-negativity, identity, symmetry, triangle inequality)
+
+This enables meaningful similarity comparison between:
+
+- Short 64-bit codes from ISCC-CODEs (embedded in composite codes)
+- Extended 256-bit ISCC-UNITs (standalone, high-precision)
+- Mixed-length codes in the same search operation
+
+Standard Hamming distance doesn't work here because it treats all bit differences equally regardless of vector
+length, producing incorrect similarity scores when comparing codes of different lengths.
+
+## Implementation Choices
+
+### Index Types
 
 ISCC-SEARCH provides multiple index implementations through a unified protocol-based interface, allowing you to
 choose the right backend for your deployment:

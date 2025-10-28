@@ -2,29 +2,38 @@
 
 ## Introduction
 
-The International Standard Content Code (ISCC) is an open source content identification system. ISCCs come in
-multiple different flavors but share a common format and structure. Every ISCC is self-describing and starts
-with variable-length ISCC-HEADER (minimum 2 bytes) that identifies the MainType, SubType, Version, and Length of
-an ISCC. The ISCC-HEADER is followed by an ISCC-BODY which is the actual payload that identifies a given digital
-asset. We are distinguishing three broad categories of ISCCs: ISCC-UNITs, ISCC-CODEs, and ISCC-IDs:
+The International Standard Content Code (ISCC) is an open source content identification system that enables
+content-based discovery of digital assets. Instead of relying solely on names, URLs, or traditional persistent
+identifiers (PIDs), ISCC allows you to find content by what it *is* - its actual characteristics and similarity
+to other content.
 
-ISCC-CODEs are multi-component fingerprints derived from digital content. The individual components of an
-ISCC-CODE are called ISCC-UNITs. Each ISCC-UNIT uses a different algorithm such that in combination an ISCC-CODE
-identifies a digital asset using a multi-faceted approach. Some ISCC-UNIT are media-type specific and can only
-identify digital assets of a specific media type, such as text, image, audio, or video. Other UNTS can work with
-any bitstream.
+### Three Types of ISCCs
 
-All algorithms, except for one, produce ISCC-UNITs that are similarity preserving binary codes (bit-vectors)
-that can match similar content based on hamming distance. The one exception is the Instance-Code, which is a
-cryptographic hash (blake3).
+ISCC distinguishes three broad categories, each serving a different purpose:
 
-ISCC-CODEs and UNITs are not to be confused with persistent identifiers (PIDs). The sole purpose of these ISCCs
-is to serve as standardized and reproducible and machine readable descriptors or fingerprints for digital
-assets.
+**ISCC-CODE**: A multi-component fingerprint derived from digital content itself. When you process a digital
+asset (text, image, audio, video), you generate an ISCC-CODE that captures multiple facets of that content.
+Think of it as a machine-readable descriptor optimized for similarity matching.
 
-This is where the ISCC-ID comes into play. ISCC-IDs are PIDs that record who declared what content at what time
-and where to find related metadata and services. ISCC-IDs issued by a distributed network of ISCC-HUBs and can
-be decoded to a microsecond timestamp and an identifier of the issuing HUB.
+**ISCC-UNIT**: Individual components that make up an ISCC-CODE. Each unit uses a specialized algorithm:
+- **Media-specific units**: Text, image, audio, or video fingerprints
+- **Generic units**: Work with any bitstream regardless of media type
+- **Similarity-preserving**: Most units are binary codes (bit-vectors) that support similarity matching via
+  hamming distance
+- **Exact matching**: Instance-Code is the exception - a cryptographic hash (blake3) for exact duplicate
+  detection
+
+**ISCC-ID**: A persistent identifier (PID) that answers *who declared what content when and where*. Unlike
+ISCC-CODEs and UNITs (which are deterministic fingerprints), ISCC-IDs are issued by a distributed network of
+ISCC-HUBs. Each ISCC-ID encodes a microsecond timestamp and the identifier of the issuing hub, linking to
+metadata and services.
+
+### Technical Structure
+
+All ISCCs share a common format: a variable-length **ISCC-HEADER** (minimum 2 bytes) followed by an
+**ISCC-BODY**. This structure makes ISCCs self-describing: the header describes the body by specifying its
+MainType, SubType, Version, and Length. The body contains the actual payload - the fingerprint data that
+identifies or references digital content.
 
 ## The Problem: Bidirectional Content Discovery
 

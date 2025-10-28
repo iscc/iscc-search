@@ -156,9 +156,9 @@ def test_update_asset_metadata(manager, sample_iscc_ids, sample_content_units):
 
 
 def test_settings_integration_file_path(tmp_path):
-    """Test get_index() factory with file path in settings."""
-    # Set index_uri to file path
-    settings = SearchSettings(index_uri=str(tmp_path))
+    """Test get_index() factory with lmdb:// URI scheme in settings."""
+    # Set index_uri to lmdb:// scheme (use file:// format with three slashes)
+    settings = SearchSettings(index_uri=f"lmdb:///{tmp_path}")
 
     # Override global settings (for this test)
     import iscc_search.settings

@@ -32,12 +32,15 @@ class SearchSettings(BaseSettings):
     - Runtime override using the override() method
 
     Attributes:
-        index_uri: Location where index data is stored (local file path, DSN, or URI scheme)
+        index_uri: URI specifying index backend and location. Supported schemes:
+                   - memory:// → In-memory index (no persistence)
+                   - lmdb:///path → LMDB index at directory path
+                   - usearch:///path → Usearch index (not yet implemented)
     """
 
     index_uri: str = Field(
         iscc_search.dirs.user_data_dir,
-        description="Location where index data is stored (local file path or DSN)",
+        description="URI specifying index backend (memory://, lmdb://, usearch://)",
     )
 
     model_config = SettingsConfigDict(
@@ -75,48 +78,62 @@ def get_index():
     Factory function to create index from settings.
 
     Parses index_uri to determine index type and returns appropriate
-    implementation. Currently supports:
+    implementation. Supported URI schemes:
     - memory:// → MemoryIndex (in-memory, no persistence)
-    - file:// or path → LmdbIndexManager (LMDB-backed, production-ready)
+    - lmdb:///path → LmdbIndexManager (LMDB-backed, production-ready)
+    - usearch:///path → UsearchIndex (not yet implemented)
 
     Future implementations:
-    - postgresql:// → PostgresIndex (not yet implemented)
+    - postgresql:// → PostgresIndex (planned)
 
     :return: Index instance implementing IsccIndexProtocol
-    :raises ValueError: If URI scheme is not supported
+    :raises ValueError: If URI scheme is not supported or missing
+    :raises NotImplementedError: If URI scheme is planned but not yet implemented
     """
     from iscc_search.protocol import IsccIndexProtocol  # noqa: F401
-    import os
+    import sys
 
     uri = search_settings.index_uri
 
-    # Handle memory:// scheme
+    # Handle memory:// scheme (no path needed)
     if uri == "memory://" or uri.startswith("memory://"):
         from iscc_search.indexes.memory import MemoryIndex
 
         return MemoryIndex()
 
-    # Detect file paths (Windows: C:\..., Unix: /..., relative: ...)
-    # Check if it's an absolute path before parsing as URI
-    if os.path.isabs(uri) or "://" not in uri:
-        # It's a file path (absolute or relative)
-        from iscc_search.indexes.lmdb import LmdbIndexManager
-
-        return LmdbIndexManager(uri)
+    # Require explicit URI scheme (reject plain paths)
+    if "://" not in uri:
+        supported = ["memory://", "lmdb:///path", "usearch:///path (planned)"]
+        raise ValueError(
+            f"ISCC_SEARCH_INDEX_URI requires explicit scheme, got: '{uri}'. Supported schemes: {', '.join(supported)}"
+        )
 
     # Parse as URI
     parsed = urlparse(uri)
 
-    if parsed.scheme == "file":
-        # file:// URI
+    # Handle lmdb:// scheme
+    if parsed.scheme == "lmdb":
         from iscc_search.indexes.lmdb import LmdbIndexManager
 
-        return LmdbIndexManager(parsed.path)
+        # Handle Windows paths: urlparse('/C:/path') → need to strip leading '/'
+        path = parsed.path
+        if sys.platform == "win32" and path.startswith("/") and len(path) > 2 and path[2] == ":":
+            path = path[1:]  # Remove leading '/' from '/C:/path'
 
-    # Reject unsupported URI schemes to prevent silent data loss
-    supported = ["memory://", "file path", "file://"]
+        return LmdbIndexManager(path)
+
+    # Handle usearch:// scheme (planned, not yet implemented)
+    if parsed.scheme == "usearch":
+        raise NotImplementedError(
+            "usearch:// scheme is not yet implemented. "
+            "UsearchIndex is planned for a future release. "
+            "NphdIndex will be integrated as an internal component of UsearchIndex."
+        )
+
+    # Reject unsupported URI schemes
+    supported = ["memory://", "lmdb://", "usearch:// (planned)"]
     raise ValueError(
-        f"Unsupported ISCC_SEARCH_INDEX_URI: '{uri}'. "
-        f"Currently supported schemes: {', '.join(supported)}. "
-        f"PostgreSQL URIs are not yet implemented."
+        f"Unsupported ISCC_SEARCH_INDEX_URI scheme: '{uri}'. "
+        f"Supported schemes: {', '.join(supported)}. "
+        f"PostgreSQL URIs are planned for future implementation."
     )

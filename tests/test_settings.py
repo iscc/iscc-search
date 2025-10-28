@@ -100,15 +100,14 @@ def test_search_settings_extra_fields_ignored():
 
 
 def test_get_index_default(tmp_path):
-    """Test get_index() factory function with default settings."""
+    """Test get_index() factory function with default settings using lmdb:// scheme."""
     import iscc_search.settings
     from iscc_search.indexes.lmdb import LmdbIndexManager
 
     original_uri = iscc_search.settings.search_settings.index_uri
     try:
-        # Override to tmp_path to avoid touching real user data directory
-        iscc_search.settings.search_settings.index_uri = str(tmp_path)
-        # Default URI from platformdirs is a file path, now supported via LMDB
+        # Override to tmp_path with lmdb:// scheme
+        iscc_search.settings.search_settings.index_uri = f"lmdb://{tmp_path}"
         index = get_index()
         assert isinstance(index, LmdbIndexManager)
         index.close()
@@ -133,19 +132,17 @@ def test_get_index_memory_uri():
 
 
 def test_get_index_custom_path(tmp_path):
-    """Test get_index() factory with custom file path (now implemented via LMDB)."""
+    """Test get_index() factory rejects plain paths without URI scheme."""
     import iscc_search.settings
-    from iscc_search.indexes.lmdb import LmdbIndexManager
+    import pytest
 
     original_uri = iscc_search.settings.search_settings.index_uri
     try:
-        # Override settings temporarily
+        # Plain paths without scheme should raise ValueError
         custom_path = str(tmp_path / "custom_indexes")
         iscc_search.settings.search_settings.index_uri = custom_path
-        # File paths are now supported via LmdbIndexManager
-        index = get_index()
-        assert isinstance(index, LmdbIndexManager)
-        index.close()
+        with pytest.raises(ValueError, match="requires explicit scheme"):
+            get_index()
     finally:
         # Restore original
         iscc_search.settings.search_settings.index_uri = original_uri
@@ -160,26 +157,42 @@ def test_get_index_unsupported_uri():
     try:
         # PostgreSQL URI is not yet supported
         iscc_search.settings.search_settings.index_uri = "postgresql://user:pass@localhost/isccdb"
-        with pytest.raises(ValueError, match="Unsupported ISCC_SEARCH_INDEX_URI"):
+        with pytest.raises(ValueError, match="Unsupported ISCC_SEARCH_INDEX_URI scheme"):
             get_index()
     finally:
         # Restore original
         iscc_search.settings.search_settings.index_uri = original_uri
 
 
-def test_get_index_file_uri(tmp_path):
-    """Test get_index() factory with file:// URI scheme."""
+def test_get_index_lmdb_uri(tmp_path):
+    """Test get_index() factory with lmdb:// URI scheme."""
     import iscc_search.settings
     from iscc_search.indexes.lmdb import LmdbIndexManager
 
     original_uri = iscc_search.settings.search_settings.index_uri
     try:
-        # file:// URI should work
-        file_uri = f"file://{tmp_path / 'file_uri_test'}"
-        iscc_search.settings.search_settings.index_uri = file_uri
+        # lmdb:// URI should work
+        lmdb_uri = f"lmdb://{tmp_path / 'lmdb_test'}"
+        iscc_search.settings.search_settings.index_uri = lmdb_uri
         index = get_index()
         assert isinstance(index, LmdbIndexManager)
         index.close()
+    finally:
+        # Restore original
+        iscc_search.settings.search_settings.index_uri = original_uri
+
+
+def test_get_index_usearch_uri():
+    """Test get_index() factory with usearch:// URI scheme raises NotImplementedError."""
+    import iscc_search.settings
+    import pytest
+
+    original_uri = iscc_search.settings.search_settings.index_uri
+    try:
+        # usearch:// URI should raise NotImplementedError
+        iscc_search.settings.search_settings.index_uri = "usearch:///tmp/usearch_test"
+        with pytest.raises(NotImplementedError, match="usearch:// scheme is not yet implemented"):
+            get_index()
     finally:
         # Restore original
         iscc_search.settings.search_settings.index_uri = original_uri

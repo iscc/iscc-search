@@ -5,7 +5,7 @@
 The International Standard Content Code (ISCC) is an open source content identification system. ISCCs come in
 multiple different flavors but share a common format and structure. Every ISCC is self-describing and starts
 with variable-length ISCC-HEADER (minimum 2 bytes) that identifies the MainType, SubType, Version, and Length of
-an ISCC. The ISCC-HEADER is followed by an ISCC-BODY wich is the actual payload that identifies a given digital
+an ISCC. The ISCC-HEADER is followed by an ISCC-BODY which is the actual payload that identifies a given digital
 asset. We are distinguishing three broad categories of ISCCs: ISCC-UNITs, ISCC-CODEs, and ISCC-IDs:
 
 ISCC-CODEs are multi-component fingerprints derived from digital content. The individual components of an
@@ -21,7 +21,7 @@ ISCC-CODEs and UNITs are not to be confused with persistent identifiers (PIDs). 
 is to serve as standardized and reproducible and machine readable descriptors or fingerprints for digital
 assets.
 
-This is where the ISCC-ID comes into play. ISCC-IDs are PIDs that record who declared what content at what time♠
+This is where the ISCC-ID comes into play. ISCC-IDs are PIDs that record who declared what content at what time
 and where to find related metadata and services. ISCC-IDs issued by a distributed network of ISCC-HUBs and can
 be decoded to a microsecond timestamp and an identifier of the issuing HUB.
 
@@ -32,6 +32,24 @@ similar content.
 
 ISCC-SEARCH implements custom indexing techniques that are tailored to the structure of the ISCC and enable web
 scale content based reverse search.
+
+### The NPHD Distance Metric
+
+ISCC-SEARCH uses **Normalized Prefix Hamming Distance (NPHD)** as its core similarity metric. Unlike standard
+Hamming distance, NPHD handles variable-length codes by:
+
+1. **Prefix alignment**: Compares only the common prefix length of two codes
+2. **Length normalization**: Divides bit differences by common prefix length
+3. **Metric properties**: Satisfies all metric axioms (non-negativity, identity, symmetry, triangle inequality)
+
+This enables meaningful similarity comparison between:
+
+- Short 64-bit codes from ISCC-CODEs (embedded in composite codes)
+- Extended 256-bit ISCC-UNITs (standalone, high-precision)
+- Mixed-length codes in the same search operation
+
+Standard Hamming distance doesn't work here because it treats all bit differences equally regardless of vector
+length, producing incorrect similarity scores when comparing codes of different lengths.
 
 ## The ISCC-SEARCH Solution
 
@@ -74,7 +92,7 @@ still match and compare short ISCC-UNITs against long ISCC-UNITS.
 
 The LMDB Index is an embeddable, memory efficient, and durable index that uses local storage and supports
 incremental updates. It matches ISCC-UNITs based on common prefixes supporting variable length UNIT matches. It
-can only match near duplicates where to different but similar assets happen produce identical ISCC-UNITs or
+can only match near duplicates where two different but similar assets happen to produce identical ISCC-UNITs or
 unit-prefixes.
 
 ### Usearch Index

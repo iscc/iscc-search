@@ -88,27 +88,66 @@ still match and compare short ISCC-UNITs against long ISCC-UNITS.
 
 ## Index Types
 
+ISCC-SEARCH provides multiple index implementations through a unified protocol-based interface, allowing you to
+choose the right backend for your deployment:
+
+### Memory Index
+
+An in-memory index ideal for **testing and development**. Provides instant startup with no persistence overhead.
+Use when:
+
+- Running unit tests
+- Prototyping search behavior
+- Benchmarking without I/O overhead
+
 ### LMDB Index
 
-The LMDB Index is an embeddable, memory efficient, and durable index that uses local storage and supports
-incremental updates. It matches ISCC-UNITs based on common prefixes supporting variable length UNIT matches. It
-can only match near duplicates where two different but similar assets happen to produce identical ISCC-UNITs or
-unit-prefixes.
+A durable, embeddable index using **Lightning Memory-Mapped Database**. Production-ready with:
 
-### Usearch Index
+- Automatic persistence to local storage
+- Bidirectional prefix matching for variable-length codes
+- Memory-efficient operation via memory mapping
+- Zero-copy reads and ACID transactions
 
-The Usearch Index an embeddable index that provides fast and scalable similarity search for ISCCs. It makes use
-of the Hierarchical Navigable Small World (HNSW) algorithm for efficiently finding approximate nearest neighbors
-by building a hierarchical, multi-layered graph index. As such it can also match and rank ISCCs with
-non-identical but similar codes. By default Usearch only supports indexes with fixed-length vectors. To overcome
-that restriction we store ISCC-UNITs with a one byte length prefix and fixed-length padding. To support matching
-those variable-length ISCC-UNITs we implemented as specialized distance metric called "Normalized Prefix Hamming
-Distance (NPHD)" that accounts for the custom storage format. In read-only (view) mode the Usearch index is can
-be efficiently memory mapped and support indexes that are larger than RAM. Usearch support incremental index
-building but only if the entire index is loaded into memory.
+Best for:
 
-### Postgres Index
+- Single-server deployments
+- Embedded applications
+- Local development with persistent data
 
-The Postgres index uses the PGvector extenstion to support efficient similarity search over ISCC-UNITs in
-hamming space using its HNSW implementation. ISCC-UNITs are indexed in separate tables. The Postgres index
-stores all ISCC-UNITs using their short 64-bit representation does not support variable length indexing.
+### Usearch Index (Planned)
+
+A high-performance index using **Hierarchical Navigable Small World (HNSW)** graphs for fast approximate nearest
+neighbor search. Designed for:
+
+- Large-scale similarity search with millions of vectors
+- Sub-millisecond query latency
+- Memory-mapped operation supporting indexes larger than RAM
+- NPHD-based matching of variable-length codes
+
+Best for:
+
+- High-throughput search applications
+- Scenarios requiring approximate matching beyond exact prefix matches
+- Production deployments where performance is critical
+
+### Postgres Index (Planned)
+
+A scalable index using **PostgreSQL + pgvector extension**. Designed for:
+
+- Multi-server deployments with horizontal scaling
+- Centralized search infrastructure
+- Integration with existing PostgreSQL deployments
+- High-availability configurations
+
+**Important limitation**: Does not support mixed/variable-length indexing and matching. Users must decide on a
+fixed length for ISCC-UNITs before creating an index (e.g., all 64-bit or all 256-bit).
+
+Best for:
+
+- Enterprise deployments requiring centralized data management
+- Applications already using PostgreSQL
+- Scenarios requiring advanced SQL querying capabilities
+
+All index types expose the same API - switch between them by changing a single environment variable
+(`ISCC_SEARCH_INDEXES_URI`).

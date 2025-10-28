@@ -145,6 +145,9 @@ choose the right backend for your deployment:
 ### Memory Index
 
 An in-memory index ideal for **testing and development**. Provides instant startup with no persistence overhead.
+
+**Configuration**: `ISCC_SEARCH_INDEX_URI=memory://`
+
 Use when:
 
 - Running unit tests
@@ -160,13 +163,15 @@ A durable, embeddable index using **Lightning Memory-Mapped Database**. Producti
 - Memory-efficient operation via memory mapping
 - Zero-copy reads and ACID transactions
 
+**Configuration**: `ISCC_SEARCH_INDEX_URI=lmdb:///path/to/index_data`
+
 Best for:
 
 - Single-server deployments
 - Embedded applications
 - Local development with persistent data
 
-### Usearch Index (Planned)
+### Usearch Index (In Development)
 
 A high-performance index using **Hierarchical Navigable Small World (HNSW)** graphs for fast approximate nearest
 neighbor search. Designed for:
@@ -175,6 +180,11 @@ neighbor search. Designed for:
 - Sub-millisecond query latency
 - Memory-mapped operation supporting indexes larger than RAM
 - NPHD-based matching of variable-length codes
+
+**Configuration**: `ISCC_SEARCH_INDEX_URI=usearch:///path/to/index_data` (not yet available)
+
+**Note**: The underlying NphdIndex implementation exists but will be integrated as an internal component of
+UsearchIndex in a future release.
 
 Best for:
 

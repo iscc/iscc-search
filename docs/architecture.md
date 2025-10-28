@@ -103,11 +103,13 @@ All operations are synchronous for simplicity:
 Single `ISCC_SEARCH_INDEX_URI` environment variable determines index implementation:
 
 - **memory://**: `ISCC_SEARCH_INDEX_URI=memory://` → MemoryIndex (in-memory, no persistence) **[IMPLEMENTED]**
-- **Directory path**: `ISCC_SEARCH_INDEX_URI=/path/to/index_data` → LmdbIndexManager (file-based persistence)
+- **lmdb://**: `ISCC_SEARCH_INDEX_URI=lmdb:///path/to/index_data` → LmdbIndexManager (LMDB persistence)
     **[IMPLEMENTED]**
-- **Postgres DSN**: `ISCC_SEARCH_INDEX_URI=postgresql://user:pass@host/db` → PostgresIndex **[PLANNED]**
-- **Default**: Uses `platformdirs` to determine OS-appropriate user data directory → LmdbIndexManager
-    **[IMPLEMENTED]**
+- **usearch://**: `ISCC_SEARCH_INDEX_URI=usearch:///path/to/index_data` → UsearchIndex (ANNS with usearch)
+    **[PLANNED]**
+- **postgresql://**: `ISCC_SEARCH_INDEX_URI=postgresql://user:pass@host/db` → PostgresIndex **[PLANNED]**
+
+**Note**: Explicit URI schemes are required. Plain file paths are not supported.
 
 Configuration uses Pydantic Settings for:
 
@@ -232,7 +234,8 @@ All methods are synchronous. Backends may use threading/connection pools interna
 **get_index() Factory**: Parses `index_uri` and returns appropriate backend:
 
 - `memory://` → MemoryIndex
-- Directory path → LmdbIndexManager
+- `lmdb:///path` → LmdbIndexManager
+- `usearch:///path` → UsearchIndex (planned)
 - `postgresql://...` → PostgresIndex (planned)
 
 ### LMDB Index (`indexes/lmdb/`)
@@ -318,8 +321,8 @@ All methods are synchronous. Backends may use threading/connection pools interna
 ### LMDB Index (Production)
 
 ```bash
-# Set ISCC_SEARCH_INDEX_URI to local path (or use default from platformdirs)
-export ISCC_SEARCH_INDEX_URI=/path/to/index_data
+# Set ISCC_SEARCH_INDEX_URI with lmdb:// scheme
+export ISCC_SEARCH_INDEX_URI=lmdb:///path/to/index_data
 
 # CLI commands
 iscc-search create myindex

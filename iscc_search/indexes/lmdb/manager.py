@@ -106,13 +106,12 @@ class LmdbIndexManager:
         :return: IsccIndex with current metadata
         :raises FileNotFoundError: If index doesn't exist
         """
-        index_path = self.base_path / f"{name}.lmdb"
-        if not index_path.exists():
-            raise FileNotFoundError(f"Index '{name}' not found")
+        self._validate_index_exists(name)
 
         # Load index and get metadata
         idx = self._get_or_load_index(name)
         asset_count = idx.get_asset_count()
+        index_path = self.base_path / f"{name}.lmdb"
         size_mb = self._get_file_size_mb(index_path)
 
         return IsccIndex(name=name, assets=asset_count, size=size_mb)
@@ -125,9 +124,7 @@ class LmdbIndexManager:
         :param name: Index name
         :raises FileNotFoundError: If index doesn't exist
         """
-        index_path = self.base_path / f"{name}.lmdb"
-        if not index_path.exists():
-            raise FileNotFoundError(f"Index '{name}' not found")
+        self._validate_index_exists(name)
 
         # Close cached instance if open
         if name in self._index_cache:
@@ -135,6 +132,7 @@ class LmdbIndexManager:
             del self._index_cache[name]
 
         # Delete file
+        index_path = self.base_path / f"{name}.lmdb"
         os.remove(index_path)
 
     def add_assets(self, index_name, assets):
@@ -148,10 +146,7 @@ class LmdbIndexManager:
         :raises FileNotFoundError: If index doesn't exist
         :raises ValueError: If asset validation fails
         """
-        # Check existence
-        index_path = self.base_path / f"{index_name}.lmdb"
-        if not index_path.exists():
-            raise FileNotFoundError(f"Index '{index_name}' not found")
+        self._validate_index_exists(index_name)
 
         # Delegate to LmdbIndex
         idx = self._get_or_load_index(index_name)
@@ -168,10 +163,7 @@ class LmdbIndexManager:
         :raises FileNotFoundError: If index doesn't exist or asset not found
         :raises ValueError: If ISCC-ID format is invalid
         """
-        # Check index existence
-        index_path = self.base_path / f"{index_name}.lmdb"
-        if not index_path.exists():
-            raise FileNotFoundError(f"Index '{index_name}' not found")
+        self._validate_index_exists(index_name)
 
         # Delegate to LmdbIndex
         idx = self._get_or_load_index(index_name)
@@ -189,10 +181,7 @@ class LmdbIndexManager:
         :raises FileNotFoundError: If index doesn't exist
         :raises ValueError: If query validation fails
         """
-        # Check existence
-        index_path = self.base_path / f"{index_name}.lmdb"
-        if not index_path.exists():
-            raise FileNotFoundError(f"Index '{index_name}' not found")
+        self._validate_index_exists(index_name)
 
         # Delegate to LmdbIndex
         idx = self._get_or_load_index(index_name)
@@ -226,6 +215,18 @@ class LmdbIndexManager:
         idx = LmdbIndex(index_path)
         self._index_cache[name] = idx
         return idx
+
+    def _validate_index_exists(self, name):
+        # type: (str) -> None
+        """
+        Validate that an index exists.
+
+        :param name: Index name
+        :raises FileNotFoundError: If index doesn't exist
+        """
+        index_path = self.base_path / f"{name}.lmdb"
+        if not index_path.exists():
+            raise FileNotFoundError(f"Index '{name}' not found")
 
     def _get_file_size_mb(self, path):
         # type: (Path) -> int

@@ -328,10 +328,9 @@ class UsearchIndex:
     def close(self):
         # type: () -> None
         """Close LMDB environment and NphdIndex files."""
-        # Close all NphdIndex instances
+        # Close all NphdIndex instances (releases file handles for memory-mapped indexes)
         for nphd_index in self._nphd_indexes.values():
-            # NphdIndex doesn't have explicit close, but we can clear references
-            pass
+            nphd_index.reset()
 
         self._nphd_indexes.clear()
 

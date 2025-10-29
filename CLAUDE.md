@@ -170,3 +170,4 @@ Common pitfalls to avoid:
 For now ISCC-SEARCH is unreleased work in progress and we do not care about backwards compatibility neither do
 we need to document breaking changes. We are free to change anything at any time if it helps to improve the
 project architecture, desing, maintainability, testability, or implementation.
+- Use loguru for logging

@@ -10,6 +10,7 @@ Implements IsccIndexProtocol for use as backend in CLI and server.
 import shutil
 from pathlib import Path
 from typing import TYPE_CHECKING
+from loguru import logger
 from iscc_search.schema import IsccIndex
 from iscc_search.indexes.usearch.index import UsearchIndex
 from iscc_search.indexes import common
@@ -82,8 +83,9 @@ class UsearchIndexManager:
                 size_mb = self._get_directory_size_mb(index_dir)
 
                 indexes.append(IsccIndex(name=name, assets=asset_count, size=size_mb))
-            except Exception:
-                # Skip corrupted or inaccessible indexes
+            except Exception as e:
+                # Log and skip corrupted or inaccessible indexes
+                logger.warning(f"Failed to load index '{name}': {type(e).__name__}: {e}")
                 continue
 
         # Sort by name for consistent ordering

@@ -9,9 +9,15 @@ Implements IsccIndexProtocol for use as backend in CLI and server.
 
 import shutil
 from pathlib import Path
+from typing import TYPE_CHECKING
 from iscc_search.schema import IsccIndex
 from iscc_search.indexes.usearch.index import UsearchIndex
 from iscc_search.indexes import common
+
+if TYPE_CHECKING:
+    from iscc_search.schema import IsccAddResult  # noqa: F401
+    from iscc_search.schema import IsccAsset  # noqa: F401
+    from iscc_search.schema import IsccSearchResult  # noqa: F401
 
 
 class UsearchIndexManager:
@@ -34,7 +40,7 @@ class UsearchIndexManager:
     """
 
     def __init__(self, base_path, max_dim=256):
-        # type: (os.PathLike, int) -> None
+        # type: (str | Path, int) -> None
         """
         Initialize UsearchIndexManager.
 

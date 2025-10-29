@@ -15,12 +15,16 @@ Key strategy: ISCC-ID body as uint64 consistently across LMDB and NphdIndex.
 import struct
 import time
 from pathlib import Path
+from typing import TYPE_CHECKING
 import lmdb
 from loguru import logger
 from iscc_search.schema import IsccAddResult, IsccSearchResult, IsccMatch, Status, Metric
 from iscc_search.models import IsccUnit, IsccID
 from iscc_search.indexes import common
 from iscc_search.nphd import NphdIndex
+
+if TYPE_CHECKING:
+    from iscc_search.schema import IsccAsset  # noqa: F401
 
 
 class UsearchIndex:
@@ -55,7 +59,7 @@ class UsearchIndex:
     }
 
     def __init__(self, path, realm_id=0, max_dim=256, lmdb_options=None):
-        # type: (os.PathLike, int, int, dict | None) -> None
+        # type: (str | Path, int, int, dict | None) -> None
         """
         Create or open usearch index at directory path.
 

@@ -211,9 +211,8 @@ class UsearchIndex:
                         nphd_index.remove(existing_keys)
 
                     nphd_index.add(keys, vectors)
-                    # Save after add for durability
-                    usearch_file = self.path / f"{unit_type}.usearch"
-                    nphd_index.save(str(usearch_file))
+                    # Update metadata with new vector count
+                    self._update_nphd_metadata(unit_type, nphd_index.size)
 
                 break  # Success
 
@@ -339,11 +338,33 @@ class UsearchIndex:
 
         return IsccSearchResult(query=query, metric=Metric.nphd, matches=matches)
 
+    def flush(self):
+        # type: () -> None
+        """
+        Save all NphdIndex files to disk.
+
+        Explicit flush for power users who want control over persistence.
+        NphdIndexes are automatically saved on close(), so flush() is only
+        needed for durability guarantees during long-running sessions.
+        """
+        for unit_type, nphd_index in self._nphd_indexes.items():
+            usearch_file = self.path / f"{unit_type}.usearch"
+            nphd_index.save(str(usearch_file))
+            # Update metadata with current vector count
+            self._update_nphd_metadata(unit_type, nphd_index.size)
+            logger.debug(f"Flushed NphdIndex for unit_type '{unit_type}'")
+
     def close(self):
         # type: () -> None
-        """Close LMDB environment and NphdIndex files."""
-        # Close all NphdIndex instances (releases file handles for memory-mapped indexes)
-        for nphd_index in self._nphd_indexes.values():
+        """Close LMDB environment and NphdIndex files, saving all indexes."""
+        # Save all NphdIndex instances before closing
+        for unit_type, nphd_index in self._nphd_indexes.items():
+            usearch_file = self.path / f"{unit_type}.usearch"
+            nphd_index.save(str(usearch_file))
+            # Update metadata with current vector count
+            self._update_nphd_metadata(unit_type, nphd_index.size)
+            logger.debug(f"Saved NphdIndex for unit_type '{unit_type}'")
+            # Release file handles for memory-mapped indexes
             nphd_index.reset()
 
         self._nphd_indexes.clear()
@@ -403,9 +424,48 @@ class UsearchIndex:
                 txn.put(b"max_dim", struct.pack(">I", self.max_dim), db=metadata_db)
                 txn.put(b"created_at", struct.pack(">d", time.time()), db=metadata_db)
 
+    def _update_nphd_metadata(self, unit_type, vector_count):
+        # type: (str, int) -> None
+        """
+        Update NphdIndex metadata in LMDB.
+
+        Tracks expected vector count for sync detection on next load.
+
+        :param unit_type: Unit type identifier
+        :param vector_count: Current number of vectors in NphdIndex
+        """
+        with self.env.begin(write=True) as txn:
+            metadata_db = self.env.open_db(b"__metadata__", txn=txn)
+            key = f"nphd_count:{unit_type}".encode()
+            txn.put(key, struct.pack(">Q", vector_count), db=metadata_db)
+
+    def _get_nphd_metadata(self, unit_type):
+        # type: (str) -> int | None
+        """
+        Get expected NphdIndex vector count from LMDB metadata.
+
+        :param unit_type: Unit type identifier
+        :return: Expected vector count, or None if not tracked
+        """
+        try:
+            with self.env.begin() as txn:
+                metadata_db = self.env.open_db(b"__metadata__", txn=txn)
+                key = f"nphd_count:{unit_type}".encode()
+                value = txn.get(key, db=metadata_db)
+                if value is None:
+                    return None
+                return struct.unpack(">Q", value)[0]
+        except lmdb.ReadonlyError:  # pragma: no cover
+            return None
+
     def _load_nphd_indexes(self):
         # type: () -> None
-        """Load existing NphdIndex files from directory."""
+        """
+        Load existing NphdIndex files with auto-rebuild on sync mismatch.
+
+        Compares actual vector count in .usearch file with expected count
+        in LMDB metadata. Triggers full rebuild from LMDB if out of sync.
+        """
         for usearch_file in self.path.glob("*.usearch"):
             unit_type = usearch_file.stem  # Filename without extension
             try:
@@ -413,11 +473,86 @@ class UsearchIndex:
                 nphd_index = NphdIndex.restore(str(usearch_file))
                 if nphd_index is None:  # pragma: no cover
                     logger.warning(f"Failed to load NphdIndex '{usearch_file}': invalid metadata")
+                    self._rebuild_nphd_index(unit_type)
                     continue
-                self._nphd_indexes[unit_type] = nphd_index
-                logger.debug(f"Loaded NphdIndex for unit_type '{unit_type}'")
+
+                # Check if index is in sync with LMDB
+                expected_count = self._get_nphd_metadata(unit_type)
+                actual_count = nphd_index.size
+
+                if expected_count is not None and expected_count != actual_count:
+                    logger.warning(
+                        f"NphdIndex '{unit_type}' out of sync: "
+                        f"expected {expected_count} vectors, found {actual_count}. "
+                        f"Rebuilding from LMDB..."
+                    )
+                    # Close the loaded index and rebuild
+                    nphd_index.reset()
+                    self._rebuild_nphd_index(unit_type)
+                else:
+                    self._nphd_indexes[unit_type] = nphd_index
+                    logger.debug(f"Loaded NphdIndex for unit_type '{unit_type}' ({actual_count} vectors)")
+
             except Exception as e:  # pragma: no cover
-                logger.warning(f"Failed to load NphdIndex '{usearch_file}': {e}")
+                logger.warning(f"Failed to load NphdIndex '{usearch_file}': {e}. Rebuilding...")
+                self._rebuild_nphd_index(unit_type)
+
+    def _rebuild_nphd_index(self, unit_type):
+        # type: (str) -> None
+        """
+        Rebuild NphdIndex from LMDB asset data.
+
+        Full rebuild: iterates all assets, extracts vectors for unit_type,
+        and creates fresh NphdIndex. Automatically saves and updates metadata.
+
+        :param unit_type: Unit type identifier to rebuild
+        """
+        import time as time_module
+
+        start_time = time_module.time()
+        logger.info(f"Rebuilding NphdIndex for unit_type '{unit_type}'...")
+
+        # Collect all vectors for this unit_type from LMDB
+        keys = []  # type: list[int]
+        vectors = []  # type: list[bytes]
+
+        with self.env.begin() as txn:
+            assets_db = self.env.open_db(b"__assets__", txn=txn)
+            cursor = txn.cursor(assets_db)
+
+            for key_bytes, asset_bytes in cursor:
+                asset = common.deserialize_asset(asset_bytes)
+                if not asset.units:  # pragma: no cover
+                    continue
+
+                # Extract vectors for this unit_type
+                for unit_str in asset.units:
+                    unit = IsccUnit(unit_str)
+                    if unit.unit_type == unit_type:
+                        key = struct.unpack(">Q", key_bytes)[0]
+                        keys.append(key)
+                        vectors.append(unit.body)
+
+        if not keys:
+            logger.info(f"No vectors found for unit_type '{unit_type}' - skipping rebuild")
+            return
+
+        # Create new NphdIndex and add all vectors
+        nphd_index = NphdIndex(max_dim=self.max_dim)
+        nphd_index.add(keys, vectors)
+
+        # Save to disk
+        usearch_file = self.path / f"{unit_type}.usearch"
+        nphd_index.save(str(usearch_file))
+
+        # Update metadata
+        self._update_nphd_metadata(unit_type, nphd_index.size)
+
+        # Store in memory
+        self._nphd_indexes[unit_type] = nphd_index
+
+        elapsed = time_module.time() - start_time
+        logger.info(f"Rebuilt NphdIndex for unit_type '{unit_type}': {len(keys)} vectors in {elapsed:.2f}s")
 
     def _get_or_create_nphd_index(self, unit_type):
         # type: (str) -> NphdIndex

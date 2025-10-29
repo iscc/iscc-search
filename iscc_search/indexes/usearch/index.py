@@ -58,6 +58,10 @@ class UsearchIndex:
         "lock": True,
     }
 
+    # MapFullError retry limits
+    MAX_RESIZE_RETRIES = 10  # Maximum number of resize attempts
+    MAX_MAP_SIZE = 1024 * 1024 * 1024 * 1024  # 1 TB maximum map size
+
     def __init__(self, path, realm_id=0, max_dim=256, lmdb_options=None):
         # type: (str | Path, int, int, dict | None) -> None
         """
@@ -114,8 +118,9 @@ class UsearchIndex:
             return []
 
         results = []
+        retry_count = 0
 
-        while True:  # Auto-retry loop for MapFullError
+        while retry_count <= self.MAX_RESIZE_RETRIES:  # pragma: no branch
             try:
                 with self.env.begin(write=True) as txn:
                     # Get database handles
@@ -199,10 +204,32 @@ class UsearchIndex:
                 break  # Success
 
             except lmdb.MapFullError:  # pragma: no cover
+                retry_count += 1
+
+                # Check if we've exceeded retry limit
+                if retry_count > self.MAX_RESIZE_RETRIES:
+                    raise RuntimeError(
+                        f"Failed to add assets after {self.MAX_RESIZE_RETRIES} resize attempts. "
+                        f"Current map_size: {self.map_size:,} bytes. "
+                        f"This may indicate disk space issues, permissions problems, or filesystem limits."
+                    )
+
                 results = []  # Clear for retry
                 old_size = self.map_size
                 new_size = old_size * 2
-                logger.info(f"UsearchIndex map_size increased from {old_size:,} to {new_size:,} bytes")
+
+                # Check if new size would exceed maximum
+                if new_size > self.MAX_MAP_SIZE:
+                    raise RuntimeError(
+                        f"Cannot resize LMDB map beyond MAX_MAP_SIZE ({self.MAX_MAP_SIZE:,} bytes). "
+                        f"Current size: {old_size:,}, attempted size: {new_size:,}. "
+                        f"Consider splitting data across multiple indexes or increasing MAX_MAP_SIZE."
+                    )
+
+                logger.info(
+                    f"UsearchIndex map_size increased from {old_size:,} to {new_size:,} bytes "
+                    f"(retry {retry_count}/{self.MAX_RESIZE_RETRIES})"
+                )
                 self.env.set_mapsize(new_size)
 
         return results

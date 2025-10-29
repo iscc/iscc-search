@@ -252,3 +252,20 @@ def test_usearch_index_search_with_no_similarity_units(tmp_path):
     # Should still find via INSTANCE match even though CONTENT not in index
     assert len(result.matches) >= 1
     idx.close()
+
+
+def test_usearch_index_retry_limits_configured():
+    """Test that retry limit constants are properly configured."""
+    # Verify constants exist and have sensible values
+    assert hasattr(UsearchIndex, "MAX_RESIZE_RETRIES")
+    assert hasattr(UsearchIndex, "MAX_MAP_SIZE")
+
+    # Verify they have reasonable values
+    assert UsearchIndex.MAX_RESIZE_RETRIES == 10, "MAX_RESIZE_RETRIES should be 10"
+    assert UsearchIndex.MAX_MAP_SIZE == 1024 * 1024 * 1024 * 1024, "MAX_MAP_SIZE should be 1TB"
+
+    # Verify they are positive integers
+    assert isinstance(UsearchIndex.MAX_RESIZE_RETRIES, int)
+    assert isinstance(UsearchIndex.MAX_MAP_SIZE, int)
+    assert UsearchIndex.MAX_RESIZE_RETRIES > 0
+    assert UsearchIndex.MAX_MAP_SIZE > 0

@@ -390,6 +390,9 @@ class UsearchIndex:
             try:
                 # Note: restore() gets max_dim from saved metadata, don't pass it
                 nphd_index = NphdIndex.restore(str(usearch_file))
+                if nphd_index is None:  # pragma: no cover
+                    logger.warning(f"Failed to load NphdIndex '{usearch_file}': invalid metadata")
+                    continue
                 self._nphd_indexes[unit_type] = nphd_index
                 logger.debug(f"Loaded NphdIndex for unit_type '{unit_type}'")
             except Exception as e:  # pragma: no cover

@@ -97,6 +97,11 @@ class UsearchIndex:
         Stores assets in LMDB, INSTANCE units in dupsort database,
         and similarity units in NphdIndex files.
 
+        Consistency model: LMDB commits before NphdIndex operations. If NphdIndex
+        operations fail, assets are in LMDB (source of truth) but not in similarity
+        search. This is acceptable as NphdIndex can be rebuilt from LMDB. True
+        two-phase commit would add significant complexity for rare failure scenarios.
+
         :param assets: List of IsccAsset instances to add
         :return: List of IsccAddResult with created/updated status
         :raises ValueError: If realm_id inconsistent or missing iscc_id
@@ -171,6 +176,8 @@ class UsearchIndex:
 
                         results.append(IsccAddResult(iscc_id=asset.iscc_id, status=status))
 
+                # LMDB transaction commits here (exits context manager)
+                # NphdIndex operations below are NOT atomic with LMDB - see docstring
                 # Batch add to NphdIndex (outside transaction)
                 for unit_type, (keys, vectors) in nphd_batches.items():
                     nphd_index = self._get_or_create_nphd_index(unit_type)

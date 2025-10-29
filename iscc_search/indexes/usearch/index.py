@@ -61,7 +61,7 @@ class UsearchIndex:
 
         :param path: Path to index directory (contains index.lmdb + .usearch files)
         :param realm_id: ISCC realm ID for new indexes (0 or 1)
-        :param max_dim: Maximum dimensions for NphdIndex (64, 128, 192, or 256)
+        :param max_dim: Maximum dimensions for NphdIndex (any multiple of 8 bits up to 256)
         :param lmdb_options: Custom LMDB options (max_dbs and subdir are forced)
         """
         self.path = Path(path)
@@ -229,7 +229,7 @@ class UsearchIndex:
         Search for similar assets using NPHD metric.
 
         Combines exact INSTANCE matching (LMDB) with similarity matching (NphdIndex).
-        Scores: INSTANCE = 1.0 (exact), similarity = 1.0 - nphd_distance.
+        Scores: INSTANCE = proportional to match length (0.25/0.5/1.0), similarity = 1.0 - nphd_distance.
 
         :param query: Query asset with units
         :param limit: Maximum number of results
@@ -370,8 +370,13 @@ class UsearchIndex:
         """
         Search INSTANCE unit in LMDB dupsort for exact matches.
 
+        Scores are proportional to match length:
+        - 64-bit match: 0.25 (64/256)
+        - 128-bit match: 0.5 (128/256)
+        - 256-bit match: 1.0 (256/256)
+
         :param instance_code: Instance-Code digest bytes
-        :return: Dict mapping integer keys to score (1.0 for exact match)
+        :return: Dict mapping integer keys to score (proportional to match length)
         """
         results = {}  # type: dict[int, float]
 
@@ -386,35 +391,39 @@ class UsearchIndex:
 
             cursor = txn.cursor(instance_db)
             # Bidirectional prefix matching (like LmdbIndex)
-            # For INSTANCE, we support variable lengths: 64, 128, 192, 256 bits
+            # For INSTANCE, we support variable lengths: 64, 128, 256 bits
 
             # Forward search: Find stored codes starting with query prefix
             if cursor.set_range(instance_code):
                 for key_bytes, value_bytes in cursor:
                     if not key_bytes.startswith(instance_code):
                         break
-                    # Exact or prefix match
+                    # Score proportional to match length (shorter of query and stored)
+                    match_bytes = min(len(instance_code), len(key_bytes))
+                    score = match_bytes / 32  # 32 bytes = 256 bits max
                     key = struct.unpack(">Q", value_bytes)[0]
-                    results[key] = 1.0  # Exact match score
+                    results[key] = max(results.get(key, 0.0), score)
 
             # Reverse search: Find stored codes that are prefixes of query
             # Check shorter versions (for 256-bit query, check 128-bit and 64-bit prefixes)
             query_len = len(instance_code)
-            if query_len == 32:  # pragma: no cover - 256-bit query
+            if query_len == 32:  # 256-bit query
                 # Check 128-bit prefix
                 prefix_128 = instance_code[:16]
                 if cursor.set_key(prefix_128):
-                    for _, value_bytes in cursor.iternext_dup():
+                    for value_bytes in cursor.iternext_dup(keys=False, values=True):
                         key = struct.unpack(">Q", value_bytes)[0]
-                        results[key] = 1.0
+                        score = 0.5  # 128-bit match (16 bytes / 32 bytes)
+                        results[key] = max(results.get(key, 0.0), score)
 
-            if query_len >= 16:  # pragma: no cover - 128-bit or 256-bit query
+            if query_len >= 16:  # 128-bit or 256-bit query
                 # Check 64-bit prefix
                 prefix_64 = instance_code[:8]
                 if cursor.set_key(prefix_64):
-                    for _, value_bytes in cursor.iternext_dup():
+                    for value_bytes in cursor.iternext_dup(keys=False, values=True):
                         key = struct.unpack(">Q", value_bytes)[0]
-                        results[key] = 1.0
+                        score = 0.25  # 64-bit match (8 bytes / 32 bytes)
+                        results[key] = max(results.get(key, 0.0), score)
 
         return results
 

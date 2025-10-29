@@ -306,8 +306,9 @@ def test_search_assets_similarity_matching(manager, gen_iscc_id_realm_0, gen_con
     assert len(result.matches) > 0
     assert result.metric.value == "nphd"
 
-    # First match should have high score (CONTENT similarity + INSTANCE exact match)
-    assert result.matches[0].score > 1.8
+    # First match should have high score (CONTENT similarity + INSTANCE proportional match)
+    # With 128-bit INSTANCE: score = CONTENT(~1.0) + INSTANCE(0.5) = ~1.5
+    assert result.matches[0].score > 1.4
 
 
 def test_search_assets_instance_exact_matching(manager, gen_iscc_id_realm_0, gen_instance, gen_content_text):
@@ -328,9 +329,10 @@ def test_search_assets_instance_exact_matching(manager, gen_iscc_id_realm_0, gen
     query = IsccAsset(units=[instance_unit, content_unit])
     result = manager.search_assets("test", query)
 
-    # Should find exact match with high score (INSTANCE=1.0 + CONTENT≈1.0)
+    # Should find exact match with high score
+    # With 128-bit INSTANCE: score = INSTANCE(0.5) + CONTENT(~1.0) = ~1.5
     assert len(result.matches) == 1
-    assert result.matches[0].score >= 1.8
+    assert result.matches[0].score >= 1.4
     assert result.matches[0].iscc_id == asset.iscc_id
 
 
@@ -354,8 +356,9 @@ def test_search_assets_hybrid(manager, gen_iscc_id_realm_0, gen_content_text, ge
 
     # Should find match with aggregated score
     assert len(result.matches) == 1
-    # Score should be sum of both matches (INSTANCE=1.0 + CONTENT≈1.0)
-    assert result.matches[0].score >= 1.8
+    # Score should be sum of both matches
+    # With 128-bit INSTANCE: score = INSTANCE(0.5) + CONTENT(~1.0) = ~1.5
+    assert result.matches[0].score >= 1.4
 
 
 def test_search_assets_index_not_found(manager, sample_content_units):

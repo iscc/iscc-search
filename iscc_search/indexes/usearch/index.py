@@ -205,10 +205,9 @@ class UsearchIndex:
                 for unit_type, (keys, vectors) in nphd_batches.items():
                     nphd_index = self._get_or_create_nphd_index(unit_type)
 
-                    # Check for existing keys and remove them first (for updates)
-                    existing_keys = [k for k in keys if nphd_index.contains(k)]
-                    if existing_keys:
-                        nphd_index.remove(existing_keys)
+                    # Remove existing keys first (for updates)
+                    # remove() handles non-existent keys gracefully (returns 0)
+                    nphd_index.remove(keys)
 
                     nphd_index.add(keys, vectors)
                     # Update metadata with new vector count

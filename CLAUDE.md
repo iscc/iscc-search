@@ -105,6 +105,15 @@ The project structure follows standard Python packaging conventions:
 3. **Numba JIT**: Functions decorated with `@njit` won't show in coverage - mark with `# pragma: no cover`
 4. **Type hints**: Always use PEP 484 type comments, not function annotations
 5. **Cross-platform**: Ensure all code works on Linux, macOS, and Windows
+6. **Type-only imports**: Ruff F401 doesn't recognize imports used only in PEP 484 type comments as valid usage
+    (known issue: [astral-sh/ruff#1619](https://github.com/astral-sh/ruff/issues/1619)). Workaround pattern:
+    ```python
+    from typing import TYPE_CHECKING
+
+    if TYPE_CHECKING:
+        from iscc_search.schema import IsccAsset  # noqa: F401
+    ```
+    This allows IDEs to resolve type references while preventing ruff from removing the imports
 
 ## Testing
 

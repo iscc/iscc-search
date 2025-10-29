@@ -116,7 +116,8 @@ class UsearchIndexManager:
             raise FileExistsError(f"Index '{index.name}' already exists")
 
         # Create new UsearchIndex (creates directory and index.lmdb)
-        idx = UsearchIndex(index_path, realm_id=0, max_dim=self.max_dim)
+        # realm_id is None - will be inferred from first asset
+        idx = UsearchIndex(index_path, realm_id=None, max_dim=self.max_dim)
         self._index_cache[index.name] = idx
 
         return IsccIndex(name=index.name, assets=0, size=0)

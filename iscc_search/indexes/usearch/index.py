@@ -62,13 +62,13 @@ class UsearchIndex:
     MAX_RESIZE_RETRIES = 10  # Maximum number of resize attempts
     MAX_MAP_SIZE = 1024 * 1024 * 1024 * 1024  # 1 TB maximum map size
 
-    def __init__(self, path, realm_id=0, max_dim=256, lmdb_options=None):
-        # type: (str | Path, int, int, dict | None) -> None
+    def __init__(self, path, realm_id=None, max_dim=256, lmdb_options=None):
+        # type: (str | Path, int | None, int, dict | None) -> None
         """
         Create or open usearch index at directory path.
 
         :param path: Path to index directory (contains index.lmdb + .usearch files)
-        :param realm_id: ISCC realm ID for new indexes (0 or 1)
+        :param realm_id: ISCC realm ID for new indexes (0 or 1). If None, inferred from first asset.
         :param max_dim: Maximum dimensions for NphdIndex (any multiple of 8 bits up to 256)
         :param lmdb_options: Custom LMDB options (max_dbs and subdir are forced)
         """
@@ -124,7 +124,7 @@ class UsearchIndex:
             try:
                 with self.env.begin(write=True) as txn:
                     # Get database handles
-                    self.env.open_db(b"__metadata__", txn=txn)
+                    metadata_db = self.env.open_db(b"__metadata__", txn=txn)
                     assets_db = self.env.open_db(b"__assets__", txn=txn)
                     instance_db = self.env.open_db(
                         b"__instance__",
@@ -133,6 +133,20 @@ class UsearchIndex:
                         dupfixed=True,
                         integerdup=True,
                     )
+
+                    # Infer realm_id from first asset if not yet set
+                    if self._realm_id is None:
+                        # Validate first asset has iscc_id
+                        if assets[0].iscc_id is None:
+                            raise ValueError("Asset must have iscc_id field when adding to index")
+
+                        # Infer realm_id from first asset
+                        inferred_realm = common.extract_realm_id(assets[0].iscc_id)
+                        self._realm_id = inferred_realm
+
+                        # Store in metadata
+                        txn.put(b"realm_id", struct.pack(">I", inferred_realm), db=metadata_db)
+                        logger.info(f"Inferred realm_id={inferred_realm} from first asset")
 
                     # Prepare vectors for batch add to NphdIndex
                     nphd_batches = {}  # type: dict[str, tuple[list[int], list[bytes]]]
@@ -363,7 +377,7 @@ class UsearchIndex:
     # Helper methods
 
     def _init_metadata(self, realm_id):
-        # type: (int) -> None
+        # type: (int | None) -> None
         """Initialize or load metadata from LMDB."""
         with self.env.begin(write=True) as txn:
             metadata_db = self.env.open_db(b"__metadata__", txn=txn)
@@ -376,9 +390,16 @@ class UsearchIndex:
                 max_dim_bytes = txn.get(b"max_dim", db=metadata_db)
                 self.max_dim = struct.unpack(">I", max_dim_bytes)[0]
             else:
-                # New index - store initial metadata
-                self._realm_id = realm_id
-                txn.put(b"realm_id", struct.pack(">I", realm_id), db=metadata_db)
+                # New index
+                if realm_id is None:
+                    # Defer realm_id assignment until first asset is added
+                    self._realm_id = None
+                else:
+                    # Explicit realm_id provided - store immediately
+                    self._realm_id = realm_id
+                    txn.put(b"realm_id", struct.pack(">I", realm_id), db=metadata_db)
+
+                # Always store max_dim and created_at for new indexes
                 txn.put(b"max_dim", struct.pack(">I", self.max_dim), db=metadata_db)
                 txn.put(b"created_at", struct.pack(">d", time.time()), db=metadata_db)
 

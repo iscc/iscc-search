@@ -473,6 +473,26 @@ def test_add_assets_missing_iscc_id(manager, sample_content_units):
         manager.add_assets("test", assets)
 
 
+def test_add_assets_missing_iscc_id_after_realm_set(manager, sample_iscc_ids, sample_content_units):
+    """Test adding asset without iscc_id after realm_id is already set."""
+    manager.create_index(IsccIndex(name="test"))
+
+    # First add valid asset to set realm_id
+    valid_asset = IsccAsset(
+        iscc_id=sample_iscc_ids[0],
+        units=[sample_content_units[0], sample_content_units[1]],
+    )
+    manager.add_assets("test", [valid_asset])
+
+    # Now try to add asset without iscc_id - should raise ValueError
+    invalid_asset = IsccAsset(
+        units=[sample_content_units[2], sample_content_units[3]],
+    )
+
+    with pytest.raises(ValueError, match="Asset must have iscc_id field"):
+        manager.add_assets("test", [invalid_asset])
+
+
 def test_add_assets_realm_mismatch(manager, sample_iscc_ids, sample_content_units):
     """Test add_assets raises ValueError for realm_id mismatch."""
     manager.create_index(IsccIndex(name="test"))

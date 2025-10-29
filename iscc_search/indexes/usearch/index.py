@@ -458,6 +458,38 @@ class UsearchIndex:
         except lmdb.ReadonlyError:  # pragma: no cover
             return None
 
+    def _get_all_tracked_unit_types(self):
+        # type: () -> set[str]
+        """
+        Get all unit_types tracked in LMDB metadata.
+
+        Scans metadata database for all 'nphd_count:*' keys and extracts unit_types.
+
+        :return: Set of unit_type identifiers that have been indexed
+        """
+        unit_types = set()  # type: set[str]
+        prefix = b"nphd_count:"
+
+        try:
+            with self.env.begin() as txn:
+                metadata_db = self.env.open_db(b"__metadata__", txn=txn)
+                cursor = txn.cursor(metadata_db)
+
+                # Seek to first key matching prefix
+                if cursor.set_range(prefix):
+                    for key_bytes, _ in cursor:
+                        if not key_bytes.startswith(prefix):
+                            break
+                        # Extract unit_type from key (format: "nphd_count:UNIT_TYPE")
+                        unit_type = key_bytes[len(prefix) :].decode()
+                        unit_types.add(unit_type)
+
+        except lmdb.ReadonlyError:  # pragma: no cover
+            # Database doesn't exist yet (empty index)
+            pass
+
+        return unit_types
+
     def _load_nphd_indexes(self):
         # type: () -> None
         """
@@ -465,9 +497,15 @@ class UsearchIndex:
 
         Compares actual vector count in .usearch file with expected count
         in LMDB metadata. Triggers full rebuild from LMDB if out of sync.
+        Also rebuilds missing .usearch files for unit_types tracked in metadata
+        (crash recovery for unflushed indexes).
         """
+        # Track which unit_types we've loaded from disk
+        loaded_unit_types = set()  # type: set[str]
+
         for usearch_file in self.path.glob("*.usearch"):
             unit_type = usearch_file.stem  # Filename without extension
+            loaded_unit_types.add(unit_type)
             try:
                 # Note: restore() gets max_dim from saved metadata, don't pass it
                 nphd_index = NphdIndex.restore(str(usearch_file))
@@ -495,6 +533,19 @@ class UsearchIndex:
 
             except Exception as e:  # pragma: no cover
                 logger.warning(f"Failed to load NphdIndex '{usearch_file}': {e}. Rebuilding...")
+                self._rebuild_nphd_index(unit_type)
+
+        # Check for orphaned metadata (tracked unit_types without .usearch files)
+        # This handles crash recovery when vectors were added but never flushed
+        tracked_unit_types = self._get_all_tracked_unit_types()
+        missing_unit_types = tracked_unit_types - loaded_unit_types
+
+        if missing_unit_types:
+            logger.warning(
+                f"Found {len(missing_unit_types)} unit_type(s) in metadata without .usearch files: "
+                f"{sorted(missing_unit_types)}. Rebuilding from LMDB (crash recovery)..."
+            )
+            for unit_type in missing_unit_types:
                 self._rebuild_nphd_index(unit_type)
 
     def _rebuild_nphd_index(self, unit_type):

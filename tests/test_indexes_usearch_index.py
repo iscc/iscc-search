@@ -4,6 +4,7 @@ Tests for UsearchIndex class - low-level index implementation.
 Tests UsearchIndex directly to cover edge cases not exercised through UsearchIndexManager.
 """
 
+import io
 import pytest
 import iscc_core as ic
 from iscc_search.indexes.usearch.index import UsearchIndex
@@ -269,3 +270,49 @@ def test_usearch_index_retry_limits_configured():
     assert isinstance(UsearchIndex.MAX_MAP_SIZE, int)
     assert UsearchIndex.MAX_RESIZE_RETRIES > 0
     assert UsearchIndex.MAX_MAP_SIZE > 0
+
+
+def test_usearch_index_max_dim_persistence(tmp_path, sample_iscc_ids):
+    """Test that max_dim is persisted and loaded correctly on index reopening."""
+    index_path = tmp_path / "max_dim_test"
+
+    # Create index with non-default max_dim
+    idx = UsearchIndex(index_path, realm_id=0, max_dim=128)
+    assert idx.max_dim == 128, "Initial index should have max_dim=128"
+
+    # Add some data to create unit indexes
+    instance_unit = f"ISCC:{ic.Code.rnd(ic.MT.INSTANCE, bits=128)}"
+    content_unit = ic.gen_text_code_v0("Test content for max_dim")["iscc"]
+    asset1 = IsccAsset(
+        iscc_id=sample_iscc_ids[0],
+        units=[instance_unit, content_unit],
+    )
+    idx.add_assets([asset1])
+
+    # Verify the created NphdIndex has correct max_dim
+    unit_type = "CONTENT_TEXT_V0"
+    assert unit_type in idx._nphd_indexes
+    assert idx._nphd_indexes[unit_type].max_dim == 128
+
+    # Close the index
+    idx.close()
+
+    # Reopen WITHOUT specifying max_dim (should load from metadata)
+    idx_reopened = UsearchIndex(index_path, realm_id=0)
+    assert idx_reopened.max_dim == 128, "Reopened index should load max_dim=128 from metadata"
+
+    # Add data that creates a NEW unit index to verify it uses loaded max_dim
+    instance_unit2 = f"ISCC:{ic.Code.rnd(ic.MT.INSTANCE, bits=128)}"
+    data_unit = ic.gen_data_code_v0(io.BytesIO(b"Some binary data for testing"))["iscc"]
+    asset2 = IsccAsset(
+        iscc_id=sample_iscc_ids[1],
+        units=[instance_unit2, data_unit],
+    )
+    idx_reopened.add_assets([asset2])
+
+    # Verify the new NphdIndex also has correct max_dim
+    data_unit_type = "DATA_NONE_V0"
+    assert data_unit_type in idx_reopened._nphd_indexes
+    assert idx_reopened._nphd_indexes[data_unit_type].max_dim == 128, "New unit index should use loaded max_dim"
+
+    idx_reopened.close()

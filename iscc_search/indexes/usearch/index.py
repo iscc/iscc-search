@@ -371,7 +371,10 @@ class UsearchIndex:
             # Try to load existing realm_id
             realm_bytes = txn.get(b"realm_id", db=metadata_db)
             if realm_bytes is not None:
+                # Existing index - load stored configuration
                 self._realm_id = struct.unpack(">I", realm_bytes)[0]
+                max_dim_bytes = txn.get(b"max_dim", db=metadata_db)
+                self.max_dim = struct.unpack(">I", max_dim_bytes)[0]
             else:
                 # New index - store initial metadata
                 self._realm_id = realm_id

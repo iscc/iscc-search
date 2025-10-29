@@ -17,6 +17,10 @@ class IsccStore:
 
     Provides atomic writes, efficient lookups by ISCC-ID, and persistent metadata storage.
     Time ordering is preserved as LMDB lexicographically sorts big-endian keys.
+
+    CONCURRENCY: LMDB supports multi-reader/single-writer with built-in locking (lock=True).
+    However, when used with NphdIndex via UsearchIndex, the combined system is single-process
+    only due to .usearch file limitations. See NphdIndex and UsearchIndexManager for details.
     """
 
     DEFAULT_LMDB_OPTIONS = {

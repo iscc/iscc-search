@@ -38,6 +38,11 @@ class UsearchIndexManager:
 
     Each subdirectory with index.lmdb is managed by a UsearchIndex instance.
     Instances are cached for performance.
+
+    CONCURRENCY: Single-process only. The .usearch files have no file locking or multi-process
+    coordination. The instance cache does not synchronize between processes. Running multiple
+    processes against the same indexes may corrupt data. Use a single process with async/await
+    for concurrent connections (e.g., FastAPI with Uvicorn).
     """
 
     def __init__(self, base_path, max_dim=256):

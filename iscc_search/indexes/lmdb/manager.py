@@ -26,6 +26,10 @@ class LmdbIndexManager:
 
     Each .lmdb file is managed by a separate LmdbIndex instance.
     Instances are cached for performance.
+
+    CONCURRENCY: LMDB-only indexes support multi-reader/single-writer with built-in locking.
+    However, the instance cache does not synchronize between processes. For production use,
+    consider single-process deployment with async/await for concurrent connections.
     """
 
     def __init__(self, base_path):

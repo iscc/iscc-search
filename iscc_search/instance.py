@@ -66,7 +66,12 @@ class PInstanceIndex(Protocol):
 
 
 class InstanceIndex:
-    """LMDB-backed index for Instance-Code prefix search with dupsort/dupfixed optimization."""
+    """LMDB-backed index for Instance-Code prefix search with dupsort/dupfixed optimization.
+
+    CONCURRENCY: LMDB supports multi-reader/single-writer with built-in locking (lock=True).
+    However, when used with NphdIndex via UsearchIndex, the combined system is single-process
+    only due to .usearch file limitations. See NphdIndex and UsearchIndexManager for details.
+    """
 
     DEFAULT_LMDB_OPTIONS = {
         "readonly": False,

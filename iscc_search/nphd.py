@@ -68,6 +68,10 @@ class NphdIndex(Index):
 
     Supports Normalized Prefix Hamming Distance (NPHD) metric and packed binary vectors
     as np.uint8 arrays of variable length. Vector keys must be integers.
+
+    CONCURRENCY: Single-process only. The underlying .usearch files have no file locking
+    or multi-process coordination. Running multiple processes against the same index may
+    corrupt data. Use a single process with async/await for concurrent connections.
     """
 
     def __init__(self, max_dim=256, **kwargs):

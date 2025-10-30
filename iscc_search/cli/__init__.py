@@ -8,6 +8,7 @@ import json
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+import simdjson
 import typer
 from rich.console import Console
 from rich.progress import BarColumn, MofNCompleteColumn, Progress, SpinnerColumn, TextColumn
@@ -112,6 +113,8 @@ def add(
     # Parse JSON files and create assets
     assets = []
     errors = []
+    # Reuse parser instance for optimal performance (reduces allocation overhead)
+    parser = simdjson.Parser()
 
     with Progress(
         TextColumn("[progress.description]{task.description}"),
@@ -123,31 +126,32 @@ def add(
 
         for file_path in files:
             try:
-                with open(file_path, encoding="utf-8") as f:
-                    data = json.load(f)
+                # Use simdjson for efficient parsing of only required fields
+                with open(file_path, "rb") as f:
+                    doc = parser.parse(f.read())
 
-                # Map JSON fields to IsccAsset
+                # Map JSON fields to IsccAsset - extract to plain Python types immediately
                 asset_data = {}
 
                 # Handle iscc_id
-                if "iscc_id" in data:
-                    asset_data["iscc_id"] = data["iscc_id"]
+                if "iscc_id" in doc:
+                    asset_data["iscc_id"] = str(doc["iscc_id"])
 
                 # Handle iscc_code - try 'iscc_code' first, fall back to 'iscc'
-                if "iscc_code" in data:
-                    asset_data["iscc_code"] = data["iscc_code"]
-                elif "iscc" in data:
-                    asset_data["iscc_code"] = data["iscc"]
+                if "iscc_code" in doc:
+                    asset_data["iscc_code"] = str(doc["iscc_code"])
+                elif "iscc" in doc:
+                    asset_data["iscc_code"] = str(doc["iscc"])
 
                 # Handle units
-                if "units" in data:
-                    asset_data["units"] = data["units"]
+                if "units" in doc:
+                    # Convert to Python list of strings immediately
+                    asset_data["units"] = [str(u) for u in doc["units"]]
 
-                # Collect all other fields as metadata
-                metadata_fields = set(data.keys()) - {"iscc_id", "iscc_code", "iscc", "units"}
-                if metadata_fields:
-                    asset_data["metadata"] = {k: data[k] for k in metadata_fields}
+                # Release proxy object before next parser reuse
+                del doc
 
+                # Do not collect metadata - only index ISCC fields
                 asset = IsccAsset(**asset_data)
                 assets.append(asset)
 

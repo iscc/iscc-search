@@ -173,10 +173,23 @@ def add(
                     # Convert to Python list of strings immediately
                     asset_data["units"] = [str(u) for u in doc["units"]]
 
+                # Handle metadata - collect name and filename if present
+                metadata = {}
+                if "name" in doc:
+                    name = str(doc["name"]).strip()
+                    if name:
+                        metadata["name"] = name
+                if "filename" in doc:
+                    filename = str(doc["filename"]).strip()
+                    if filename:
+                        metadata["filename"] = filename
+
+                if metadata:
+                    asset_data["metadata"] = metadata
+
                 # Release proxy object before next parser reuse
                 del doc
 
-                # Do not collect metadata - only index ISCC fields
                 asset = IsccAsset(**asset_data)
                 assets.append(asset)
 

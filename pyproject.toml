@@ -51,6 +51,7 @@ dependencies = [
     "click>=8.3.0",
     "tqdm>=4.67.1",
     "typer>=0.20.0",
+    "rich>=13.7.0",
     "fastapi>=0.120.0",
     "pyyaml>=6.0.3",
     "uvicorn[standard]>=0.38.0",
@@ -63,7 +64,7 @@ Repository = "https://github.com/iscc/iscc-search"
 Documentation = "https://search.iscc.codes"
 
 [project.scripts]
-iscc-search = "iscc_search.cli:cli"
+iscc-search = "iscc_search.cli:main"
 
 [dependency-groups]
 dev = [
@@ -114,7 +115,7 @@ fail_under = 100
 [tool.coverage.run]
 branch = true
 source = ["iscc_search"]
-omit = ["iscc_search/cli.py", "iscc_search/schema.py"]
+omit = ["iscc_search/cli/*", "iscc_search/schema.py"]
 
 [tool.datamodel-codegen]
 input = "iscc_search/openapi/openapi.yaml"

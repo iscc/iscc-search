@@ -205,6 +205,18 @@ class UsearchIndex:
                 for unit_type, (keys, vectors) in nphd_batches.items():
                     nphd_index = self._get_or_create_nphd_index(unit_type)
 
+                    # Deduplicate keys (keep last occurrence for each duplicate)
+                    # This handles cases where multiple assets share the same ISCC-ID
+                    # TODO Review Duplicate Key Handling
+                    if len(keys) != len(set(keys)):
+                        # Build dict with key -> (last) vector mapping
+                        unique_items = {}  # type: dict[int, bytes]
+                        for key, vector in zip(keys, vectors):
+                            unique_items[key] = vector
+                        # Rebuild lists from deduplicated items
+                        keys = list(unique_items.keys())
+                        vectors = list(unique_items.values())
+
                     # Remove existing keys first (for updates)
                     # remove() handles non-existent keys gracefully (returns 0)
                     nphd_index.remove(keys)

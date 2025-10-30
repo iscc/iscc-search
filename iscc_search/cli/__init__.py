@@ -19,6 +19,7 @@ if TYPE_CHECKING:
     from iscc_search.protocol import IsccIndexProtocol  # noqa: F401
 
 import iscc_search
+from iscc_search.utils import timer
 
 __all__ = ["app", "main"]
 
@@ -213,14 +214,8 @@ def add(
         raise typer.Exit(code=4)
 
     # Add assets to index
-    with Progress(
-        SpinnerColumn(),
-        TextColumn("[progress.description]{task.description}"),
-        console=console,
-    ) as progress:
-        task = progress.add_task(f"Adding {len(assets)} asset(s)...", total=None)
+    with timer(f"Indexing {len(assets)} asset(s)"):
         results = index.add_assets("default", assets)
-        progress.remove_task(task)
 
     # Close index to save all data
     with Progress(

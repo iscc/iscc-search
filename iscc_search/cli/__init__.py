@@ -10,7 +10,9 @@ from typing import TYPE_CHECKING
 
 import simdjson
 import typer
+from loguru import logger
 from rich.console import Console
+from rich.logging import RichHandler
 from rich.progress import BarColumn, MofNCompleteColumn, Progress, SpinnerColumn, TextColumn
 
 if TYPE_CHECKING:
@@ -28,6 +30,21 @@ app = typer.Typer(
 )
 
 console = Console()
+
+# Configure loguru to use rich's console for proper output coordination
+logger.remove()  # Remove default handler
+logger.add(
+    RichHandler(
+        console=console,
+        rich_tracebacks=True,
+        markup=True,
+        show_time=False,  # Use custom time format
+        show_level=False,  # Use custom level format
+        show_path=False,  # Don't show file path on right
+    ),
+    format="{time:YYYY-MM-DD HH:mm:ss.SSS} | {level: <7} | {module}:{function}:{line} - {message}",
+    level="DEBUG",
+)
 
 
 def get_default_index():

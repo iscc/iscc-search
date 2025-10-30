@@ -316,3 +316,49 @@ def test_usearch_index_max_dim_persistence(tmp_path, sample_iscc_ids):
     assert idx_reopened._nphd_indexes[data_unit_type].max_dim == 128, "New unit index should use loaded max_dim"
 
     idx_reopened.close()
+
+
+def test_usearch_index_duplicate_iscc_ids_in_batch(usearch_index, sample_iscc_ids):
+    """Test that adding multiple assets with same ISCC-ID in batch handles deduplication."""
+    # Create multiple assets with the same ISCC-ID but different content
+    content_unit_1 = ic.gen_text_code_v0("First version of content")["iscc"]
+    content_unit_2 = ic.gen_text_code_v0("Second version of content")["iscc"]
+    content_unit_3 = ic.gen_text_code_v0("Third version of content")["iscc"]
+
+    instance_unit = f"ISCC:{ic.Code.rnd(ic.MT.INSTANCE, bits=128)}"
+
+    # Create three assets with the same ISCC-ID
+    asset1 = IsccAsset(
+        iscc_id=sample_iscc_ids[0],
+        units=[instance_unit, content_unit_1],
+        metadata={"version": 1},
+    )
+    asset2 = IsccAsset(
+        iscc_id=sample_iscc_ids[0],  # Same ISCC-ID
+        units=[instance_unit, content_unit_2],
+        metadata={"version": 2},
+    )
+    asset3 = IsccAsset(
+        iscc_id=sample_iscc_ids[0],  # Same ISCC-ID
+        units=[instance_unit, content_unit_3],
+        metadata={"version": 3},
+    )
+
+    # Add all three in a single batch - should handle deduplication internally
+    results = usearch_index.add_assets([asset1, asset2, asset3])
+
+    # Should get 3 results (one for each add operation)
+    assert len(results) == 3
+    assert results[0].status == "created"
+    assert results[1].status == "updated"  # Second overwrites first
+    assert results[2].status == "updated"  # Third overwrites second
+
+    # Verify that the last asset's metadata is stored
+    retrieved = usearch_index.get_asset(sample_iscc_ids[0])
+    assert retrieved.metadata["version"] == 3
+
+    # Verify search works (last content unit should be indexed)
+    query = IsccAsset(units=[instance_unit, content_unit_3])
+    result = usearch_index.search_assets(query, limit=10)
+    assert len(result.matches) >= 1
+    assert sample_iscc_ids[0] in [m.iscc_id for m in result.matches]

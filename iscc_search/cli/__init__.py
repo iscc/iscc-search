@@ -130,6 +130,7 @@ def add(
     # Parse JSON files and create assets
     assets = []
     errors = []
+    seen_iscc_ids = set()  # Track ISCC-IDs to detect duplicates
     # Reuse parser instance for optimal performance (reduces allocation overhead)
     parser = simdjson.Parser()
 
@@ -152,7 +153,14 @@ def add(
 
                 # Handle iscc_id
                 if "iscc_id" in doc:
-                    asset_data["iscc_id"] = str(doc["iscc_id"])
+                    iscc_id = str(doc["iscc_id"])
+                    asset_data["iscc_id"] = iscc_id
+
+                    # Check for duplicate ISCC-ID
+                    if iscc_id in seen_iscc_ids:
+                        logger.warning(f"Duplicate ISCC-ID encountered: {iscc_id} in {file_path.name}")
+                    else:
+                        seen_iscc_ids.add(iscc_id)
 
                 # Handle iscc_code - try 'iscc_code' first, fall back to 'iscc'
                 if "iscc_code" in doc:

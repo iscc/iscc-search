@@ -166,6 +166,9 @@ class NphdIndex(Index):
         """
         Load index from file or buffer and restore max_dim from saved ndim.
 
+        CRITICAL: After loading, we must restore the custom NPHD metric because
+        usearch's load() overwrites it with the saved metric (standard Hamming).
+
         :param path_or_buffer: Path or buffer to load from (defaults to self.path)
         :param progress: Optional progress callback
         """
@@ -173,10 +176,17 @@ class NphdIndex(Index):
         self.max_dim = self.ndim - 8
         self.max_bytes = self.max_dim // 8
 
+        # Restore custom NPHD metric (usearch load() replaces it with standard Hamming)
+        metric = create_nphd_metric()
+        self._compiled.change_metric(metric.kind, metric.signature, metric.pointer)
+
     def view(self, path_or_buffer=None, progress=None):
         # type: (Any, Any) -> None
         """
         Memory-map index from file or buffer and restore max_dim from saved ndim.
+
+        CRITICAL: After viewing, we must restore the custom NPHD metric because
+        usearch's view() overwrites it with the saved metric (standard Hamming).
 
         :param path_or_buffer: Path or buffer to view from (defaults to self.path)
         :param progress: Optional progress callback
@@ -184,6 +194,10 @@ class NphdIndex(Index):
         super().view(path_or_buffer, progress)
         self.max_dim = self.ndim - 8
         self.max_bytes = self.max_dim // 8
+
+        # Restore custom NPHD metric (usearch view() replaces it with standard Hamming)
+        metric = create_nphd_metric()
+        self._compiled.change_metric(metric.kind, metric.signature, metric.pointer)
 
     def copy(self):
         # type: () -> NphdIndex

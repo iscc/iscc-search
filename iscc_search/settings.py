@@ -8,6 +8,7 @@ Provides configuration management using Pydantic settings with support for:
 - Type validation and defaults
 """
 
+from pathlib import Path
 from urllib.parse import urlparse
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -40,7 +41,7 @@ class SearchSettings(BaseSettings):
     """
 
     index_uri: str = Field(
-        iscc_search.dirs.user_data_dir,
+        f"usearch:///{Path(iscc_search.dirs.user_data_dir).as_posix()}",
         description="URI specifying index backend (memory://, lmdb://, usearch://, postgres://)",
     )
 

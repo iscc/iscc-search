@@ -182,11 +182,13 @@ paths:
               items:
                 $ref: '#/components/schemas/IsccAsset'
             example:
-              - iscc_code: "ISCC:KECYCMZIOY36XXGZ7S6QJQ2AEEXPOVEHZYPK6GMSFLU3WF54UPZMTPY"
+              - iscc_id: "ISCC:MAIGIJ2FJ5R6BMAA"
+                iscc_code: "ISCC:KECYCMZIOY36XXGZ7S6QJQ2AEEXPOVEHZYPK6GMSFLU3WF54UPZMTPY"
                 units:
                   - "ISCC:AADYCMZIOY36XXGZ5B5BME7EIPPXRFKYQZ7VXKI7V55AEQQE67A33BY"
                   - "ISCC:EED7ZPIEYNACCLXXZSS2LIM6JVXDYGCG2QSMC7DCPER4MYJPJATIM4Y"
-              - units:
+              - iscc_id: "ISCC:MAIGIJ2FJ5R6BMAA"
+                units:
                   - "ISCC:GADVJB6OD2XRTERK3G4KOFHGDJCBYEXAZCZLVVSA7MMURDPMJ5S5JWI"
                   - "ISCC:IAD6TOYXXSR7FSN7TRRRNOKQ6JCFK3ZF4KRFVEQRQ4M4PDPUR5H7GHQ"
       responses:

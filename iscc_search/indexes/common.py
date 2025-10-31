@@ -157,19 +157,22 @@ def validate_index_name(name):
         )
 
 
-def validate_iscc_id(iscc_id):
-    # type: (str) -> None
+def validate_iscc_id(iscc_id, expected_realm=None):
+    # type: (str, int | None) -> None
     """
-    Validate ISCC-ID format.
+    Validate ISCC-ID format and optionally check realm.
 
     Checks:
     - Starts with "ISCC:"
     - Valid base32 encoding
     - Correct length (10 bytes = 2-byte header + 8-byte body)
     - Main type is ID
+    - Length field is 0 (64-bit ISCC-ID v1)
+    - Realm matches expected_realm (if provided)
 
     :param iscc_id: ISCC-ID string to validate
-    :raises ValueError: If ISCC-ID format is invalid
+    :param expected_realm: Optional realm ID (0 or 1) to validate against
+    :raises ValueError: If ISCC-ID format is invalid or realm doesn't match
     """
     if not iscc_id or not iscc_id.startswith("ISCC:"):
         raise ValueError(f"Invalid ISCC-ID format: '{iscc_id}' (must start with 'ISCC:')")
@@ -186,9 +189,24 @@ def validate_iscc_id(iscc_id):
 
     # Validate main type is ID
     # Decode returns: maintype, subtype, version, length, body
-    mt, _realm, _vs, _len, _body = ic.decode_header(code_bytes)
+    mt, realm, _vs, length_field, _body = ic.decode_header(code_bytes)
     if mt != ic.MT.ID:
         raise ValueError(f"Invalid ISCC-ID main type: {mt} (expected {ic.MT.ID})")
+
+    # Validate length field is 0 (64-bit ISCC-ID v1)
+    if length_field != 0:
+        raise ValueError(
+            f"Invalid ISCC-ID length field: {length_field} (expected 0 for 64-bit ISCC-ID v1). "
+            f"ISCC-ID '{iscc_id}' appears to be malformed."
+        )
+
+    # Validate realm if expected_realm provided
+    if expected_realm is not None and realm != expected_realm:
+        raise ValueError(
+            f"Realm mismatch: ISCC-ID '{iscc_id}' has realm={realm}, "
+            f"but expected realm={expected_realm}. "
+            f"Cannot query assets from different realm."
+        )
 
 
 def normalize_query_asset(query):

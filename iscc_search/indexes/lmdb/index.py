@@ -161,10 +161,11 @@ class LmdbIndex:
 
         :param iscc_id: ISCC-ID to retrieve
         :return: IsccAsset with full metadata
+        :raises ValueError: If ISCC-ID realm doesn't match index realm or format invalid
         :raises FileNotFoundError: If asset not found
-        :raises ValueError: If ISCC-ID format invalid
         """
-        common.validate_iscc_id(iscc_id)
+        # Validate format and realm in single decode operation
+        common.validate_iscc_id(iscc_id, expected_realm=self._realm_id)
 
         with self.env.begin() as txn:
             assets_db = self._get_db("__assets__", txn)

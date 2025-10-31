@@ -227,6 +227,23 @@ def test_usearch_index_get_asset_not_found(tmp_path):
     idx.close()
 
 
+def test_usearch_index_get_asset_realm_mismatch(tmp_path, sample_assets):
+    """Test get_asset raises ValueError for ISCC-ID with different realm."""
+    index_path = tmp_path / "realm_index"
+    idx = UsearchIndex(index_path, realm_id=0, max_dim=256)
+
+    # Add asset with realm=0
+    idx.add_assets([sample_assets[0]])
+
+    # Try to get asset with realm=1 ISCC-ID
+    iscc_id_realm1 = ic.gen_iscc_id(timestamp=9999999, hub_id=99, realm_id=1)["iscc"]
+
+    with pytest.raises(ValueError, match="Realm mismatch"):
+        idx.get_asset(iscc_id_realm1)
+
+    idx.close()
+
+
 def test_usearch_index_search_with_no_similarity_units(tmp_path):
     """Test search_assets when no similarity units are indexed."""
     # Create fresh index
@@ -362,3 +379,370 @@ def test_usearch_index_duplicate_iscc_ids_in_batch(usearch_index, sample_iscc_id
     result = usearch_index.search_assets(query, limit=10)
     assert len(result.matches) >= 1
     assert sample_iscc_ids[0] in [m.iscc_id for m in result.matches]
+
+
+def test_usearch_index_infer_realm_from_first_asset(tmp_path, sample_iscc_ids):
+    """Test that realm_id is inferred from first asset when not specified."""
+    index_path = tmp_path / "infer_realm"
+
+    # Create index WITHOUT specifying realm_id
+    idx = UsearchIndex(index_path, realm_id=None, max_dim=256)
+
+    # realm_id should be None before adding assets
+    assert idx._realm_id is None
+
+    # Add first asset - should infer realm_id from it
+    content_unit = ic.gen_text_code_v0("First asset content")["iscc"]
+    instance_unit = f"ISCC:{ic.Code.rnd(ic.MT.INSTANCE, bits=128)}"
+
+    asset = IsccAsset(
+        iscc_id=sample_iscc_ids[0],  # Has realm_id=0
+        units=[instance_unit, content_unit],
+    )
+
+    results = idx.add_assets([asset])
+    assert len(results) == 1
+    assert results[0].status == "created"
+
+    # realm_id should now be inferred as 0
+    assert idx._realm_id == 0
+
+    # Verify asset was stored
+    retrieved = idx.get_asset(sample_iscc_ids[0])
+    assert retrieved.iscc_id == sample_iscc_ids[0]
+
+    idx.close()
+
+
+def test_usearch_index_migration_from_legacy_index(tmp_path, sample_iscc_ids):
+    """Test migration path for legacy indexes without stored realm_id."""
+    import lmdb
+    import struct
+    from iscc_search.indexes import common
+    from iscc_search.models import IsccID
+
+    index_path = tmp_path / "legacy_index"
+
+    # Step 1: Manually create a legacy index structure (without realm_id in metadata)
+    # This simulates an old index from before realm_id was stored
+    index_path.mkdir(parents=True, exist_ok=True)
+    db_path = index_path / "index.lmdb"  # UsearchIndex expects index.lmdb, not metadata.lmdb
+
+    # Create LMDB environment and add assets WITHOUT storing realm_id
+    env = lmdb.open(
+        str(db_path),
+        max_dbs=10,
+        map_size=100 * 1024 * 1024,
+        subdir=False,
+    )
+
+    with env.begin(write=True) as txn:
+        # Create metadata database
+        metadata_db = env.open_db(b"__metadata__", txn=txn)
+
+        # Store max_dim but NOT realm_id (simulating old index)
+        txn.put(b"max_dim", struct.pack(">I", 256), db=metadata_db)
+        # Do NOT store realm_id - this is the key difference
+
+        # Create assets database and add an asset
+        assets_db = env.open_db(b"__assets__", txn=txn)
+
+        # Create a test asset
+        content_unit = ic.gen_text_code_v0("Legacy asset content")["iscc"]
+        instance_unit = f"ISCC:{ic.Code.rnd(ic.MT.INSTANCE, bits=128)}"
+        asset = IsccAsset(
+            iscc_id=sample_iscc_ids[0],
+            units=[instance_unit, content_unit],
+            metadata={"legacy": True},
+        )
+
+        # Serialize and store the asset using the same key format as UsearchIndex
+        iscc_id_obj = IsccID(sample_iscc_ids[0])
+        asset_key = struct.pack(">Q", int(iscc_id_obj))
+        asset_bytes = common.serialize_asset(asset)
+        txn.put(asset_key, asset_bytes, db=assets_db)
+
+    env.close()
+
+    # Step 2: Open the legacy index - should trigger migration
+    # This should infer realm_id from the first asset
+    idx = UsearchIndex(index_path, realm_id=None)
+
+    # Should have inferred realm_id=0 from the stored asset
+    assert idx._realm_id == 0
+
+    # Should be able to retrieve the legacy asset
+    retrieved = idx.get_asset(sample_iscc_ids[0])
+    assert retrieved.iscc_id == sample_iscc_ids[0]
+    assert retrieved.metadata["legacy"] is True
+
+    # Should be able to add new assets
+    new_content = ic.gen_text_code_v0("New asset after migration")["iscc"]
+    new_instance = f"ISCC:{ic.Code.rnd(ic.MT.INSTANCE, bits=128)}"
+    new_asset = IsccAsset(
+        iscc_id=sample_iscc_ids[1],
+        units=[new_instance, new_content],
+    )
+
+    results = idx.add_assets([new_asset])
+    assert len(results) == 1
+    assert results[0].status == "created"
+
+    idx.close()
+
+    # Step 3: Reopen the migrated index - should load realm_id from metadata now
+    idx_reopened = UsearchIndex(index_path, realm_id=None)
+    assert idx_reopened._realm_id == 0
+
+    # Both assets should be accessible
+    assert idx_reopened.get_asset(sample_iscc_ids[0]).metadata["legacy"] is True
+    assert idx_reopened.get_asset(sample_iscc_ids[1]).iscc_id == sample_iscc_ids[1]
+
+    idx_reopened.close()
+
+
+def test_usearch_index_migration_missing_created_at(tmp_path, sample_iscc_ids):
+    """Test migration path adds created_at timestamp if missing."""
+    import lmdb
+    import struct
+    from iscc_search.indexes import common
+    from iscc_search.models import IsccID
+
+    index_path = tmp_path / "legacy_no_timestamp"
+    index_path.mkdir(parents=True, exist_ok=True)
+    db_path = index_path / "index.lmdb"
+
+    # Create legacy index without created_at
+    env = lmdb.open(
+        str(db_path),
+        max_dbs=10,
+        map_size=100 * 1024 * 1024,
+        subdir=False,
+    )
+
+    with env.begin(write=True) as txn:
+        metadata_db = env.open_db(b"__metadata__", txn=txn)
+        assets_db = env.open_db(b"__assets__", txn=txn)
+
+        # Store max_dim but NOT realm_id or created_at
+        txn.put(b"max_dim", struct.pack(">I", 256), db=metadata_db)
+
+        # Add an asset
+        content_unit = ic.gen_text_code_v0("Asset without timestamp")["iscc"]
+        instance_unit = f"ISCC:{ic.Code.rnd(ic.MT.INSTANCE, bits=128)}"
+        asset = IsccAsset(
+            iscc_id=sample_iscc_ids[0],
+            units=[instance_unit, content_unit],
+        )
+
+        iscc_id_obj = IsccID(sample_iscc_ids[0])
+        asset_key = struct.pack(">Q", int(iscc_id_obj))
+        asset_bytes = common.serialize_asset(asset)
+        txn.put(asset_key, asset_bytes, db=assets_db)
+
+    env.close()
+
+    # Open the index - should add created_at during migration
+    idx = UsearchIndex(index_path, realm_id=None)
+
+    # Verify created_at was added
+    with idx.env.begin() as txn:
+        metadata_db = idx.env.open_db(b"__metadata__", txn=txn)
+        created_at_bytes = txn.get(b"created_at", db=metadata_db)
+        assert created_at_bytes is not None, "created_at should be added during migration"
+
+        created_at = struct.unpack(">d", created_at_bytes)[0]
+        assert created_at > 0, "created_at should be a valid timestamp"
+
+    idx.close()
+
+
+def test_usearch_index_migration_missing_max_dim(tmp_path, sample_iscc_ids):
+    """Test migration path adds max_dim if missing."""
+    import lmdb
+    import struct
+    from iscc_search.indexes import common
+    from iscc_search.models import IsccID
+
+    index_path = tmp_path / "legacy_no_max_dim"
+    index_path.mkdir(parents=True, exist_ok=True)
+    db_path = index_path / "index.lmdb"
+
+    # Create legacy index without max_dim
+    env = lmdb.open(
+        str(db_path),
+        max_dbs=10,
+        map_size=100 * 1024 * 1024,
+        subdir=False,
+    )
+
+    with env.begin(write=True) as txn:
+        metadata_db = env.open_db(b"__metadata__", txn=txn)
+        assets_db = env.open_db(b"__assets__", txn=txn)
+
+        # Do NOT store realm_id or max_dim
+
+        # Add an asset
+        content_unit = ic.gen_text_code_v0("Asset without max_dim")["iscc"]
+        instance_unit = f"ISCC:{ic.Code.rnd(ic.MT.INSTANCE, bits=128)}"
+        asset = IsccAsset(
+            iscc_id=sample_iscc_ids[0],
+            units=[instance_unit, content_unit],
+        )
+
+        iscc_id_obj = IsccID(sample_iscc_ids[0])
+        asset_key = struct.pack(">Q", int(iscc_id_obj))
+        asset_bytes = common.serialize_asset(asset)
+        txn.put(asset_key, asset_bytes, db=assets_db)
+
+    env.close()
+
+    # Open the index with explicit max_dim - should use it
+    idx = UsearchIndex(index_path, realm_id=None, max_dim=128)
+
+    # Should have stored the provided max_dim
+    assert idx.max_dim == 128
+
+    # Verify max_dim was stored in metadata
+    with idx.env.begin() as txn:
+        metadata_db = idx.env.open_db(b"__metadata__", txn=txn)
+        max_dim_bytes = txn.get(b"max_dim", db=metadata_db)
+        assert max_dim_bytes is not None, "max_dim should be stored"
+
+        max_dim = struct.unpack(">I", max_dim_bytes)[0]
+        assert max_dim == 128, "max_dim should be 128"
+
+    idx.close()
+
+
+def test_usearch_index_migration_invalid_asset_no_iscc_id(tmp_path):
+    """Test migration fails when first asset has no iscc_id."""
+    import lmdb
+    import struct
+    from iscc_search.indexes import common
+
+    index_path = tmp_path / "legacy_invalid"
+    index_path.mkdir(parents=True, exist_ok=True)
+    db_path = index_path / "index.lmdb"
+
+    # Create legacy index with asset that has no iscc_id
+    env = lmdb.open(
+        str(db_path),
+        max_dbs=10,
+        map_size=100 * 1024 * 1024,
+        subdir=False,
+    )
+
+    with env.begin(write=True) as txn:
+        metadata_db = env.open_db(b"__metadata__", txn=txn)
+        assets_db = env.open_db(b"__assets__", txn=txn)
+
+        # Store max_dim but NOT realm_id
+        txn.put(b"max_dim", struct.pack(">I", 256), db=metadata_db)
+
+        # Add an asset WITHOUT iscc_id (invalid for migration)
+        content_unit = ic.gen_text_code_v0("Asset without iscc_id")["iscc"]
+        instance_unit = f"ISCC:{ic.Code.rnd(ic.MT.INSTANCE, bits=128)}"
+        asset = IsccAsset(
+            iscc_id=None,  # No iscc_id!
+            units=[instance_unit, content_unit],
+        )
+
+        # Use a dummy key since we can't derive it from iscc_id
+        asset_key = struct.pack(">Q", 1)
+        asset_bytes = common.serialize_asset(asset)
+        txn.put(asset_key, asset_bytes, db=assets_db)
+
+    env.close()
+
+    # Opening the index should fail because first asset has no iscc_id
+    with pytest.raises(ValueError, match="Cannot infer realm_id"):
+        UsearchIndex(index_path, realm_id=None)
+
+
+def test_usearch_index_explicit_realm_id_first_add(tmp_path, sample_iscc_ids):
+    """Test adding assets when index was created with explicit realm_id."""
+    index_path = tmp_path / "explicit_realm"
+
+    # Create index WITH explicit realm_id
+    idx = UsearchIndex(index_path, realm_id=0, max_dim=256)
+
+    # realm_id should be set in memory
+    assert idx._realm_id == 0
+
+    # Add first asset - this covers the branch where realm_id is in memory but not in DB
+    content_unit = ic.gen_text_code_v0("First asset with explicit realm")["iscc"]
+    instance_unit = f"ISCC:{ic.Code.rnd(ic.MT.INSTANCE, bits=128)}"
+
+    asset = IsccAsset(
+        iscc_id=sample_iscc_ids[0],
+        units=[instance_unit, content_unit],
+    )
+
+    results = idx.add_assets([asset])
+    assert len(results) == 1
+    assert results[0].status == "created"
+
+    # Verify asset was stored
+    retrieved = idx.get_asset(sample_iscc_ids[0])
+    assert retrieved.iscc_id == sample_iscc_ids[0]
+
+    idx.close()
+
+
+def test_usearch_index_migration_with_existing_created_at(tmp_path, sample_iscc_ids):
+    """Test migration path when created_at already exists."""
+    import lmdb
+    import struct
+    import time
+    from iscc_search.indexes import common
+    from iscc_search.models import IsccID
+
+    index_path = tmp_path / "legacy_with_timestamp"
+    index_path.mkdir(parents=True, exist_ok=True)
+    db_path = index_path / "index.lmdb"
+
+    # Create legacy index with created_at already set
+    env = lmdb.open(
+        str(db_path),
+        max_dbs=10,
+        map_size=100 * 1024 * 1024,
+        subdir=False,
+    )
+
+    with env.begin(write=True) as txn:
+        metadata_db = env.open_db(b"__metadata__", txn=txn)
+        assets_db = env.open_db(b"__assets__", txn=txn)
+
+        # Store max_dim and created_at but NOT realm_id
+        txn.put(b"max_dim", struct.pack(">I", 256), db=metadata_db)
+        txn.put(b"created_at", struct.pack(">d", time.time()), db=metadata_db)
+
+        # Add an asset
+        content_unit = ic.gen_text_code_v0("Asset with existing timestamp")["iscc"]
+        instance_unit = f"ISCC:{ic.Code.rnd(ic.MT.INSTANCE, bits=128)}"
+        asset = IsccAsset(
+            iscc_id=sample_iscc_ids[0],
+            units=[instance_unit, content_unit],
+        )
+
+        iscc_id_obj = IsccID(sample_iscc_ids[0])
+        asset_key = struct.pack(">Q", int(iscc_id_obj))
+        asset_bytes = common.serialize_asset(asset)
+        txn.put(asset_key, asset_bytes, db=assets_db)
+
+    env.close()
+
+    # Open the index - should migrate without overwriting created_at
+    idx = UsearchIndex(index_path, realm_id=None)
+
+    # Verify migration succeeded
+    assert idx._realm_id == 0
+
+    # Verify created_at still exists
+    with idx.env.begin() as txn:
+        metadata_db = idx.env.open_db(b"__metadata__", txn=txn)
+        created_at_bytes = txn.get(b"created_at", db=metadata_db)
+        assert created_at_bytes is not None
+
+    idx.close()

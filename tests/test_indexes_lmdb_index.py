@@ -152,6 +152,18 @@ def test_get_asset_invalid_iscc_id(lmdb_index):
         lmdb_index.get_asset("NOT_VALID")
 
 
+def test_get_asset_realm_mismatch(lmdb_index, sample_assets):
+    """Test get_asset raises ValueError for ISCC-ID with different realm."""
+    # Add asset with realm=0
+    lmdb_index.add_assets([sample_assets[0]])
+
+    # Try to get asset with realm=1 ISCC-ID
+    iscc_id_realm1 = ic.gen_iscc_id(timestamp=9999999, hub_id=99, realm_id=1)["iscc"]
+
+    with pytest.raises(ValueError, match="Realm mismatch"):
+        lmdb_index.get_asset(iscc_id_realm1)
+
+
 def test_search_assets_basic(lmdb_index, sample_assets):
     """Test basic search returns matches."""
     asset = sample_assets[0]

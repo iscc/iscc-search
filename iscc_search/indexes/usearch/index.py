@@ -134,19 +134,20 @@ class UsearchIndex:
                         integerdup=True,
                     )
 
-                    # Infer realm_id from first asset if not yet set
-                    if self._realm_id is None:
-                        # Validate first asset has iscc_id
-                        if assets[0].iscc_id is None:
-                            raise ValueError("Asset must have iscc_id field when adding to index")
+                    # Infer realm_id from first asset if not yet persisted
+                    # Check database, not just self._realm_id (persists across retries)
+                    realm_bytes = txn.get(b"realm_id", db=metadata_db)
+                    if realm_bytes is None:
+                        # Realm not in database - infer from first asset
+                        if self._realm_id is None:  # pragma: no branch
+                            # Not in memory either - validate and infer
+                            if assets[0].iscc_id is None:
+                                raise ValueError("Asset must have iscc_id field when adding to index")
+                            self._realm_id = common.extract_realm_id(assets[0].iscc_id)
 
-                        # Infer realm_id from first asset
-                        inferred_realm = common.extract_realm_id(assets[0].iscc_id)
-                        self._realm_id = inferred_realm
-
-                        # Store in metadata
-                        txn.put(b"realm_id", struct.pack(">I", inferred_realm), db=metadata_db)
-                        logger.info(f"Inferred realm_id={inferred_realm} from first asset")
+                        # Store in metadata (handles both initial write and retry after rollback)
+                        txn.put(b"realm_id", struct.pack(">I", self._realm_id), db=metadata_db)
+                        logger.info(f"Inferred realm_id={self._realm_id} from first asset")
 
                     # Prepare vectors for batch add to NphdIndex
                     nphd_batches = {}  # type: dict[str, tuple[list[int], list[bytes]]]
@@ -238,7 +239,10 @@ class UsearchIndex:
                         f"This may indicate disk space issues, permissions problems, or filesystem limits."
                     )
 
-                results = []  # Clear for retry
+                # Clear state for retry
+                results = []
+                # Reset NphdIndexes - they have vectors from failed transaction
+                self._nphd_indexes = {}
                 old_size = self.map_size
                 new_size = old_size * 2
 
@@ -265,8 +269,12 @@ class UsearchIndex:
 
         :param iscc_id: ISCC-ID string
         :return: IsccAsset instance
+        :raises ValueError: If ISCC-ID realm doesn't match index realm or format invalid
         :raises FileNotFoundError: If asset not found
         """
+        # Validate format and realm in single decode operation
+        common.validate_iscc_id(iscc_id, expected_realm=self._realm_id)
+
         # Convert ISCC-ID to integer key
         iscc_id_obj = IsccID(iscc_id)
         key = int(iscc_id_obj)
@@ -422,18 +430,48 @@ class UsearchIndex:
                 max_dim_bytes = txn.get(b"max_dim", db=metadata_db)
                 self.max_dim = struct.unpack(">I", max_dim_bytes)[0]
             else:
-                # New index
-                if realm_id is None:
-                    # Defer realm_id assignment until first asset is added
-                    self._realm_id = None
-                else:
-                    # Explicit realm_id provided - store immediately
-                    self._realm_id = realm_id
-                    txn.put(b"realm_id", struct.pack(">I", realm_id), db=metadata_db)
+                # No realm_id in metadata - check if this is truly a new index or needs migration
+                assets_db = self.env.open_db(b"__assets__", txn=txn)
+                asset_count = txn.stat(db=assets_db)["entries"]
 
-                # Always store max_dim and created_at for new indexes
-                txn.put(b"max_dim", struct.pack(">I", self.max_dim), db=metadata_db)
-                txn.put(b"created_at", struct.pack(">d", time.time()), db=metadata_db)
+                if asset_count > 0:
+                    # Existing index from before realm_id was stored - infer from first asset
+                    cursor = txn.cursor(assets_db)
+                    if cursor.first():  # pragma: no branch
+                        _, asset_bytes = cursor.item()
+                        asset = common.deserialize_asset(asset_bytes)
+                        if asset.iscc_id:
+                            inferred_realm = common.extract_realm_id(asset.iscc_id)
+                            self._realm_id = inferred_realm
+                            txn.put(b"realm_id", struct.pack(">I", inferred_realm), db=metadata_db)
+                            logger.info(f"Migrated existing index: inferred realm_id={inferred_realm} from first asset")
+                        else:
+                            raise ValueError("Cannot infer realm_id: first asset has no iscc_id")
+                    cursor.close()
+
+                    # Load max_dim if exists, otherwise use default
+                    max_dim_bytes = txn.get(b"max_dim", db=metadata_db)
+                    if max_dim_bytes:
+                        self.max_dim = struct.unpack(">I", max_dim_bytes)[0]
+                    else:
+                        txn.put(b"max_dim", struct.pack(">I", self.max_dim), db=metadata_db)
+
+                    # Add created_at if missing
+                    if not txn.get(b"created_at", db=metadata_db):
+                        txn.put(b"created_at", struct.pack(">d", time.time()), db=metadata_db)
+                else:
+                    # Truly new index
+                    if realm_id is None:
+                        # Defer realm_id assignment until first asset is added
+                        self._realm_id = None
+                    else:
+                        # Explicit realm_id provided - store immediately
+                        self._realm_id = realm_id
+                        txn.put(b"realm_id", struct.pack(">I", realm_id), db=metadata_db)
+
+                    # Always store max_dim and created_at for new indexes
+                    txn.put(b"max_dim", struct.pack(">I", self.max_dim), db=metadata_db)
+                    txn.put(b"created_at", struct.pack(">d", time.time()), db=metadata_db)
 
     def _update_nphd_metadata(self, unit_type, vector_count):
         # type: (str, int) -> None

@@ -261,6 +261,18 @@ def test_validate_iscc_id_wrong_maintype():
         common.validate_iscc_id(wrong_id)
 
 
+def test_validate_iscc_id_invalid_length_field():
+    """Test ISCC-ID validation rejects invalid length field."""
+    # Create ISCC-ID with length=1 (invalid for 64-bit ISCC-ID v1)
+    # Valid length field for ISCC-ID v1 is 0
+    header = ic.encode_header(ic.MT.ID, 0, ic.VS.V1, 1)  # length=1 is invalid
+    body = b"\x01\x02\x03\x04\x05\x06\x07\x08"
+    malformed_id = "ISCC:" + ic.encode_base32(header + body)
+
+    with pytest.raises(ValueError, match="Invalid ISCC-ID length field"):
+        common.validate_iscc_id(malformed_id)
+
+
 def test_roundtrip_iscc_id_body_reconstruction(sample_iscc_ids):
     """Test full roundtrip: extract body and realm, then reconstruct."""
     original_iscc_id = sample_iscc_ids[0]

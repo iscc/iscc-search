@@ -173,15 +173,15 @@ project architecture, desing, maintainability, testability, or implementation.
 
 - Use loguru for logging
 - Many current and nuanced details about specific python libraries may not be known to you yet. Whenever you
-  encounter a problem, use the deepwiki mcp to ask questions about these libraries:
-  - usearch -> unum-cloud/usearch
-  - iscc-core -> iscc/iscc-core
-  - lmdb -> jnwatson/py-lmdb (python bindings)
-  - lmdb -> LMDB/lmdb (C library)
-  - simdjson -> TkTech/pysimdjson
-  - fastapi -> fastapi/fastapi
-  - typer -> fastapi/typer
-  - rich -> Textualize/rich
-  - uvicorn -> Kludex/uvicorn
-  - loguru -> Delgan/loguru
-  - msgspec -> jcrist/msgspec
+    encounter a problem, use the deepwiki mcp to ask questions about these libraries:
+    - usearch -> unum-cloud/usearch
+    - iscc-core -> iscc/iscc-core
+    - lmdb -> jnwatson/py-lmdb (python bindings)
+    - lmdb -> LMDB/lmdb (C library)
+    - simdjson -> TkTech/pysimdjson
+    - fastapi -> fastapi/fastapi
+    - typer -> fastapi/typer
+    - rich -> Textualize/rich
+    - uvicorn -> Kludex/uvicorn
+    - loguru -> Delgan/loguru
+    - msgspec -> jcrist/msgspec

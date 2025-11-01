@@ -7,9 +7,9 @@ content-based discovery of digital assets. Instead of relying solely on names, U
 identifiers (PIDs), ISCC allows you to find content by what it *is* - its actual characteristics and similarity
 to other content.
 
-### Three Types of ISCCs
+### Four Types of ISCCs
 
-ISCC distinguishes three broad categories, each serving a different purpose:
+ISCC distinguishes four broad categories, each serving a different purpose:
 
 **ISCC-CODE**: A multi-component fingerprint derived from digital content itself. When you process a digital
 asset (text, image, audio, video), you generate an ISCC-CODE that captures multiple facets of that content.
@@ -29,28 +29,45 @@ ISCC-CODEs and UNITs (which are deterministic fingerprints), ISCC-IDs are issued
 ISCC-HUBs. Each ISCC-ID encodes a microsecond timestamp and the identifier of the issuing hub, linking to
 metadata and services.
 
+**ISCC-SIMPRINT**: A similarity hash that identifies content at the granular segment level. While ISCC-CODEs
+and ISCC-UNITs identify entire assets (documents, images, videos), ISCC-SIMPRINTs identify segments within those
+assets - text passages, image regions, video scenes, or audio clips. Like ISCC-UNITs, different simprint types
+operate at different abstraction levels (semantic, content, data) with specialized segmentation strategies. A
+single asset typically generates many simprints, enabling discovery of where specific content appears within
+larger works.
+
 ```mermaid
 graph TB
     ID[<b>ISCC-ID</b><br/>Persistent Identifier<br/><i>who • what • when • where</i>]
 
     CODE[<b>ISCC-CODE</b><br/>Multi-component Fingerprint<br/><i>deterministic content descriptor</i>]
 
-    META[<b>META-CODE</b><br/><i>title, creator</i>]
+    META[<b>META-CODE</b><br/><i>title, description</i>]
     SEMANTIC[<b>SEMANTIC-CODE</b><br/><i>semantic similarity</i>]
     CONTENT[<b>CONTENT-CODE</b><br/><i>perceptual similarity</i>]
-    DATA[<b>DATA-CODE</b><br/><i>structural similarity</i>]
-    INSTANCE[<b>INSTANCE-CODE</b><br/><i>exact duplicate</i>]
+    DATA[<b>DATA-CODE</b><br/><i>bitstream similarity</i>]
+    INSTANCE[<b>INSTANCE-CODE</b><br/><i>exact identity</i>]
+
+    SEM_SIM[<b>SEMANTIC-SIMPRINTS</b><br/><i>segment-level semantic</i>]
+    CON_SIM[<b>CONTENT-SIMPRINTS</b><br/><i>segment-level perceptual</i>]
+    DAT_SIM[<b>DATA-SIMPRINTS</b><br/><i>segment-level bitstream</i>]
 
     ID -.-> |references| CODE
     CODE --> |composed of| META & SEMANTIC & CONTENT & DATA & INSTANCE
+    SEMANTIC -.-> |many segments| SEM_SIM
+    CONTENT -.-> |many segments| CON_SIM
+    DATA -.-> |many segments| DAT_SIM
 ```
 
 ### Technical Structure
 
-All ISCCs share a common format: a variable-length **ISCC-HEADER** (minimum 2 bytes) followed by an
-**ISCC-BODY**. This structure makes ISCCs self-describing: the header describes the body by specifying its
-MainType, SubType, Version, and Length. The body contains the actual payload - the fingerprint data that
-identifies or references digital content.
+ISCC-CODEs, ISCC-UNITs, and ISCC-IDs share a common format: a variable-length **ISCC-HEADER** (minimum 2 bytes)
+followed by an **ISCC-BODY**. This structure makes ISCCs self-describing: the header describes the body by
+specifying its MainType, SubType, Version, and Length. The body contains the actual payload - the fingerprint
+data that identifies or references digital content.
+
+**ISCC-SIMPRINTs are the exception**: They are headerless base64-encoded hashes where type information must be
+tracked externally (typically by the index/collection in which they are stored).
 
 ## The Problem: Bidirectional Content Discovery
 
@@ -95,8 +112,28 @@ Consider a digital content platform with millions of images:
 3. **Result Ranking**: Aggregates scores across unit types, prioritizing stronger signals (INSTANCE > CONTENT >
     DATA > META)
 
-This bidirectional discovery - finding ISCCs from content and content from ISCCs - is what makes ISCC-ID
-different from traditional PIDs.
+### Granular Search with ISCC-SIMPRINTs
+
+Consider a text corpus platform with millions of documents:
+
+1. **Document Registration**: User uploads a 10-page document → system generates:
+    - ISCC-CODE with META, SEMANTIC-TEXT, CONTENT-TEXT, DATA, and INSTANCE units
+    - ~200 CONTENT-TEXT simprints (one per ~3 sentence chunk)
+    - ~300 SEMANTIC-TEXT simprints (overlapping chunks capturing semantic meaning)
+    - All stored with ISCC-ID and document metadata
+
+2. **Passage Search**: User provides a 5-sentence quote → system generates simprints → search finds:
+    - Lexically similar matches (CONTENT-TEXT simprint collision)
+    - Paraphrases/Translations (SEMANTIC-TEXT simprint collision)
+
+3. **Document-Level Discovery**: Results include:
+    - Which documents contain the passage (via ISCC-ID lookup)
+    - Where in each document (byte offsets from simprint metadata)
+    - Context around the match (neighboring simprints)
+    - Related documents (via parent ISCC-CODE similarity)
+
+This granular discovery - finding specific passages and their locations within documents - complements
+document-level ISCC-CODE matching for comprehensive content discovery.
 
 ## Technical Foundation
 
@@ -117,6 +154,23 @@ ISCC-UNIT may come with a 256-bit ISCC-BODY. The ISCC system guarantees that lon
 the same type are extensions of their shorter counterparts such that their common prefix is compatible. This
 means that, while the statistical probability of unintended collisions is higher with shorter codes, we can
 still match and compare short ISCC-UNITs against long ISCC-UNITS.
+
+**ISCC-SIMPRINT indexes** have different requirements and present unique scalability challenges:
+
+- **Volume**: A content collection typically has 100x-1000x more simprints than ISCC-CODEs, requiring careful
+    performance optimization
+- **Metadata tracking**: Each simprint must be associated with its parent ISCC-ID, segment byte offset, and
+    segment size
+- **Type-specific indexes**: Each simprint type (SEMANTIC_TEXT_V0, CONTENT_TEXT_V0, DATA_NONE_V0, ...) requires
+    a separate index
+- **Scalability tradeoffs**: To maintain performance at scale, various approaches are under evaluation:
+    - Fixed-length simprints (e.g., all 128-bit) instead of variable-length codes
+    - Simple inverted indexes (simprint → [iscc-id, ...]) that rely on the inherent clustering capability of
+        fuzzy simprints
+    - Exact matching with collision-based clustering rather than approximate similarity search
+
+The optimal indexing strategy requires experimentation and evaluation based on specific use cases and scale
+requirements.
 
 ### The NPHD Distance Metric
 

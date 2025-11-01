@@ -36,12 +36,13 @@ graph TB
     CODE[<b>ISCC-CODE</b><br/>Multi-component Fingerprint<br/><i>deterministic content descriptor</i>]
 
     META[<b>META-CODE</b><br/><i>title, creator</i>]
+    SEMANTIC[<b>SEMANTIC-CODE</b><br/><i>semantic similarity</i>]
     CONTENT[<b>CONTENT-CODE</b><br/><i>perceptual similarity</i>]
     DATA[<b>DATA-CODE</b><br/><i>structural similarity</i>]
     INSTANCE[<b>INSTANCE-CODE</b><br/><i>exact duplicate</i>]
 
     ID -.-> |references| CODE
-    CODE --> |composed of| META & CONTENT & DATA & INSTANCE
+    CODE --> |composed of| META & SEMANTIC & CONTENT & DATA & INSTANCE
 ```
 
 ### Technical Structure

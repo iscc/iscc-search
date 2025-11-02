@@ -195,7 +195,7 @@ class SimprintMiniIndexRaw:
         self.close()
 
 
-class SimprintIndexMini(SimprintMiniIndexRaw):
+class SimprintMiniIndex(SimprintMiniIndexRaw):
     """
     Developer-friendly simprint index with automatic data transformation.
 
@@ -243,7 +243,7 @@ class SimprintIndexMini(SimprintMiniIndexRaw):
             self.realm_id = iscc_id_obj.realm_id
             with self.env.begin(write=True, db=self.metadata_db) as txn:
                 txn.put(b"realm_id", self.realm_id.to_bytes(1, "big"))
-            logger.info(f"SimprintIndexMini realm_id set to {self.realm_id}")
+            logger.info(f"SimprintMiniIndex realm_id set to {self.realm_id}")
 
         # Get simprints from features
         simprints = features.get("simprints", [])

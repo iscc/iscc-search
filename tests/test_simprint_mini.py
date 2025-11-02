@@ -3,7 +3,7 @@
 import struct
 import tempfile
 from pathlib import Path
-from iscc_search.simprint.mini import SimprintMiniIndexRaw, SimprintIndexMini
+from iscc_search.simprint.mini import SimprintMiniIndexRaw, SimprintMiniIndex
 
 
 def test_simprint_mini_index_basic():
@@ -138,11 +138,11 @@ def test_simprint_mini_index_map_size_property():
 
 def test_simprint_index_mini_add_and_search():
     # type: () -> None
-    """Test SimprintIndexMini add and search with ISCC-ID strings and base64 simprints."""
+    """Test SimprintMiniIndex add and search with ISCC-ID strings and base64 simprints."""
     with tempfile.TemporaryDirectory() as tmpdir:
         index_path = Path(tmpdir) / "test_index"
 
-        with SimprintIndexMini(index_path, "SEMANTIC_TEXT_V0") as index:
+        with SimprintMiniIndex(index_path, "SEMANTIC_TEXT_V0") as index:
             # Test data with base64-encoded simprints
             iscc_id_1 = "ISCC:MAIWIDONMPAVUUAA"
             iscc_id_2 = "MAIWIDONMPAVUUAB"  # Without ISCC: prefix
@@ -176,11 +176,11 @@ def test_simprint_index_mini_add_and_search():
 
 def test_simprint_index_mini_search_with_limit():
     # type: () -> None
-    """Test SimprintIndexMini search with limit parameter."""
+    """Test SimprintMiniIndex search with limit parameter."""
     with tempfile.TemporaryDirectory() as tmpdir:
         index_path = Path(tmpdir) / "test_index"
 
-        with SimprintIndexMini(index_path, "SEMANTIC_TEXT_V0") as index:
+        with SimprintMiniIndex(index_path, "SEMANTIC_TEXT_V0") as index:
             # Add multiple ISCC-IDs (using valid base32 characters)
             base_ids = [
                 "ISCC:MAIWIDONMPAVUUAA",
@@ -202,11 +202,11 @@ def test_simprint_index_mini_search_with_limit():
 
 def test_simprint_index_mini_no_simprints():
     # type: () -> None
-    """Test SimprintIndexMini add with empty simprints list (warning case)."""
+    """Test SimprintMiniIndex add with empty simprints list (warning case)."""
     with tempfile.TemporaryDirectory() as tmpdir:
         index_path = Path(tmpdir) / "test_index"
 
-        with SimprintIndexMini(index_path, "SEMANTIC_TEXT_V0") as index:
+        with SimprintMiniIndex(index_path, "SEMANTIC_TEXT_V0") as index:
             # Add with empty simprints
             iscc_id = "ISCC:MAIWIDONMPAVUUAA"
             features = {"simprints": []}
@@ -223,7 +223,7 @@ def test_simprint_index_mini_realm_id_tracking():
     with tempfile.TemporaryDirectory() as tmpdir:
         index_path = Path(tmpdir) / "test_index"
 
-        with SimprintIndexMini(index_path, "SEMANTIC_TEXT_V0") as index:
+        with SimprintMiniIndex(index_path, "SEMANTIC_TEXT_V0") as index:
             # Initially realm_id should be None
             assert index.realm_id is None
 
@@ -243,14 +243,14 @@ def test_simprint_index_mini_realm_id_persistence():
         index_path = Path(tmpdir) / "test_index"
 
         # First session: add data
-        with SimprintIndexMini(index_path, "SEMANTIC_TEXT_V0") as index:
+        with SimprintMiniIndex(index_path, "SEMANTIC_TEXT_V0") as index:
             iscc_id = "ISCC:MAIWIDONMPAVUUAA"  # REALM_0
             features = {"simprints": ["8IAnFvInk24iEkDGoxfPid4DLgKjoHcf9U4-_3zPEVk"]}
             index.add(iscc_id, features)
             assert index.realm_id == 0
 
         # Second session: realm_id should be loaded
-        with SimprintIndexMini(index_path, "SEMANTIC_TEXT_V0") as index:
+        with SimprintMiniIndex(index_path, "SEMANTIC_TEXT_V0") as index:
             assert index.realm_id == 0
 
 
@@ -260,7 +260,7 @@ def test_simprint_index_mini_search_empty_index_error():
     with tempfile.TemporaryDirectory() as tmpdir:
         index_path = Path(tmpdir) / "test_index"
 
-        with SimprintIndexMini(index_path, "SEMANTIC_TEXT_V0") as index:
+        with SimprintMiniIndex(index_path, "SEMANTIC_TEXT_V0") as index:
             # Search on empty index should raise ValueError
             try:
                 index.search(["8IAnFvInk24iEkDGoxfPid4DLgKjoHcf9U4-_3zPEVk"])
@@ -281,7 +281,7 @@ def test_simprint_index_mini_realm_id_reconstruction():
         iscc_id_realm1 = IsccID.from_int(123456789, realm_id=1)
         iscc_id_str = str(iscc_id_realm1)
 
-        with SimprintIndexMini(index_path, "SEMANTIC_TEXT_V0") as index:
+        with SimprintMiniIndex(index_path, "SEMANTIC_TEXT_V0") as index:
             features = {"simprints": ["8IAnFvInk24iEkDGoxfPid4DLgKjoHcf9U4-_3zPEVk"]}
             index.add(iscc_id_str, features)
 

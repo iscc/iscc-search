@@ -18,17 +18,18 @@ approximate nearest neighbor search.
     without HEADER
 - **ISCC-DIGEST** - Binary representation of complete ISCC (ISCC-HEADER + ISCC-BODY).
 - **ISCC-UNIT** - ISCC-HEADER + ISCC-BODY where the ISCC-BODY is calculated from a single algorithm
-  - **META-UNIT** ISCC-UNIT that encodes syntactic/lexical **metadata** similarity
-  - **SEMANTIC-UNIT** ISCC-UNITs that encode semantic/conceptual **content** similarity
-      - Implemented SubTypes: TEXT, IMAGE, MIXED
-  - **CONTENT-UNIT** ISCC-UNITs encode perceptual/syntactic/lexical/structural **content** similarity
-    - Implemented SubTypes: TEXT, IMAGE, AUDIO, VIDEO, MIXED
-  - **DATA-UNIT** ISCC-UNIT that encodes raw **data** similarity
-  - **INSTANCE-UNIT** ISCC-UNIT identifies **data** like a checksum or cryptographic hash (depending on length)
+    - **META-UNIT** ISCC-UNIT that encodes syntactic/lexical **metadata** similarity
+    - **SEMANTIC-UNIT** ISCC-UNITs that encode semantic/conceptual **content** similarity
+        - Implemented SubTypes: TEXT, IMAGE, MIXED
+    - **CONTENT-UNIT** ISCC-UNITs encode perceptual/syntactic/lexical/structural **content** similarity
+        - Implemented SubTypes: TEXT, IMAGE, AUDIO, VIDEO, MIXED
+    - **DATA-UNIT** ISCC-UNIT that encodes raw **data** similarity
+    - **INSTANCE-UNIT** ISCC-UNIT identifies **data** like a checksum or cryptographic hash (depending on length)
 - **ISCC-CODE** - ISCC-HEADER + ISCC-BODY where the ISCC-BODY is a sequence of multiple ISCC-UNIT BODYs
     - DATA and INSTANCE are the minimum required mandatory ISCC-UNITS for a valid ISCC-CODE
 - **ISCC-ID** - Globally unique digital asset identifier (ISCC-HEADER + 52-bit timestamp + 12-bit server-id)
-- **ISCC-SIMPRINT** - Headerless base64 encoded similarity hash that describes a content segment (granular feature)
+- **ISCC-SIMPRINT** - Headerless base64 encoded similarity hash that describes a content segment (granular
+    feature)
 - **ISCC-UNIT-TYPE**: Identifier for UNIT-TYPES that can be indexed together with meaningful similarity search
     - All ISCCs of the same type are stored in the same index regardless of length
     - The type is identified by the composite of MainType, SubType, Version

@@ -29,8 +29,8 @@ ISCC-CODEs and UNITs (which are deterministic fingerprints), ISCC-IDs are issued
 ISCC-HUBs. Each ISCC-ID encodes a microsecond timestamp and the identifier of the issuing hub, linking to
 metadata and services.
 
-**ISCC-SIMPRINT**: A similarity hash that identifies content at the granular segment level. While ISCC-CODEs
-and ISCC-UNITs identify entire assets (documents, images, videos), ISCC-SIMPRINTs identify segments within those
+**ISCC-SIMPRINT**: A similarity hash that identifies content at the granular segment level. While ISCC-CODEs and
+ISCC-UNITs identify entire assets (documents, images, videos), ISCC-SIMPRINTs identify segments within those
 assets - text passages, image regions, video scenes, or audio clips. Like ISCC-UNITs, different simprint types
 operate at different abstraction levels (semantic, content, data) with specialized segmentation strategies. A
 single asset typically generates many simprints, enabling discovery of where specific content appears within
@@ -117,16 +117,19 @@ Consider a digital content platform with millions of images:
 Consider a text corpus platform with millions of documents:
 
 1. **Document Registration**: User uploads a 10-page document → system generates:
+
     - ISCC-CODE with META, SEMANTIC-TEXT, CONTENT-TEXT, DATA, and INSTANCE units
     - ~200 CONTENT-TEXT simprints (one per ~3 sentence chunk)
     - ~300 SEMANTIC-TEXT simprints (overlapping chunks capturing semantic meaning)
     - All stored with ISCC-ID and document metadata
 
 2. **Passage Search**: User provides a 5-sentence quote → system generates simprints → search finds:
+
     - Lexically similar matches (CONTENT-TEXT simprint collision)
     - Paraphrases/Translations (SEMANTIC-TEXT simprint collision)
 
 3. **Document-Level Discovery**: Results include:
+
     - Which documents contain the passage (via ISCC-ID lookup)
     - Where in each document (byte offsets from simprint metadata)
     - Context around the match (neighboring simprints)
@@ -165,8 +168,8 @@ still match and compare short ISCC-UNITs against long ISCC-UNITS.
     a separate index
 - **Scalability tradeoffs**: To maintain performance at scale, various approaches are under evaluation:
     - Fixed-length simprints (e.g., all 128-bit) instead of variable-length codes
-    - Simple inverted indexes (simprint → [iscc-id, ...]) that rely on the inherent clustering capability of
-        fuzzy simprints
+    - Simple inverted indexes (simprint → [iscc-id, ...]) that rely on the inherent clustering capability of fuzzy
+        simprints
     - Exact matching with collision-based clustering rather than approximate similarity search
 
 The optimal indexing strategy requires experimentation and evaluation based on specific use cases and scale

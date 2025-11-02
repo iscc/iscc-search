@@ -126,6 +126,20 @@ The project structure follows standard Python packaging conventions:
 
 @~/.claude/docs/python.md
 
+## Code Style Preferences
+
+1. **Prefer library functions over manual implementations**
+
+    - Use `ic.decode_base64()` instead of manual base64 padding + `urlsafe_b64decode()`
+    - Leverage domain-specific libraries (iscc-core) for ISCC operations
+    - Example: `ic.decode_base64(s)[:8]` vs `urlsafe_b64decode(s + "=" * (-len(s) % 4))[:8]`
+
+2. **Use list comprehensions for building lists**
+
+    - Prefere concise comprehensions over explicit loops
+    - Bad: `pairs = []; for x in items: pairs.append(transform(x))`
+    - Good: `pairs = [transform(x) for x in items]`
+
 ## Development Notes
 
 1. **Custom usearch build**: Project uses custom usearch wheels from iscc.github.io (not PyPI)

@@ -1,37 +1,11 @@
 """Minimal LMDB-Based High Performance Simprint Inverted Index"""
 
-import struct
 from pathlib import Path
-from typing import Protocol
 from collections import Counter
 import lmdb
 
 
-class SimprintMiniItem(Protocol):
-    """Protocol for items to be indexed."""
-
-    iscc_id: bytes  # 64-bit ISCC-ID body (realm needs to be tracked at index level)
-    simprints: list[bytes]  # List of 64-bit simprint digests
-
-
-class SimprintMiniResult:
-    """Search result with ranked ISCC-IDs by match count."""
-
-    def __init__(self, matches):
-        # type: (list[tuple[bytes, int]]) -> None
-        """
-        Initialize search result.
-
-        :param matches: List of (iscc_id, match_count) tuples sorted by match_count descending
-        """
-        self.matches = matches
-
-    def __repr__(self):
-        # type: () -> str
-        return f"SimprintMiniResult(matches={len(self.matches)})"
-
-
-class SimprintMiniIndex:
+class SimprintMiniIndexRaw:
     """
     Minimal space-efficient LMDB Simprint Index without simprint positional metadata.
 
@@ -43,7 +17,7 @@ class SimprintMiniIndex:
     - Fixed 64-bit simprints and ISCC-IDs for optimal LMDB performance
     - Append-only (no deletion support)
     - Ranked search results by match count
-    - Allows duplicate (simprint, iscc_id) pairs for faster writes
+    - Prevents duplicate (simprint, iscc_id) pairs for accurate match counts
     """
 
     def __init__(self, path, simprint_type, map_size=1024**3):
@@ -75,40 +49,30 @@ class SimprintMiniIndex:
             integerdup=True,  # 64-bit integer values (ISCC-IDs) - implies dupsort and dupfixed
         )
 
-    def add(self, items):
-        # type: (list[SimprintMiniItem]) -> None
+    def add(self, pairs):
+        # type: (list[tuple[bytes, bytes]]) -> None
         """
-        Add items to the index.
+        Add simprint-to-ISCC-ID pairs to the index.
 
-        Each simprint from each item is added as a key with the item's ISCC-ID as value.
-        Duplicates are allowed for faster writes (same simprint-iscc_id pair can exist multiple times).
+        Duplicate pairs are automatically skipped to ensure accurate match counts.
 
-        :param items: List of items with iscc_id and simprints to index
+        :param pairs: List of (simprint, iscc_id) tuples in native byte order (64-bit each)
         """
+        # Batch insert using putmulti (moves loop to C for better performance)
         with self.env.begin(write=True, db=self.db) as txn:
-            for item in items:
-                # Convert ISCC-ID once per item
-                iscc_id_int = struct.unpack("<Q", item.iscc_id)[0]
-                iscc_id_bytes = struct.pack("=Q", iscc_id_int)  # Native byte order for LMDB
-
-                # Add each simprint with this ISCC-ID
-                for simprint in item.simprints:
-                    simprint_int = struct.unpack("<Q", simprint)[0]
-                    simprint_bytes = struct.pack("=Q", simprint_int)  # Native byte order for LMDB
-
-                    # dupdata=True allows duplicates (default behavior)
-                    txn.put(simprint_bytes, iscc_id_bytes, dupdata=True)
+            cursor = txn.cursor()
+            cursor.putmulti(pairs, dupdata=False)
 
     def search(self, simprints):
-        # type: (list[bytes]) -> SimprintMiniResult
+        # type: (list[bytes]) -> list[tuple[bytes, int]]
         """
         Search the index for matching items.
 
         Returns ISCC-IDs ranked by number of matching simprints (collision count).
         ISCC-IDs with more matching simprints are ranked higher.
 
-        :param simprints: List of 64-bit simprint digests to search for
-        :return: Search result with ranked matches
+        :param simprints: List of 64-bit simprint digests to search for (native byte order)
+        :return: List of (iscc_id, match_count) tuples sorted by match_count descending
         """
         # Counter to aggregate match counts per ISCC-ID
         iscc_id_counter = Counter()  # type: Counter[bytes]
@@ -116,27 +80,20 @@ class SimprintMiniIndex:
         with self.env.begin(db=self.db) as txn:
             cursor = txn.cursor()
 
-            # Look up each simprint and collect all matching ISCC-IDs
-            for simprint in simprints:
-                simprint_int = struct.unpack("<Q", simprint)[0]
-                simprint_bytes = struct.pack("=Q", simprint_int)
+            # Retrieve all ISCC-IDs for all simprints in one optimized call
+            # dupdata=True: get all duplicate values for each key
+            # dupfixed_bytes=8: values are 64-bit integers (8 bytes)
+            results = cursor.getmulti(simprints, dupdata=True, dupfixed_bytes=8)
 
-                # Position cursor at this simprint key
-                if cursor.set_key(simprint_bytes):
-                    # Iterate through all ISCC-IDs for this simprint
-                    for iscc_id_bytes in cursor.iternext_dup(keys=False, values=True):
-                        # Convert back to little-endian for consistency
-                        iscc_id_int = struct.unpack("=Q", iscc_id_bytes)[0]
-                        iscc_id = struct.pack("<Q", iscc_id_int)
-                        iscc_id_counter[iscc_id] += 1
+            # Count ISCC-ID occurrences
+            for _, iscc_id in results:
+                iscc_id_counter[iscc_id] += 1
 
         # Sort by match count descending, then by ISCC-ID for stable ordering
-        ranked_matches = sorted(
+        return sorted(
             iscc_id_counter.items(),
             key=lambda x: (-x[1], x[0]),  # Descending count, ascending ID
         )
-
-        return SimprintMiniResult(matches=ranked_matches)
 
     def close(self):
         # type: () -> None
@@ -145,7 +102,7 @@ class SimprintMiniIndex:
         self.env.close()
 
     def __enter__(self):
-        # type: () -> SimprintMiniIndex
+        # type: () -> SimprintMiniIndexRaw
         """Context manager entry."""
         return self
 

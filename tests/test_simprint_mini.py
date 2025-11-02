@@ -3,7 +3,7 @@
 import struct
 import tempfile
 from pathlib import Path
-from iscc_search.simprint.mini import SimprintMiniIndexRaw
+from iscc_search.simprint.mini import SimprintMiniIndexRaw, SimprintIndexMini
 
 
 def test_simprint_mini_index_basic():
@@ -134,3 +134,84 @@ def test_simprint_mini_index_map_size_property():
             assert map_size > 0
             # Default LMDB map_size is 10MB (10,485,760 bytes)
             assert map_size == 10485760
+
+
+def test_simprint_index_mini_add_and_search():
+    # type: () -> None
+    """Test SimprintIndexMini add and search with ISCC-ID strings and base64 simprints."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        index_path = Path(tmpdir) / "test_index"
+
+        with SimprintIndexMini(index_path, "SEMANTIC_TEXT_V0") as index:
+            # Test data with base64-encoded simprints
+            iscc_id_1 = "ISCC:MAIWIDONMPAVUUAA"
+            iscc_id_2 = "MAIWIDONMPAVUUAB"  # Without ISCC: prefix
+
+            features_1 = {
+                "simprints": [
+                    "8IAnFvInk24iEkDGoxfPid4DLgKjoHcf9U4-_3zPEVk",
+                    "GH7W703iOzPEyhD295s0nrKPNujISF5YBbWDpGwiK1Q",
+                ]
+            }
+
+            features_2 = {
+                "simprints": [
+                    "8IAnFvInk24iEkDGoxfPid4DLgKjoHcf9U4-_3zPEVk",  # Same as first simprint of id_1
+                    "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                ]
+            }
+
+            # Add both
+            index.add(iscc_id_1, features_1)
+            index.add(iscc_id_2, features_2)
+
+            # Search for the shared simprint
+            results = index.search(["8IAnFvInk24iEkDGoxfPid4DLgKjoHcf9U4-_3zPEVk"])
+
+            # Should find both ISCC-IDs
+            assert len(results) == 2
+            assert all("iscc_id" in r and "match_count" in r for r in results)
+            assert all(r["match_count"] == 1 for r in results)
+
+
+def test_simprint_index_mini_search_with_limit():
+    # type: () -> None
+    """Test SimprintIndexMini search with limit parameter."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        index_path = Path(tmpdir) / "test_index"
+
+        with SimprintIndexMini(index_path, "SEMANTIC_TEXT_V0") as index:
+            # Add multiple ISCC-IDs (using valid base32 characters)
+            base_ids = [
+                "ISCC:MAIWIDONMPAVUUAA",
+                "ISCC:MAIWIDONMPAVUUAB",
+                "ISCC:MAIWIDONMPAVUUAC",
+                "ISCC:MAIWIDONMPAVUUAD",
+                "ISCC:MAIWIDONMPAVUUAE",
+            ]
+            for iscc_id in base_ids:
+                features = {"simprints": ["8IAnFvInk24iEkDGoxfPid4DLgKjoHcf9U4-_3zPEVk"]}
+                index.add(iscc_id, features)
+
+            # Search with limit
+            results = index.search(["8IAnFvInk24iEkDGoxfPid4DLgKjoHcf9U4-_3zPEVk"], limit=3)
+
+            # Should only return 3 results
+            assert len(results) == 3
+
+
+def test_simprint_index_mini_no_simprints():
+    # type: () -> None
+    """Test SimprintIndexMini add with empty simprints list (warning case)."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        index_path = Path(tmpdir) / "test_index"
+
+        with SimprintIndexMini(index_path, "SEMANTIC_TEXT_V0") as index:
+            # Add with empty simprints
+            iscc_id = "ISCC:MAIWIDONMPAVUUAA"
+            features = {"simprints": []}
+            index.add(iscc_id, features)
+
+            # Search should return no results
+            results = index.search(["8IAnFvInk24iEkDGoxfPid4DLgKjoHcf9U4-_3zPEVk"])
+            assert len(results) == 0

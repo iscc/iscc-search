@@ -1,9 +1,44 @@
-"""Minimal LMDB-Based High Performance Simprint Inverted Index"""
+"""
+Minimal LMDB-Based High Performance Simprint Inverted Index
+
+Serialized Simprint data as the following structure:
+
+```
+{
+  "iscc_id": "ISCC:MAIWIDONMPAVUUAA"
+  "features": [
+    {
+      "maintype": "content",
+      "subtype": "text",
+      "version": 0,
+      "simprints": [
+        "8IAnFvInk24iEkDGoxfPid4DLgKjoHcf9U4-_3zPEVk",
+        "GH7W703iOzPEyhD295s0nrKPNujISF5YBbWDpGwiK1Q",
+        "..."
+      ],
+      "offsets": [
+        0,
+        698,
+        "..."
+      ],
+      "sizes": [
+        698,
+        469,
+        "..."
+      ]
+    },
+    ...
+  ],
+}
+```
+"""
 
 from pathlib import Path
 from collections import Counter
+from base64 import urlsafe_b64decode
 import lmdb
 from loguru import logger
+import iscc_core as ic
 
 
 class SimprintMiniIndexRaw:
@@ -157,3 +192,78 @@ class SimprintMiniIndexRaw:
         # type: (type | None, Exception | None, object | None) -> None
         """Context manager exit."""
         self.close()
+
+
+class SimprintIndexMini(SimprintMiniIndexRaw):
+    """
+    Developer-friendly simprint index with automatic data transformation.
+
+    Accepts high-level features objects and ISCC-ID strings, handles all encoding/decoding
+    internally. Returns developer-friendly search results with ISCC-ID strings.
+    """
+
+    def add(self, iscc_id, features):
+        # type: (str, dict) -> None
+        """
+        Add simprints from features object to the index.
+
+        Automatically decodes ISCC-ID and simprints, creates pairs, and indexes them.
+
+        :param iscc_id: ISCC-ID in canonical string format (with or without "ISCC:" prefix)
+        :param features: Features dict with 'simprints' key containing base64-encoded simprints
+        """
+        # Decode ISCC-ID and extract 8-byte body (strip 2-byte header)
+        iscc_id_digest = ic.decode_base32(iscc_id.removeprefix("ISCC:"))
+        iscc_id_body = iscc_id_digest[2:]  # Remove 2-byte header
+
+        # Get simprints from features
+        simprints = features.get("simprints", [])
+        if not simprints:
+            logger.warning(f"No simprints found in features for {iscc_id}")
+            return
+
+        # Base64 decode simprints and take first 8 bytes, create pairs
+        pairs = []
+        for simprint_b64 in simprints:
+            # Add padding if needed (base64 urlsafe encoding may strip padding)
+            simprint_b64 += "=" * (-len(simprint_b64) % 4)
+            simprint_bytes = urlsafe_b64decode(simprint_b64)[:8]
+            pairs.append((simprint_bytes, iscc_id_body))
+
+        # Call parent add method
+        super().add(pairs)
+
+    def search(self, simprints, limit=None):
+        # type: (list[str], int | None) -> list[dict]
+        """
+        Search for matching ISCC-IDs by simprints.
+
+        :param simprints: List of base64-encoded simprint strings
+        :param limit: Optional maximum number of results to return
+        :return: List of dicts with 'iscc_id' (str) and 'match_count' (int), sorted by match_count
+        """
+        # Base64 decode simprints and take first 8 bytes
+        simprint_bytes = []
+        for simprint_b64 in simprints:
+            # Add padding if needed
+            simprint_b64 += "=" * (-len(simprint_b64) % 4)
+            simprint_bytes.append(urlsafe_b64decode(simprint_b64)[:8])
+
+        # Call parent search method
+        raw_results = super().search(simprint_bytes)
+
+        # Convert to developer-friendly format
+        results = []
+        for iscc_id_body, match_count in raw_results:
+            # Reconstruct ISCC-ID with header (we need to know the realm_id)
+            # For now, assume REALM_0 (most common case)
+            iscc_id_header = ic.encode_header(ic.MT.ID, ic.ST_ID_REALM.REALM_0, ic.VS.V1, 0)
+            iscc_id_digest = iscc_id_header + iscc_id_body
+            iscc_id_str = f"ISCC:{ic.encode_base32(iscc_id_digest)}"
+
+            results.append({"iscc_id": iscc_id_str, "match_count": match_count})
+
+            if limit and len(results) >= limit:
+                break
+
+        return results

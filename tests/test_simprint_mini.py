@@ -215,3 +215,80 @@ def test_simprint_index_mini_no_simprints():
             # Search should return no results
             results = index.search(["8IAnFvInk24iEkDGoxfPid4DLgKjoHcf9U4-_3zPEVk"])
             assert len(results) == 0
+
+
+def test_simprint_index_mini_realm_id_tracking():
+    # type: () -> None
+    """Test that realm_id is tracked from first ISCC-ID."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        index_path = Path(tmpdir) / "test_index"
+
+        with SimprintIndexMini(index_path, "SEMANTIC_TEXT_V0") as index:
+            # Initially realm_id should be None
+            assert index.realm_id is None
+
+            # Add first ISCC-ID (REALM_0)
+            iscc_id = "ISCC:MAIWIDONMPAVUUAA"  # REALM_0
+            features = {"simprints": ["8IAnFvInk24iEkDGoxfPid4DLgKjoHcf9U4-_3zPEVk"]}
+            index.add(iscc_id, features)
+
+            # realm_id should now be set to 0
+            assert index.realm_id == 0
+
+
+def test_simprint_index_mini_realm_id_persistence():
+    # type: () -> None
+    """Test that realm_id persists across sessions."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        index_path = Path(tmpdir) / "test_index"
+
+        # First session: add data
+        with SimprintIndexMini(index_path, "SEMANTIC_TEXT_V0") as index:
+            iscc_id = "ISCC:MAIWIDONMPAVUUAA"  # REALM_0
+            features = {"simprints": ["8IAnFvInk24iEkDGoxfPid4DLgKjoHcf9U4-_3zPEVk"]}
+            index.add(iscc_id, features)
+            assert index.realm_id == 0
+
+        # Second session: realm_id should be loaded
+        with SimprintIndexMini(index_path, "SEMANTIC_TEXT_V0") as index:
+            assert index.realm_id == 0
+
+
+def test_simprint_index_mini_search_empty_index_error():
+    # type: () -> None
+    """Test that search raises ValueError on empty index."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        index_path = Path(tmpdir) / "test_index"
+
+        with SimprintIndexMini(index_path, "SEMANTIC_TEXT_V0") as index:
+            # Search on empty index should raise ValueError
+            try:
+                index.search(["8IAnFvInk24iEkDGoxfPid4DLgKjoHcf9U4-_3zPEVk"])
+                assert False, "Expected ValueError"
+            except ValueError as e:
+                assert "Cannot search empty index" in str(e)
+
+
+def test_simprint_index_mini_realm_id_reconstruction():
+    # type: () -> None
+    """Test that ISCC-IDs are correctly reconstructed with tracked realm_id."""
+    from iscc_search.models import IsccID
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        index_path = Path(tmpdir) / "test_index"
+
+        # Create ISCC-ID with REALM_1
+        iscc_id_realm1 = IsccID.from_int(123456789, realm_id=1)
+        iscc_id_str = str(iscc_id_realm1)
+
+        with SimprintIndexMini(index_path, "SEMANTIC_TEXT_V0") as index:
+            features = {"simprints": ["8IAnFvInk24iEkDGoxfPid4DLgKjoHcf9U4-_3zPEVk"]}
+            index.add(iscc_id_str, features)
+
+            # realm_id should be set to 1
+            assert index.realm_id == 1
+
+            # Search should reconstruct ISCC-ID with correct realm_id
+            results = index.search(["8IAnFvInk24iEkDGoxfPid4DLgKjoHcf9U4-_3zPEVk"])
+            assert len(results) == 1
+            assert results[0]["iscc_id"] == iscc_id_str

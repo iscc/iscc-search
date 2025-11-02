@@ -35,7 +35,6 @@ Serialized Simprint data as the following structure:
 
 from pathlib import Path
 from collections import Counter
-from base64 import urlsafe_b64decode
 import lmdb
 from loguru import logger
 import iscc_core as ic
@@ -81,7 +80,7 @@ class SimprintMiniIndexRaw:
         # writemap=True and map_async=True avoid Windows file reservation issue
         self.env = lmdb.open(
             str(self.path),
-            max_dbs=1,
+            max_dbs=2,
             writemap=True,  # Use writable mmap, avoids Windows file reservation
             map_async=True,  # Asynchronous flushing for better write performance
         )
@@ -202,7 +201,27 @@ class SimprintIndexMini(SimprintMiniIndexRaw):
 
     Accepts high-level features objects and ISCC-ID strings, handles all encoding/decoding
     internally. Returns developer-friendly search results with ISCC-ID strings.
+
+    Automatically tracks REALM-ID from the first indexed ISCC-ID for correct reconstruction.
     """
+
+    def __init__(self, path, simprint_type):
+        # type: (Path | str, str) -> None
+        """
+        Open or create the simprint index with metadata tracking.
+
+        :param path: Directory path for LMDB database
+        :param simprint_type: Simprint type identifier (e.g., 'SEMANTIC_TEXT_V0')
+        """
+        super().__init__(path, simprint_type)
+
+        # Open metadata database for storing realm_id
+        self.metadata_db = self.env.open_db(b"metadata")
+
+        # Load realm_id from metadata database if it exists
+        with self.env.begin(db=self.metadata_db) as txn:
+            realm_id_bytes = txn.get(b"realm_id")
+            self.realm_id = int.from_bytes(realm_id_bytes, "big") if realm_id_bytes else None
 
     def add(self, iscc_id, features):
         # type: (str, dict) -> None
@@ -210,6 +229,7 @@ class SimprintIndexMini(SimprintMiniIndexRaw):
         Add simprints from features object to the index.
 
         Automatically decodes ISCC-ID and simprints, creates pairs, and indexes them.
+        Sets REALM-ID from the first ISCC-ID added to the index.
 
         :param iscc_id: ISCC-ID in canonical string format (with or without "ISCC:" prefix)
         :param features: Features dict with 'simprints' key containing base64-encoded simprints
@@ -218,6 +238,13 @@ class SimprintIndexMini(SimprintMiniIndexRaw):
         iscc_id_obj = IsccID(iscc_id)
         iscc_id_body = iscc_id_obj.body
 
+        # Store realm_id from first ISCC-ID if not already set
+        if self.realm_id is None:
+            self.realm_id = iscc_id_obj.realm_id
+            with self.env.begin(write=True, db=self.metadata_db) as txn:
+                txn.put(b"realm_id", self.realm_id.to_bytes(1, "big"))
+            logger.info(f"SimprintIndexMini realm_id set to {self.realm_id}")
+
         # Get simprints from features
         simprints = features.get("simprints", [])
         if not simprints:
@@ -225,13 +252,7 @@ class SimprintIndexMini(SimprintMiniIndexRaw):
             return
 
         # Base64 decode simprints and take first 8 bytes, create pairs
-        pairs = []
-        for simprint_b64 in simprints:
-            # Add padding if needed (base64 urlsafe encoding may strip padding)
-            simprint_b64 += "=" * (-len(simprint_b64) % 4)
-            simprint_bytes = urlsafe_b64decode(simprint_b64)[:8]
-            pairs.append((simprint_bytes, iscc_id_body))
-
+        pairs = [(ic.decode_base64(s)[:8], iscc_id_body) for s in simprints]
         # Call parent add method
         super().add(pairs)
 
@@ -243,13 +264,14 @@ class SimprintIndexMini(SimprintMiniIndexRaw):
         :param simprints: List of base64-encoded simprint strings
         :param limit: Optional maximum number of results to return
         :return: List of dicts with 'iscc_id' (str) and 'match_count' (int), sorted by match_count
+        :raises ValueError: If realm_id is not set (index is empty)
         """
+        # Verify realm_id is set (index must have at least one entry)
+        if self.realm_id is None:
+            raise ValueError("Cannot search empty index - realm_id not set")
+
         # Base64 decode simprints and take first 8 bytes
-        simprint_bytes = []
-        for simprint_b64 in simprints:
-            # Add padding if needed
-            simprint_b64 += "=" * (-len(simprint_b64) % 4)
-            simprint_bytes.append(urlsafe_b64decode(simprint_b64)[:8])
+        simprint_bytes = [ic.decode_base64(s)[:8] for s in simprints]
 
         # Call parent search method
         raw_results = super().search(simprint_bytes)
@@ -257,11 +279,8 @@ class SimprintIndexMini(SimprintMiniIndexRaw):
         # Convert to developer-friendly format
         results = []
         for iscc_id_body, match_count in raw_results:
-            # Reconstruct ISCC-ID with header (we need to know the realm_id)
-            # For now, assume REALM_0 (most common case)
-            iscc_id_header = ic.encode_header(ic.MT.ID, ic.ST_ID_REALM.REALM_0, ic.VS.V1, 0)
-            iscc_id_digest = iscc_id_header + iscc_id_body
-            iscc_id_str = f"ISCC:{ic.encode_base32(iscc_id_digest)}"
+            # Reconstruct ISCC-ID with header using tracked realm_id
+            iscc_id_str = str(IsccID.from_body(iscc_id_body, self.realm_id))
 
             results.append({"iscc_id": iscc_id_str, "match_count": match_count})
 

@@ -110,6 +110,18 @@ def test_iscc_type_property():
     assert iscc_id_r1.iscc_type == "ID_REALM_1_V1"
 
 
+def test_realm_id_property():
+    # type: () -> None
+    """realm_id property returns realm identifier from header."""
+    # Test realm_id 0
+    iscc_id_r0 = IsccID(ic.gen_iscc_id(timestamp=1000000, hub_id=5, realm_id=0)["iscc"])
+    assert iscc_id_r0.realm_id == 0
+
+    # Test realm_id 1
+    iscc_id_r1 = IsccID(ic.gen_iscc_id(timestamp=2000000, hub_id=10, realm_id=1)["iscc"])
+    assert iscc_id_r1.realm_id == 1
+
+
 def test_int_returns_body_as_integer():
     # type: () -> None
     """__int__ returns body-only as integer (header excluded)."""
@@ -351,6 +363,128 @@ def test_from_int_with_max_body_value():
 
     assert isinstance(reconstructed, IsccID)
     assert int.from_bytes(reconstructed.body, "big", signed=False) == max_body
+
+
+def test_from_body_with_realm_0():
+    # type: () -> None
+    """from_body class method builds ISCC-ID from body bytes with realm_id=0."""
+    # Create original ISCC-ID
+    original_str = ic.gen_iscc_id(timestamp=1000000, hub_id=5, realm_id=0)["iscc"]
+    original = IsccID(original_str)
+
+    # Extract body bytes
+    body_bytes = original.body
+
+    # Reconstruct using from_body
+    reconstructed = IsccID.from_body(body_bytes, realm_id=0)
+
+    # Should match original
+    assert str(reconstructed) == str(original)
+    assert reconstructed.body == original.body
+    assert reconstructed.fields == original.fields
+
+
+def test_from_body_with_realm_1():
+    # type: () -> None
+    """from_body class method builds ISCC-ID from body bytes with realm_id=1."""
+    # Create original ISCC-ID with realm_id=1
+    original_str = ic.gen_iscc_id(timestamp=2000000, hub_id=10, realm_id=1)["iscc"]
+    original = IsccID(original_str)
+
+    # Extract body bytes
+    body_bytes = original.body
+
+    # Reconstruct using from_body
+    reconstructed = IsccID.from_body(body_bytes, realm_id=1)
+
+    # Should match original
+    assert str(reconstructed) == str(original)
+    assert reconstructed.body == original.body
+    assert reconstructed.fields == original.fields
+
+
+def test_from_body_changes_realm_id():
+    # type: () -> None
+    """from_body can reconstruct with different realm_id."""
+    # Create original ISCC-ID with realm_id=1
+    original_str = ic.gen_iscc_id(timestamp=2000000, hub_id=10, realm_id=1)["iscc"]
+    original = IsccID(original_str)
+
+    # Extract body bytes
+    body_bytes = original.body
+
+    # Reconstruct with realm_id=0 (different from original)
+    reconstructed = IsccID.from_body(body_bytes, realm_id=0)
+
+    # Body should be identical
+    assert reconstructed.body == original.body
+    # But header and type should be different
+    assert reconstructed.digest != original.digest
+    assert reconstructed.realm_id == 0
+    assert original.realm_id == 1
+    assert reconstructed.iscc_type == "ID_REALM_0_V1"
+    assert original.iscc_type == "ID_REALM_1_V1"
+
+
+def test_from_body_roundtrip():
+    # type: () -> None
+    """Roundtrip: ISCC-ID -> body bytes -> ISCC-ID preserves ID."""
+    original_str = ic.gen_iscc_id(timestamp=1234567, hub_id=42, realm_id=0)["iscc"]
+    original = IsccID(original_str)
+
+    # Extract body bytes
+    body_bytes = original.body
+
+    # Reconstruct with same realm_id
+    reconstructed = IsccID.from_body(body_bytes, realm_id=0)
+
+    # Should be identical
+    assert str(reconstructed) == str(original)
+    assert bytes(reconstructed) == bytes(original)
+    assert reconstructed.body == body_bytes
+
+
+def test_from_body_equivalent_to_from_int():
+    # type: () -> None
+    """from_body produces same result as from_int with equivalent inputs."""
+    original_str = ic.gen_iscc_id(timestamp=3000000, hub_id=100, realm_id=0)["iscc"]
+    original = IsccID(original_str)
+
+    # Create using from_body
+    from_body_result = IsccID.from_body(original.body, realm_id=0)
+
+    # Create using from_int
+    body_int = int.from_bytes(original.body, "big", signed=False)
+    from_int_result = IsccID.from_int(body_int, realm_id=0)
+
+    # Both should produce identical results
+    assert str(from_body_result) == str(from_int_result)
+    assert bytes(from_body_result) == bytes(from_int_result)
+    assert from_body_result.body == from_int_result.body
+
+
+def test_from_body_with_zero_body():
+    # type: () -> None
+    """from_body handles zero body (all bytes zero)."""
+    zero_body = b"\x00" * 8
+
+    reconstructed = IsccID.from_body(zero_body, realm_id=0)
+
+    assert isinstance(reconstructed, IsccID)
+    assert reconstructed.body == zero_body
+    assert int.from_bytes(reconstructed.body, "big", signed=False) == 0
+
+
+def test_from_body_with_max_body():
+    # type: () -> None
+    """from_body handles maximum body value (all bits set)."""
+    max_body = b"\xff" * 8
+
+    reconstructed = IsccID.from_body(max_body, realm_id=0)
+
+    assert isinstance(reconstructed, IsccID)
+    assert reconstructed.body == max_body
+    assert int.from_bytes(reconstructed.body, "big", signed=False) == 2**64 - 1
 
 
 def test_cached_int_property():

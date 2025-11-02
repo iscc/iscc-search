@@ -175,6 +175,16 @@ class IsccID(IsccBase):
         """
         return int.from_bytes(self.body, "big", signed=False)
 
+    @property
+    def realm_id(self):
+        # type: () -> int
+        """
+        Extract REALM-ID from ISCC-ID header.
+
+        :return: Realm identifier (0 for REALM_0, 1 for REALM_1)
+        """
+        return self.fields[1]
+
     @classmethod
     def from_int(cls, iscc_id, realm_id):
         # type: (int, int) -> IsccID
@@ -186,6 +196,18 @@ class IsccID(IsccBase):
         :return: New IsccID instance
         """
         return cls(cls._iscc_id_headers[realm_id] + iscc_id.to_bytes(8, "big", signed=False))
+
+    @classmethod
+    def from_body(cls, body, realm_id):
+        # type: (bytes, int) -> IsccID
+        """
+        Construct ISCC-ID from body bytes and realm identifier.
+
+        :param body: ISCC-ID body bytes (8 bytes)
+        :param realm_id: Realm identifier for ISCC-HEADER SubType (0 or 1)
+        :return: New IsccID instance
+        """
+        return cls(cls._iscc_id_headers[realm_id] + body)
 
     @classmethod
     def random(cls):

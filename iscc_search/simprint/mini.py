@@ -40,6 +40,8 @@ import lmdb
 from loguru import logger
 import iscc_core as ic
 
+from iscc_search.models import IsccID
+
 
 class SimprintMiniIndexRaw:
     """
@@ -213,8 +215,8 @@ class SimprintIndexMini(SimprintMiniIndexRaw):
         :param features: Features dict with 'simprints' key containing base64-encoded simprints
         """
         # Decode ISCC-ID and extract 8-byte body (strip 2-byte header)
-        iscc_id_digest = ic.decode_base32(iscc_id.removeprefix("ISCC:"))
-        iscc_id_body = iscc_id_digest[2:]  # Remove 2-byte header
+        iscc_id_obj = IsccID(iscc_id)
+        iscc_id_body = iscc_id_obj.body
 
         # Get simprints from features
         simprints = features.get("simprints", [])

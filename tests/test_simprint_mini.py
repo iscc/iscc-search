@@ -119,3 +119,18 @@ def test_simprint_mini_index_persistence():
             result = index.search([simprint_a])
             assert len(result) == 1
             assert result[0] == (iscc_id_1, 1)
+
+
+def test_simprint_mini_index_map_size_property():
+    # type: () -> None
+    """Test map_size property returns current LMDB map size."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        index_path = Path(tmpdir) / "test_index"
+
+        with SimprintMiniIndexRaw(index_path, "TEST_V0") as index:
+            # Check that map_size is accessible
+            map_size = index.map_size
+            assert isinstance(map_size, int)
+            assert map_size > 0
+            # Default LMDB map_size is 10MB (10,485,760 bytes)
+            assert map_size == 10485760

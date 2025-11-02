@@ -3,6 +3,7 @@
 from pathlib import Path
 from collections import Counter
 import lmdb
+from loguru import logger
 
 
 class SimprintMiniIndexRaw:
@@ -18,27 +19,33 @@ class SimprintMiniIndexRaw:
     - Append-only (no deletion support)
     - Ranked search results by match count
     - Prevents duplicate (simprint, iscc_id) pairs for accurate match counts
+    - Automatic map_size expansion on MapFullError
     """
 
-    def __init__(self, path, simprint_type, map_size=1024**3):
-        # type: (Path | str, str, int) -> None
+    # MapFullError retry limits
+    MAX_RESIZE_RETRIES = 10
+    MAX_MAP_SIZE = 1024 * 1024 * 1024 * 1024  # 1 TB
+
+    def __init__(self, path, simprint_type):
+        # type: (Path | str, str) -> None
         """
         Open or create the simprint index.
 
+        Uses LMDB default map_size (10MB) with automatic expansion on demand.
+
         :param path: Directory path for LMDB database
         :param simprint_type: Simprint type identifier (e.g., 'SEMANTIC_TEXT_V0')
-        :param map_size: Maximum size of database in bytes (default 1GB)
         """
         self.path = Path(path)
         self.simprint_type = simprint_type
         self.path.mkdir(parents=True, exist_ok=True)
 
-        # Open LMDB environment
+        # Open LMDB environment with default map_size (10MB)
+        # writemap=True and map_async=True avoid Windows file reservation issue
         self.env = lmdb.open(
             str(self.path),
-            map_size=map_size,
             max_dbs=1,
-            writemap=True,  # Use writable mmap for better performance
+            writemap=True,  # Use writable mmap, avoids Windows file reservation
             map_async=True,  # Asynchronous flushing for better write performance
         )
 
@@ -55,13 +62,47 @@ class SimprintMiniIndexRaw:
         Add simprint-to-ISCC-ID pairs to the index.
 
         Duplicate pairs are automatically skipped to ensure accurate match counts.
+        Automatically resizes map_size if MapFullError occurs.
 
         :param pairs: List of (simprint, iscc_id) tuples in native byte order (64-bit each)
         """
-        # Batch insert using putmulti (moves loop to C for better performance)
-        with self.env.begin(write=True, db=self.db) as txn:
-            cursor = txn.cursor()
-            cursor.putmulti(pairs, dupdata=False)
+        retry_count = 0
+
+        while retry_count <= self.MAX_RESIZE_RETRIES:  # pragma: no branch
+            try:
+                # Batch insert using putmulti (moves loop to C for better performance)
+                with self.env.begin(write=True, db=self.db) as txn:
+                    cursor = txn.cursor()
+                    cursor.putmulti(pairs, dupdata=False)
+                break  # Success
+
+            except lmdb.MapFullError:  # pragma: no cover
+                retry_count += 1
+
+                # Check if we've exceeded retry limit
+                if retry_count > self.MAX_RESIZE_RETRIES:
+                    raise RuntimeError(
+                        f"Failed to add pairs after {self.MAX_RESIZE_RETRIES} resize attempts. "
+                        f"Current map_size: {self.map_size:,} bytes. "
+                        f"This may indicate disk space issues, permissions problems, or filesystem limits."
+                    )
+
+                old_size = self.map_size
+                new_size = old_size * 2
+
+                # Check if new size would exceed maximum
+                if new_size > self.MAX_MAP_SIZE:
+                    raise RuntimeError(
+                        f"Cannot resize LMDB map beyond MAX_MAP_SIZE ({self.MAX_MAP_SIZE:,} bytes). "
+                        f"Current size: {old_size:,}, attempted size: {new_size:,}. "
+                        f"Consider splitting data across multiple indexes or increasing MAX_MAP_SIZE."
+                    )
+
+                logger.info(
+                    f"SimprintMiniIndexRaw map_size increased from {old_size:,} to {new_size:,} bytes "
+                    f"(retry {retry_count}/{self.MAX_RESIZE_RETRIES})"
+                )
+                self.env.set_mapsize(new_size)
 
     def search(self, simprints):
         # type: (list[bytes]) -> list[tuple[bytes, int]]
@@ -100,6 +141,12 @@ class SimprintMiniIndexRaw:
         """Close the index and flush to disk."""
         self.env.sync()  # Ensure all data is flushed
         self.env.close()
+
+    @property
+    def map_size(self):
+        # type: () -> int
+        """Get current LMDB map_size in bytes."""
+        return self.env.info()["map_size"]
 
     def __enter__(self):
         # type: () -> SimprintMiniIndexRaw

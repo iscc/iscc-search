@@ -210,21 +210,33 @@ bit-length, which are cryptographic hashes rather than similarity-preserving cod
 
 ### The NPHD Distance Metric
 
-ISCC-SEARCH uses **Normalized Prefix Hamming Distance (NPHD)** as its core similarity metric. Unlike standard
-Hamming distance, NPHD handles variable-length codes by:
+ISCC uses **prefix-compatible variable-length codes**: shorter codes are valid prefixes of longer ones. A 64-bit
+ISCC-UNIT embedded in an ISCC-CODE shares its prefix with the same content's standalone 256-bit ISCC-UNIT. Think
+of it like nested dolls—the shorter code is fully contained within the longer version.
 
-1. **Prefix alignment**: Compares only the common prefix length of two codes
-2. **Length normalization**: Divides bit differences by common prefix length
-3. **Metric properties**: Satisfies all metric axioms (non-negativity, identity, symmetry, triangle inequality)
+This prefix compatibility enables:
 
-This enables meaningful similarity comparison between:
+- **Adaptive precision**: Use 64-bit codes for fast, broad matching; 256-bit codes for high-precision search
+- **Mixed-length queries**: Search with short codes, match against longer indexed codes (or vice versa)
+- **Cost-performance tradeoff**: Shorter codes mean faster processing and lower storage with acceptable precision
+    loss
 
-- Short 64-bit codes from ISCC-CODEs (embedded in composite codes)
-- Extended 256-bit ISCC-UNITs (standalone, high-precision)
-- Mixed-length codes in the same search operation
+This design parallels **Matryoshka Representation Learning (MRL)**, where embeddings can be truncated to
+different dimensions while maintaining compatibility—but applied to discrete binary codes rather than continuous
+vector spaces.
 
-Standard Hamming distance doesn't work here because it treats all bit differences equally regardless of vector
-length, producing incorrect similarity scores when comparing codes of different lengths.
+However, standard Hamming distance fails with variable-length codes—it treats all bit differences equally
+regardless of vector length, producing incorrect similarity scores when comparing codes of different lengths.
+
+**Normalized Prefix Hamming Distance (NPHD)** solves this by:
+
+1. **Prefix alignment**: Comparing only the common prefix length of two codes
+2. **Length normalization**: Dividing bit differences by common prefix length
+3. **Metric properties**: Satisfying all metric axioms (non-negativity, identity, symmetry, triangle inequality)
+
+Like truncating MRL embeddings adjusts granularity while preserving compatibility, shortening an ISCC adjusts
+precision without breaking matchability. NPHD makes this multi-scale matching mathematically sound for discrete
+binary codes.
 
 ## Implementation Choices
 

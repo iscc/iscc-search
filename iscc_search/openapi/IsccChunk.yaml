@@ -1,0 +1,147 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "http://purl.org/iscc/schema/iscc-chunk.json"
+title: "IsccChunk"
+type: object
+description: |
+  Content chunk pointer with 16-byte binary serialization support.
+
+  **Core fields** (stored in index, required for binary format):
+  - iscc_id: 8 bytes (ISCC-ID body without header)
+  - offset: 4 bytes (position/time/coordinates, max 4 GB / ~49 days / 65k pixels)
+  - size: 4 bytes (extent/duration/dimensions, same limits)
+
+  **Interpretation by modality**:
+  - Text: offset=byte_position, size=byte_length
+  - Audio/Video: offset=milliseconds_start, size=milliseconds_duration
+  - Image: offset=packed(x,y), size=packed(width,height)
+
+  **Optional convenience fields** (outbound denormalization for client context):
+  - source: Asset-level metadata (URL), denormalized from parent asset
+  - modality: Asset-level metadata (content type), inferred from ISCC-UNIT type
+  - track: Asset-level or chunk-level metadata (track/layer identifier)
+  - content: Runtime-populated field for match verification (not stored)
+
+  **Data architecture note**:
+  The `source` and `modality` fields represent asset-global metadata stored once per
+  ISCC-ID, not per chunk. When serving isolated chunks to clients, these fields are
+  denormalized from the asset record to provide context. The `content` field is
+  populated on-demand by fetching and extracting the chunk region from the source URL.
+
+  **Limitations**:
+  32-bit fields limit file sizes to 4GB, temporal ranges to ~49.7 days, and 2D spatial
+  regions to 65k × 65k pixels. 3D spatial regions and multi-track content require
+  alternative addressing strategies.
+required:
+  - iscc_id
+  - offset
+  - size
+properties:
+  iscc_id:
+    type: string
+    description: ISCC-ID identifying the source content (canonical string format)
+    pattern: "^ISCC:[A-Z2-7]{16,}$"
+    example: "ISCC:MAIGIIFJRDGEQQAA"
+  offset:
+    type: integer
+    description: |
+      Starting position/time/coordinates (0-indexed, interpretation depends on modality).
+
+      **Text**: UTF-8 byte offset (0 to 4,294,967,295)
+      - 0-indexed: first byte is at offset 0
+      - Defines inclusive start of half-open interval [offset, offset+size)
+      - Example: offset=0, size=77 covers bytes [0..76]
+
+      **Audio/Video**: Milliseconds from start (0-indexed)
+      - 0 = beginning of media
+      - Half-open interval: [offset_ms, offset_ms+size_ms)
+
+      **Image**: Packed coordinates (x << 16 | y) where x,y ∈ [0, 65535]
+      - Origin (0,0) is top-left corner
+      - x increases rightward, y increases downward
+
+      **Note**: Both offset and size are required even for sequential chunks,
+      as chunks may overlap or have gaps between them.
+    minimum: 0
+    maximum: 4294967295
+    example: 1024
+  size:
+    type: integer
+    description: |
+      Extent/duration/dimensions (interpretation depends on modality).
+
+      **Text**: UTF-8 byte length (0 to 4,294,967,295)
+      - Number of bytes in the chunk
+      - Chunk occupies half-open interval [offset, offset+size)
+      - Last byte is at position (offset + size - 1)
+
+      **Audio/Video**: Duration in milliseconds
+      - Length of the temporal segment
+      - End time is (offset + size) milliseconds
+
+      **Image**: Packed dimensions (width << 16 | height) where width,height ∈ [0, 65535]
+      - Rectangle extends from (x,y) to (x+width, y+height)
+      - Covers width × height pixels
+
+      **Note**: Both offset and size are required even for sequential chunks,
+      as chunks may overlap or have gaps between them.
+    minimum: 0
+    maximum: 4294967295
+    example: 512
+  source:
+    type: string
+    format: uri
+    description: |
+      Optional resolvable URL to the full content from which this chunk originates.
+      Supports various protocols (https://, s3://, file://, ftp://, etc.) including
+      fsspec-compatible schemes.
+
+      **Storage**: Asset-level metadata, stored once per ISCC-ID (not per chunk).
+      **Usage**: Denormalized into chunk responses to provide context for isolated results.
+    examples:
+      - "https://example.com/content.txt"
+      - "s3://bucket/path/to/content.txt"
+      - "file:///local/path/document.pdf"
+  content:
+    type: string
+    description: |
+      Optional chunk content encoded as data-url (RFC 2397).
+
+      **Storage**: Not stored. Populated on-demand by fetching from `source` URL and
+      extracting the region defined by `offset` and `size`.
+      **Usage**: Convenience field for match verification and content preview in client responses.
+    pattern: "^data:[^;]+;base64,.+$"
+    example: "data:text/plain;base64,SGVsbG8gV29ybGQh"
+  modality:
+    type: string
+    enum: ["text", "image", "audio", "video", "mixed"]
+    description: |
+      Optional content modality hint for interpreting offset/size fields.
+
+      **Storage**: Asset-level metadata, inferred from ISCC-UNIT MainType/SubType.
+      **Usage**: Denormalized into chunk responses to clarify offset/size semantics.
+    example: "text"
+  track:
+    type: integer
+    description: |
+      Optional track, layer, stream, or page identifier for multiplexed content.
+
+      **Interpretation by media type**:
+      - Video: Stream index (0=video, 1=audio, 2=subtitles, etc.) or camera angle
+      - Audio: Audio channel or language track (0=stereo, 1=commentary, etc.)
+      - Images: Layer index (0=background, 1=foreground, etc.) for layered formats (PSD, XCF)
+      - Documents: Page number (PDF), sheet index (spreadsheet), slide number (presentation)
+      - 3D: Channel type (0=geometry, 1=texture, 2=animation, etc.)
+
+      **Storage**: May be asset-level (single track per ISCC-ID) or chunk-level
+      (different chunks from different tracks). Storage strategy depends on use case.
+      **Usage**: Denormalized into chunk responses for multi-track/multi-layer content.
+    minimum: 0
+    example: 1
+example:
+  iscc_id: "ISCC:MAIGIIFJRDGEQQAA"
+  offset: 2048
+  size: 1024
+  source: "https://example.com/document.txt"
+  content: "data:text/plain;base64,VGhpcyBpcyBhIHNhbXBsZSB0ZXh0IGNodW5r"
+  modality: "text"
+  track: 0

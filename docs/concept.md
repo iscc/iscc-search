@@ -175,6 +175,39 @@ still match and compare short ISCC-UNITs against long ISCC-UNITS.
 The optimal indexing strategy requires experimentation and evaluation based on specific use cases and scale
 requirements.
 
+### Hard vs. Soft Boundaries
+
+Similarity-preserving hashes deliberately create collisions—similar content collapses into identical hashes.
+This clustering is intentional: it enables efficient retrieval of similar items via hash collision. However,
+cluster boundaries are fixed by the hash algorithm.
+
+The key insight: Hamming distance between different hashes approximates similarity between their clusters. This
+property enables two complementary indexing strategies:
+
+**Hard-boundary indexes** (collision-based):
+
+- Structure: Inverted index mapping hashes to content lists
+- Matching: Find content that shares the same hash value
+- Performance: Fast lookups, minimal memory, highly scalable
+- Tradeoff: Fixed similarity thresholds determined by the hash algorithm
+
+**Soft-boundary indexes** (proximity-based):
+
+- Structure: Vector space with approximate nearest neighbor (ANN) search
+- Matching: Find content within a tunable distance threshold
+- Performance: Flexible similarity control, higher computational cost
+- Tradeoff: Cross-boundary search capability at the expense of complexity
+
+ISCC-SEARCH employs both strategies where appropriate. The choice reflects a fundamental tradeoff: exploit the
+hash algorithm's built-in clustering for efficiency, or enable flexible cross-boundary search for adaptability.
+
+**Implementation mapping**: Hard-boundary indexes use key-value stores (LMDB for embedded deployments,
+PostgreSQL for remote). Soft-boundary indexes use vector search engines (USEARCH for embedded deployments,
+pgvector for remote).
+
+Note: True exact matching (cryptographic-level identity) only occurs with INSTANCE units of sufficient
+bit-length, which are cryptographic hashes rather than similarity-preserving codes.
+
 ### The NPHD Distance Metric
 
 ISCC-SEARCH uses **Normalized Prefix Hamming Distance (NPHD)** as its core similarity metric. Unlike standard

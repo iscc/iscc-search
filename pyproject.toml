@@ -83,6 +83,7 @@ dev = [
     "prek>=0.2.9",
     "datamodel-code-generator>=0.35.0",
     "httpx>=0.28.1",
+    "psutil>=7.1.2",
 ]
 
 [build-system]

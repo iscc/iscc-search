@@ -134,7 +134,7 @@ class SimprintIndexRaw:
         # writemap=True and map_async=True avoid Windows file reservation issue
         self.env = lmdb.open(
             str(self.path),
-            max_dbs=3,  # simprint_type db, metadata db, iscc_files db
+            max_dbs=3,  # simprint_type db, index_metadata db, asset_metadata db
             writemap=True,
             map_async=True,
             sync=False,
@@ -283,10 +283,10 @@ class SimprintIndex(SimprintIndexRaw):
     Developer-friendly simprint index with automatic data transformation and chunk metadata.
 
     Accepts high-level features objects and ISCC-ID strings, handles all encoding/decoding
-    internally. Returns developer-friendly search results with ISCC-ID strings and chunk metadata.
+    internally. Returns IsccChunk-compliant search results with ISCC-ID strings and chunk metadata.
 
     Automatically tracks REALM-ID from the first indexed ISCC-ID for correct reconstruction.
-    Supports optional filename storage for text retrieval.
+    Stores asset-level metadata (source, modality, track) per ISCC-ID for text retrieval.
     """
 
     def __init__(self, path, simprint_type, text_base_dir=None, bits=64):
@@ -315,10 +315,10 @@ class SimprintIndex(SimprintIndexRaw):
                 readonly=True,
                 lock=False,
             )
-            temp_metadata_db = temp_env.open_db(b"metadata")
+            temp_index_metadata_db = temp_env.open_db(b"index_metadata")
 
             try:
-                with temp_env.begin(db=temp_metadata_db) as txn:
+                with temp_env.begin(db=temp_index_metadata_db) as txn:
                     bits_bytes = txn.get(b"bits")
                     if bits_bytes:
                         stored_bits = int.from_bytes(bits_bytes, "big")
@@ -335,37 +335,43 @@ class SimprintIndex(SimprintIndexRaw):
         # Initialize parent with determined bits value
         super().__init__(path, simprint_type, bits=stored_bits if stored_bits else bits)
 
-        # Open metadata database for storing realm_id and bits
-        self.metadata_db = self.env.open_db(b"metadata")
+        # Open index metadata database for storing realm_id and bits
+        self.index_metadata_db = self.env.open_db(b"index_metadata")
 
-        # Open filename database for ISCC-ID -> filename mapping (bytes -> bytes)
-        self.iscc_files_db = self.env.open_db(b"iscc_files")
+        # Open asset metadata database for ISCC-ID -> asset metadata mapping
+        # Stores JSON with: source (URL/path), modality (text/image/audio/video/mixed), track (optional)
+        self.asset_metadata_db = self.env.open_db(b"asset_metadata")
 
-        # Store bits in metadata if not already stored
+        # Store bits in index metadata if not already stored
         if stored_bits is None:
-            with self.env.begin(write=True, db=self.metadata_db) as txn:
+            with self.env.begin(write=True, db=self.index_metadata_db) as txn:
                 txn.put(b"bits", self.bits.to_bytes(2, "big"))
             logger.info(f"SimprintIndex bits set to {self.bits}")
 
-        # Load realm_id from metadata database if it exists
-        with self.env.begin(db=self.metadata_db) as txn:
+        # Load realm_id from index metadata database if it exists
+        with self.env.begin(db=self.index_metadata_db) as txn:
             realm_id_bytes = txn.get(b"realm_id")
             self.realm_id = int.from_bytes(realm_id_bytes, "big") if realm_id_bytes else None
 
         self.text_base_dir = Path(text_base_dir) if text_base_dir else None
 
-    def add(self, iscc_id, features, filename=None):
-        # type: (str, dict, str | None) -> None
+    def add(self, iscc_id, features, source=None, modality=None, track=None):
+        # type: (str, dict, str | None, str | None, int | None) -> None
         """
         Add simprints from features object to the index with chunk metadata.
 
         Automatically decodes ISCC-ID and simprints, creates ChunkPointer pairs, and indexes them.
         Sets REALM-ID from the first ISCC-ID added to the index.
+        Stores asset-level metadata (source, modality, track) per ISCC-ID.
 
         :param iscc_id: ISCC-ID in canonical string format (with or without "ISCC:" prefix)
         :param features: Features dict with 'simprints', 'offsets', and 'sizes' keys
-        :param filename: Optional filename for text retrieval
+        :param source: Optional resolvable URL/path to source content
+        :param modality: Optional content modality (text/image/audio/video/mixed)
+        :param track: Optional track/layer/page identifier
         """
+        import json
+
         # Decode ISCC-ID and extract 8-byte body (strip 2-byte header)
         iscc_id_obj = IsccID(iscc_id)
         iscc_id_body = iscc_id_obj.body
@@ -373,7 +379,7 @@ class SimprintIndex(SimprintIndexRaw):
         # Store realm_id from first ISCC-ID if not already set
         if self.realm_id is None:
             self.realm_id = iscc_id_obj.realm_id
-            with self.env.begin(write=True, db=self.metadata_db) as txn:
+            with self.env.begin(write=True, db=self.index_metadata_db) as txn:
                 txn.put(b"realm_id", self.realm_id.to_bytes(1, "big"))
             logger.info(f"SimprintIndex realm_id set to {self.realm_id}")
 
@@ -390,10 +396,18 @@ class SimprintIndex(SimprintIndexRaw):
             logger.warning(f"Length mismatch in simprints/offsets/sizes for {iscc_id}")
             return
 
-        # Store filename if provided
-        if filename:
-            with self.env.begin(write=True, db=self.iscc_files_db) as txn:
-                txn.put(iscc_id_body, filename.encode("utf-8"))
+        # Store asset metadata if any field is provided
+        if source or modality or track is not None:
+            metadata = {}  # type: dict[str, str | int]
+            if source:
+                metadata["source"] = source
+            if modality:
+                metadata["modality"] = modality
+            if track is not None:
+                metadata["track"] = track
+
+            with self.env.begin(write=True, db=self.asset_metadata_db) as txn:
+                txn.put(iscc_id_body, json.dumps(metadata).encode("utf-8"))
 
         # Build pairs: (simprint, ChunkPointer.to_bytes())
         pairs = []
@@ -458,13 +472,16 @@ class SimprintIndex(SimprintIndexRaw):
     def get_chunks(self, simprints, limit_per_simprint=None):
         # type: (list[str], int | None) -> dict[str, list[dict]]
         """
-        Get actual text chunks for simprints.
+        Get actual content chunks for simprints in IsccChunk format.
 
         :param simprints: List of base64-encoded simprint strings
         :param limit_per_simprint: Max chunks per simprint (None = all)
-        :return: Dict mapping simprint -> list of chunk dicts with text
+        :return: Dict mapping simprint -> list of IsccChunk dicts
         :raises ValueError: If text_base_dir not configured or realm_id not set
         """
+        import json
+        import base64
+
         if not self.text_base_dir:
             raise ValueError("text_base_dir not configured")
         if self.realm_id is None:
@@ -473,33 +490,46 @@ class SimprintIndex(SimprintIndexRaw):
         pointer_map = self.get_chunk_pointers(simprints)
         result = {}  # type: dict[str, list[dict]]
 
-        # Get filenames for all ISCC-IDs
-        iscc_id_to_filename = {}  # type: dict[bytes, str]
-        with self.env.begin(db=self.iscc_files_db) as txn:
+        # Get asset metadata for all ISCC-IDs
+        iscc_id_to_metadata = {}  # type: dict[bytes, dict]
+        with self.env.begin(db=self.asset_metadata_db) as txn:
             for pointers in pointer_map.values():
                 for ptr in pointers:
-                    if ptr.iscc_id_body not in iscc_id_to_filename:
-                        filename_bytes = txn.get(ptr.iscc_id_body)
-                        if filename_bytes:
-                            iscc_id_to_filename[ptr.iscc_id_body] = filename_bytes.decode("utf-8")
+                    if ptr.iscc_id_body not in iscc_id_to_metadata:
+                        metadata_bytes = txn.get(ptr.iscc_id_body)
+                        if metadata_bytes:
+                            iscc_id_to_metadata[ptr.iscc_id_body] = json.loads(metadata_bytes.decode("utf-8"))
                         else:
-                            logger.debug(f"No filename in DB for ISCC-ID body {ptr.iscc_id_body.hex()}")
+                            logger.debug(f"No asset metadata in DB for ISCC-ID body {ptr.iscc_id_body.hex()}")
+                            iscc_id_to_metadata[ptr.iscc_id_body] = {}
 
         # Extract chunks
         for simprint_b64, pointers in pointer_map.items():
             chunks = []
 
             for ptr in pointers[:limit_per_simprint] if limit_per_simprint else pointers:
-                filename = iscc_id_to_filename.get(ptr.iscc_id_body)
-                if not filename:
-                    logger.debug(f"No filename found for ISCC-ID body {ptr.iscc_id_body.hex()}")
+                metadata = iscc_id_to_metadata.get(ptr.iscc_id_body, {})
+                source = metadata.get("source")
+                modality = metadata.get("modality")
+                track = metadata.get("track")
+
+                if not source:
+                    logger.debug(f"No source URL found for ISCC-ID body {ptr.iscc_id_body.hex()}")
                     continue
+
+                # Parse source URL to get file path
+                # Support file:// URLs and plain paths
+                if source.startswith("file://"):
+                    file_path = Path(source[7:])  # Strip "file://"
+                else:
+                    # Assume relative path, resolve against text_base_dir
+                    file_path = self.text_base_dir / source
 
                 # Try multiple path variations
                 text_path = None
                 tried_paths = []
-                for suffix in [".iscc.utf8", ""]:
-                    candidate = self.text_base_dir / f"{filename}{suffix}"
+                for suffix in ["", ".iscc.utf8"]:
+                    candidate = file_path.parent / (file_path.name + suffix) if suffix else file_path
                     tried_paths.append(str(candidate))
                     if candidate.exists():
                         text_path = candidate
@@ -509,20 +539,35 @@ class SimprintIndex(SimprintIndexRaw):
                     logger.debug(f"Text file not found. Tried: {tried_paths}")
                     continue
 
-                # Read and extract chunk
+                # Read and extract chunk (slice by bytes, not characters)
                 try:
-                    with open(text_path, "r", encoding="utf-8") as f:
-                        text = f.read()
+                    # Read file in binary mode to preserve byte offsets
+                    with open(text_path, "rb") as f:
+                        file_bytes = f.read()
 
-                    chunk_text = text[ptr.offset : ptr.offset + ptr.size]
+                    # Slice by byte offsets (as stored in ChunkPointer)
+                    chunk_bytes = file_bytes[ptr.offset : ptr.offset + ptr.size]
 
-                    chunks.append({
+                    # Create IsccChunk dict conforming to schema
+                    chunk = {
                         "iscc_id": str(IsccID.from_body(ptr.iscc_id_body, self.realm_id)),
-                        "filename": filename,
                         "offset": ptr.offset,
                         "size": ptr.size,
-                        "text": chunk_text,
-                    })
+                    }
+
+                    # Add optional fields
+                    if source:
+                        chunk["source"] = source
+                    if modality:
+                        chunk["modality"] = modality
+                    if track is not None:
+                        chunk["track"] = track
+
+                    # Add content as data-url (RFC 2397)
+                    content_b64 = base64.b64encode(chunk_bytes).decode("ascii")
+                    chunk["content"] = f"data:text/plain;base64,{content_b64}"
+
+                    chunks.append(chunk)
                 except Exception as e:
                     logger.warning(f"Error reading {text_path}: {e}")
                     continue
@@ -537,7 +582,7 @@ class SimprintIndex(SimprintIndexRaw):
                 f"get_chunks returned no results! "
                 f"Simprints queried: {len(simprints)}, "
                 f"Chunk pointers found: {total_pointers}, "
-                f"Filenames in DB: {len(iscc_id_to_filename)}, "
+                f"Asset metadata in DB: {len(iscc_id_to_metadata)}, "
                 f"Text base dir: {self.text_base_dir}"
             )
 

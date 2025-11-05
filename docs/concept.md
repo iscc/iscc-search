@@ -218,8 +218,8 @@ This prefix compatibility enables:
 
 - **Adaptive precision**: Use 64-bit codes for fast, broad matching; 256-bit codes for high-precision search
 - **Mixed-length queries**: Search with short codes, match against longer indexed codes (or vice versa)
-- **Cost-performance tradeoff**: Shorter codes mean faster processing and lower storage with acceptable precision
-    loss
+- **Cost-performance tradeoff**: Shorter codes mean faster processing and lower storage with acceptable
+    precision loss
 
 This design parallels **Matryoshka Representation Learning (MRL)**, where embeddings can be truncated to
 different dimensions while maintaining compatibility—but applied to discrete binary codes rather than continuous

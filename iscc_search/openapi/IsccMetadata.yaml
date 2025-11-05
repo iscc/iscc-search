@@ -1,0 +1,30 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "http://purl.org/iscc/schema/iscc-metadata.json"
+title: "IsccMetadata"
+type: object
+description: |
+  Extensible metadata container for application-specific data.
+
+  This schema allows clients to attach arbitrary structured data to indexed assets
+  without requiring API changes. The index stores this data opaquely without validation
+  or interpretation.
+
+  **Storage**: Metadata is stored per ISCC-ID and can be retrieved with search results.
+
+  **Use cases**:
+  - Asset provenance (creator, upload timestamp, processing pipeline)
+  - Content classification (tags, categories, content ratings)
+  - Integration data (external IDs, URLs, API references)
+  - Business logic (access control, pricing, licensing)
+additionalProperties: true
+example:
+  name: "Digital Philosophy: An Introduction"
+  filename: "9788899445566.epub"
+  creator: "John Doe"
+  publisher: "Tech Press"
+  year: 2024
+  tags: ["philosophy", "technology", "digital humanities"]
+  isbn: "978-88-99445-56-6"
+  language: "en"
+  external_id: "db-12345"
+  content_rating: "general"

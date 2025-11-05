@@ -1,0 +1,116 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "http://purl.org/iscc/schema/iscc-matched-chunk.json"
+title: "IsccMatchedChunk"
+type: object
+description: |
+  Detailed information about a matched content chunk, including similarity metrics
+  and optional content preview.
+
+  Extends the basic chunk location data (offset, size) with match-specific information:
+  - Query and index simprint comparison
+  - Similarity score (0.0-1.0 for soft boundaries, 1.0 for exact matches)
+  - IDF weighting (inverse document frequency) for ranking
+  - Optional denormalized asset metadata (source, modality)
+  - Optional content preview (data URL)
+required:
+  - query_simprint
+  - index_simprint
+  - simprint_type
+  - similarity
+  - idf
+  - offset
+  - size
+properties:
+  query_simprint:
+    type: string
+    description: |
+      Base64-encoded simprint from the query that matched this chunk.
+      In hard-boundary indexes, equals index_simprint. In soft-boundary indexes,
+      may differ (similar but not identical).
+    pattern: "^[A-Za-z0-9+/_=-]+$"
+    example: "AXvu3tp2kF8mN9qL4rT1sZ"
+  index_simprint:
+    type: string
+    description: |
+      Base64-encoded simprint stored in the index that was matched.
+      In hard-boundary indexes, equals query_simprint. In soft-boundary indexes,
+      may differ (within similarity threshold).
+    pattern: "^[A-Za-z0-9+/_=-]+$"
+    example: "AXvu3tp2kF8mN9qL4rT1sZ"
+  simprint_type:
+    type: string
+    description: |
+      Type identifier for this simprint (e.g., "CONTENT_TEXT_V0", "SEMANTIC_TEXT_V0").
+      Determines matching semantics and abstraction level.
+    pattern: "^[A-Z_]+_[A-Z_]+_V[0-9]+$"
+    example: "CONTENT_TEXT_V0"
+  similarity:
+    type: number
+    description: |
+      Similarity score between query_simprint and index_simprint (0.0-1.0).
+
+      **Hard-boundary indexes**: Always 1.0 (exact collision)
+      **Soft-boundary indexes**: NPHD-based similarity (1.0 = identical, 0.0 = maximum distance)
+
+      This field enables forward compatibility with soft-boundary matching.
+    minimum: 0.0
+    maximum: 1.0
+    example: 1.0
+  idf:
+    type: number
+    description: |
+      Inverse Document Frequency weight for this simprint.
+
+      Measures simprint rarity: higher values indicate rarer simprints that are
+      more discriminative for ranking. Used in IDF-weighted similarity calculations.
+    minimum: 0.0
+    example: 9.21
+  offset:
+    type: integer
+    description: |
+      Starting position/time/coordinates in the source content.
+      See IsccChunk documentation for modality-specific interpretation.
+    minimum: 0
+    maximum: 4294967295
+    example: 12500
+  size:
+    type: integer
+    description: |
+      Extent/duration/dimensions of the content segment.
+      See IsccChunk documentation for modality-specific interpretation.
+    minimum: 0
+    maximum: 4294967295
+    example: 350
+  source:
+    type: string
+    format: uri
+    description: |
+      Optional resolvable URL to the full content containing this chunk.
+      Denormalized from parent asset for convenience.
+    example: "https://example.com/9788899445566.epub"
+  modality:
+    type: string
+    enum: ["text", "image", "audio", "video", "mixed"]
+    description: |
+      Optional content modality hint for interpreting offset/size.
+      Denormalized from parent asset for convenience.
+    example: "text"
+  content:
+    type: string
+    pattern: "^data:[^;]+;base64,.+$"
+    description: |
+      Optional chunk content as data URL (RFC 2397).
+      Populated on-demand by fetching from source and extracting the chunk region.
+      Useful for match verification and content preview.
+    example: "data:text/plain;base64,SWYgd2UgdGhpbmsgb2YgdGhlIGRpZ2l0YWwgd29ybGQgYXMgYSBuZXcgZm9ybSBvZiBwaGlsb3NvcGh5Li4u"
+example:
+  query_simprint: "AXvu3tp2kF8mN9qL4rT1sZ"
+  index_simprint: "AXvu3tp2kF8mN9qL4rT1sZ"
+  simprint_type: "CONTENT_TEXT_V0"
+  similarity: 1.0
+  idf: 9.21
+  offset: 12500
+  size: 350
+  source: "https://example.com/9788899445566.epub"
+  modality: "text"
+  content: "data:text/plain;base64,SWYgd2UgdGhpbmsgb2YgdGhlIGRpZ2l0YWwgd29ybGQgYXMgYSBuZXcgZm9ybSBvZiBwaGlsb3NvcGh5Li4u"

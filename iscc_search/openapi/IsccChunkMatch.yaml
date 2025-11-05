@@ -1,0 +1,208 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "http://purl.org/iscc/schema/iscc-chunk-match.json"
+title: "IsccChunkMatch"
+type: object
+description: |
+  Segment-level similarity match result.
+
+  Represents a matched asset based on simprint collisions/similarity. The overall
+  similarity score is computed using IDF-weighted averaging across all query simprints.
+
+  **Score calculation**:
+  - Each query simprint has an IDF weight (rarity measure)
+  - Matched simprints contribute: idf * similarity
+  - Unmatched simprints contribute: idf * 0.0
+  - Overall similarity = sum(contributions) / sum(all_idfs)
+
+  **Example**: Query with 2 CONTENT + 3 SEMANTIC simprints
+  - CONTENT: (idf=9.21*sim=1.0 + idf=8.76*sim=1.0) / (9.21+8.76) = 0.954
+  - SEMANTIC: (7.83*0.94 + 6.54*1.0 + 5.12*0.0) / (7.83+6.54+5.12) = 0.891
+  - Overall: (9.21*1.0 + 8.76*1.0 + 7.83*0.94 + 6.54*1.0 + 5.12*0.0) / 37.46 = 0.923
+
+  **Properties**:
+  - Normalized 0.0-1.0 range (directly comparable)
+  - IDF-weighted (rare simprints have more influence)
+  - Accounts for partial matches (some simprints matched, others not)
+required:
+  - iscc_id
+  - similarity
+  - types
+properties:
+  iscc_id:
+    type: string
+    description: The matched ISCC-ID from the index
+    pattern: "^ISCC:[A-Z2-7]{16,}$"
+    example: "ISCC:MAIGIHZPQR7XKLAB"
+  similarity:
+    type: number
+    description: |
+      Overall IDF-weighted similarity score (0.0-1.0).
+
+      Computed as the weighted average of matched simprint similarities across
+      all query simprints, with weights determined by IDF values.
+
+      Interpretation: "92.3% of query matched (by IDF weight)"
+    minimum: 0.0
+    maximum: 1.0
+    example: 0.923
+  types:
+    type: object
+    description: |
+      Per-simprint-type match statistics. Keys are simprint type identifiers
+      (e.g., "CONTENT_TEXT_V0", "SEMANTIC_TEXT_V0"), values are stat objects
+      containing similarity, matches, queried counts, and optional chunk details.
+
+      **Data locality**: Stats and chunks are co-located per type, enabling
+      type-specific workflows (e.g., "show only semantic matches").
+
+      **Missing keys**: Simprint types that were queried but had no matches
+      are omitted.
+    additionalProperties:
+      type: object
+      description: Match statistics and optional chunk details for a single simprint type
+      required:
+        - similarity
+        - matches
+        - queried
+      properties:
+        similarity:
+          type: number
+          description: |
+            IDF-weighted similarity for this simprint type (0.0-1.0).
+            Computed using the same formula as overall similarity but only
+            for simprints of this type.
+          minimum: 0.0
+          maximum: 1.0
+          example: 0.954
+        matches:
+          type: integer
+          description: |
+            Number of query simprints of this type that found matches in this asset.
+          minimum: 0
+          example: 2
+        queried:
+          type: integer
+          description: |
+            Total number of query simprints of this type that were searched.
+          minimum: 1
+          example: 2
+        chunks:
+          type: array
+          description: |
+            Optional detailed list of matched chunks for this simprint type.
+
+            Provides granular match information: which simprints matched, where they
+            are located, similarity scores, and optional content preview.
+
+            **Performance note**: This array can be large (100+ entries per type).
+            Consider omitting or paginating for production use.
+
+            **Note**: simprint_type field in IsccMatchedChunk is redundant here
+            (implicit from parent key) but included for consistency.
+          items:
+            $ref: "./IsccMatchedChunk.yaml"
+    minProperties: 1
+    example:
+      CONTENT_TEXT_V0:
+        similarity: 0.954
+        matches: 2
+        queried: 2
+        chunks:
+          - query_simprint: "AXvu3tp2kF8mN9qL4rT1sZ"
+            index_simprint: "AXvu3tp2kF8mN9qL4rT1sZ"
+            simprint_type: "CONTENT_TEXT_V0"
+            similarity: 1.0
+            idf: 9.21
+            offset: 12500
+            size: 350
+            source: "https://example.com/9788899445566.epub"
+            modality: "text"
+          - query_simprint: "B4kl9mQ1pP7xY3jH8vW2aF"
+            index_simprint: "B4kl9mQ1pP7xY3jH8vW2aF"
+            simprint_type: "CONTENT_TEXT_V0"
+            similarity: 1.0
+            idf: 8.76
+            offset: 45230
+            size: 412
+            source: "https://example.com/9788899445566.epub"
+            modality: "text"
+      SEMANTIC_TEXT_V0:
+        similarity: 0.891
+        matches: 2
+        queried: 3
+        chunks:
+          - query_simprint: "CYhq2nR8oL3pT5mK9sX4bG"
+            index_simprint: "CYhq3nR7oL2pT5mK9sX4bG"
+            simprint_type: "SEMANTIC_TEXT_V0"
+            similarity: 0.94
+            idf: 7.83
+            offset: 78900
+            size: 389
+            source: "https://example.com/9788899445566.epub"
+            modality: "text"
+          - query_simprint: "D9mn7vT4qK2rU6nL1tY5cH"
+            index_simprint: "D9mn7vT4qK2rU6nL1tY5cH"
+            simprint_type: "SEMANTIC_TEXT_V0"
+            similarity: 1.0
+            idf: 6.54
+            offset: 123450
+            size: 301
+            source: "https://example.com/9788899445566.epub"
+            modality: "text"
+  metadata:
+    $ref: "./IsccMetadata.yaml"
+    description: |
+      Optional asset metadata, denormalized from the index for convenience.
+example:
+  iscc_id: "ISCC:MAIGIHZPQR7XKLAB"
+  similarity: 0.923
+  types:
+    CONTENT_TEXT_V0:
+      similarity: 0.954
+      matches: 2
+      queried: 2
+      chunks:
+        - query_simprint: "AXvu3tp2kF8mN9qL4rT1sZ"
+          index_simprint: "AXvu3tp2kF8mN9qL4rT1sZ"
+          simprint_type: "CONTENT_TEXT_V0"
+          similarity: 1.0
+          idf: 9.21
+          offset: 12500
+          size: 350
+          source: "https://example.com/9788899445566.epub"
+          modality: "text"
+        - query_simprint: "B4kl9mQ1pP7xY3jH8vW2aF"
+          index_simprint: "B4kl9mQ1pP7xY3jH8vW2aF"
+          simprint_type: "CONTENT_TEXT_V0"
+          similarity: 1.0
+          idf: 8.76
+          offset: 45230
+          size: 412
+          source: "https://example.com/9788899445566.epub"
+          modality: "text"
+    SEMANTIC_TEXT_V0:
+      similarity: 0.891
+      matches: 2
+      queried: 3
+      chunks:
+        - query_simprint: "CYhq2nR8oL3pT5mK9sX4bG"
+          index_simprint: "CYhq3nR7oL2pT5mK9sX4bG"
+          simprint_type: "SEMANTIC_TEXT_V0"
+          similarity: 0.94
+          idf: 7.83
+          offset: 78900
+          size: 389
+          source: "https://example.com/9788899445566.epub"
+          modality: "text"
+        - query_simprint: "D9mn7vT4qK2rU6nL1tY5cH"
+          index_simprint: "D9mn7vT4qK2rU6nL1tY5cH"
+          simprint_type: "SEMANTIC_TEXT_V0"
+          similarity: 1.0
+          idf: 6.54
+          offset: 123450
+          size: 301
+          source: "https://example.com/9788899445566.epub"
+          modality: "text"
+  metadata:
+    name: "Digital Philosophy: An Introduction"
+    filename: "9788899445566.epub"

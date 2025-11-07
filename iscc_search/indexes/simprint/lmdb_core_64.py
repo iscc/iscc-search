@@ -25,8 +25,9 @@ from loguru import logger
 
 from iscc_search.indexes.simprint.models import MatchedChunkRaw, SimprintMatchRaw
 
+
 if TYPE_CHECKING:
-    pass
+    from iscc_search.protocols.simprint_core import SimprintEntryRaw  # noqa: F401
 
 
 class LmdbSimprintIndex64:

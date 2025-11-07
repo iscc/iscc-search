@@ -33,7 +33,7 @@ class SimprintEntryRaw(Protocol):
     (e.g., all CONTENT_TEXT_V0 or all SEMANTIC_TEXT_V0).
     """
 
-    iscc_id: bytes  # Binary ISCC-ID body (8 bytes, without header)
+    iscc_id_body: bytes  # Binary ISCC-ID body (8 bytes, without header)
     simprints: list[SimprintRaw]  # List of simprints with location metadata
 
 
@@ -64,7 +64,7 @@ class SimprintMatchRaw(Protocol):
         The only requirement is that score is a float between 0.0 and 1.0.
     """
 
-    iscc_id: bytes  # Binary ISCC-ID body of the matched asset (without header)
+    iscc_id_body: bytes  # Binary ISCC-ID body of the matched asset (without header)
     score: float  # Aggregated similarity score (0.0 to 1.0) at asset level
     queried: int  # Number of simprints in the query
     matches: int  # Number of query simprints that found matches
@@ -105,8 +105,8 @@ class SimprintIndexRaw(Protocol):
         Add entries to the index with add-once semantics.
 
         Add-Once Semantics:
-            Each ISCC-ID can only be added ONCE to the index.
-            Duplicate ISCC-IDs are silently ignored (no-op).
+            Each ISCC-ID body can only be added ONCE to the index.
+            Duplicate ISCC-ID bodies are silently ignored (no-op).
 
         Rationale:
             Silent ignore allows efficient bulk loading without pre-checking.
@@ -134,14 +134,14 @@ class SimprintIndexRaw(Protocol):
         :return: List of matched assets ordered by similarity (best first)
         """
 
-    def __contains__(self, iscc_id):
+    def __contains__(self, iscc_id_body):
         # type: (bytes) -> bool
         """
-        Check if an ISCC-ID exists in the index.
+        Check if an ISCC-ID body exists in the index.
 
-        Enables pythonic membership testing: `if iscc_id in index:`
+        Enables pythonic membership testing: `if iscc_id_body in index:`
 
-        :param iscc_id: Binary ISCC-ID body (without header) to check
+        :param iscc_id_body: Binary ISCC-ID body (without header) to check
         :return: True if the asset has been indexed, False otherwise
         """
 
@@ -172,28 +172,28 @@ class SimprintIndexMutableRaw(SimprintIndexRaw):
     implement only the base SimprintIndexRaw protocol.
     """
 
-    def get_raw(self, iscc_ids):
+    def get_raw(self, iscc_id_bodies):
         # type: (list[bytes]) -> list[SimprintEntryRaw]
         """
-        Retrieve indexed entries by their ISCC-IDs.
+        Retrieve indexed entries by their ISCC-ID bodies.
 
         Returns the stored simprints for the specified assets. Useful for
         re-indexing, debugging, or implementing update operations.
 
-        :param iscc_ids: Binary ISCC-ID bodies to retrieve
-        :return: List of entries (empty entries for non-existent ISCC-IDs)
+        :param iscc_id_bodies: Binary ISCC-ID bodies to retrieve
+        :return: List of entries (empty entries for non-existent ISCC-ID bodies)
         """
 
-    def delete_raw(self, iscc_ids):
+    def delete_raw(self, iscc_id_bodies):
         # type: (list[bytes]) -> None
         """
-        Remove assets from the index by their ISCC-IDs.
+        Remove assets from the index by their ISCC-ID bodies.
 
         Completely removes all simprints associated with the specified assets.
-        Non-existent ISCC-IDs are silently ignored.
+        Non-existent ISCC-ID bodies are silently ignored.
 
         Transaction Semantics:
             MUST be atomic - either all entries are deleted or none are deleted.
 
-        :param iscc_ids: Binary ISCC-ID bodies to delete
+        :param iscc_id_bodies: Binary ISCC-ID bodies to delete
         """

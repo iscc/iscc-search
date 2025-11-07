@@ -1,7 +1,7 @@
 """Index management endpoints for ISCC-Search API."""
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from iscc_search.protocol import IsccIndexProtocol
+from iscc_search.protocols.index import IsccIndexProtocol
 from iscc_search.schema import IsccIndex
 from iscc_search.server import get_index_from_state
 

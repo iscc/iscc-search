@@ -9,7 +9,7 @@ import iscc_core as ic
 import pytest
 from iscc_search.schema import IsccIndex, IsccAsset, Status
 from iscc_search.indexes.usearch import UsearchIndexManager
-from iscc_search.protocol import IsccIndexProtocol
+from iscc_search.protocols.index import IsccIndexProtocol
 
 
 @pytest.fixture

@@ -2,7 +2,7 @@
 
 import pytest
 from iscc_search.indexes.memory import MemoryIndex
-from iscc_search.protocol import IsccIndexProtocol
+from iscc_search.protocols.index import IsccIndexProtocol
 from iscc_search.schema import IsccAddResult, IsccAsset, IsccIndex, IsccSearchResult, Metric, Status
 
 

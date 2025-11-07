@@ -92,7 +92,7 @@ def get_index():
     :raises ValueError: If URI scheme is not supported or missing
     :raises NotImplementedError: If URI scheme is planned but not yet implemented
     """
-    from iscc_search.protocol import IsccIndexProtocol  # noqa: F401
+    from iscc_search.protocols.index import IsccIndexProtocol  # noqa: F401
     import sys
 
     uri = search_settings.index_uri

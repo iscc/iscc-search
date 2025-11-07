@@ -7,7 +7,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from iscc_search.settings import get_index
-from iscc_search.protocol import IsccIndexProtocol  # noqa: F401
+from iscc_search.protocols.index import IsccIndexProtocol  # noqa: F401
 
 
 @asynccontextmanager

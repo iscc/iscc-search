@@ -16,7 +16,7 @@ from rich.logging import RichHandler
 from rich.progress import BarColumn, MofNCompleteColumn, Progress, SpinnerColumn, TextColumn
 
 if TYPE_CHECKING:
-    from iscc_search.protocol import IsccIndexProtocol  # noqa: F401
+    from iscc_search.protocols.index import IsccIndexProtocol  # noqa: F401
 
 import iscc_search
 from iscc_search.utils import timer

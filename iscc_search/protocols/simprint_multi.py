@@ -6,7 +6,7 @@ support for multiple simprint types.
 """
 
 from typing import Protocol
-from iscc_search.indexes.simprint.core import SimprintRaw, MatchedChunkRaw
+from iscc_search.protocols.simprint_core import SimprintRaw, MatchedChunkRaw
 
 
 class SimprintEntryMulti(Protocol):

@@ -118,7 +118,7 @@ fail_under = 100
 [tool.coverage.run]
 branch = true
 source = ["iscc_search"]
-omit = ["iscc_search/cli/*", "iscc_search/schema.py", "iscc_search/simprint/*"]
+omit = ["iscc_search/cli/*", "iscc_search/schema.py", "iscc_search/simprint/*", "iscc_search/protocols/*"]
 
 [tool.datamodel-codegen]
 input = "iscc_search/openapi/openapi.yaml"

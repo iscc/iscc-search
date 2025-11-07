@@ -288,9 +288,6 @@ class LmdbSimprintIndex64:
                     # Insert simprint entries
                     simprints_cursor = txn.cursor(db=self.simprints_db)
                     simprints_cursor.putmulti(simprint_pairs, dupdata=False)
-
-                # Sync to disk
-                self.env.sync(True)
                 break
 
             except lmdb.MapFullError:  # pragma: no cover

@@ -86,15 +86,16 @@ class SimprintIndexRaw(Protocol):
         - All operations must be thread-safe for concurrent access
     """
 
-    def __init__(self, path, **kwargs):
+    def __init__(self, uri, **kwargs):
         # type: (str, ...) -> None
         """
-        Open or create a simprint index at the specified path.
+        Open or create a simprint index at the specified location.
 
-        Creates a new index if the path doesn't exist, otherwise opens the existing index.
-        Implementation-specific parameters can be passed via kwargs.
-
-        :param path: Path to the index directory (will be created if needed)
+        :param uri: Index location as URI:
+          - File path: '/path/to/index' or 'file:///path/to/index'
+          - LMDB: 'lmdb:///path/to/index'
+          - PostgreSQL: 'postgresql://user:pass@host:5432/dbname'
+          - Future: 'redis://host:6379/0', 's3://bucket/prefix', etc.
         :param kwargs: Backend-specific configuration options
         """
 

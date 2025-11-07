@@ -54,7 +54,6 @@ class LmdbSimprintIndex64:
     MAX_SIZE = 2**32 - 1  # 4 GB max size
     MAX_RESIZE_RETRIES = 10
     MAX_MAP_SIZE = 1024 * 1024 * 1024 * 1024  # 1 TB
-    DEFAULT_MAP_SIZE = 10 * 1024 * 1024  # 10 MB initial size
     _DB_SIMPRINTS = b"simprints"  # LMDB database name for simprint mappings
     _DB_ASSETS = b"assets"  # LMDB database name for asset tracking
 
@@ -81,7 +80,6 @@ class LmdbSimprintIndex64:
         self.env = lmdb.open(
             str(self.path),
             max_dbs=2,  # simprints, assets
-            map_size=self.DEFAULT_MAP_SIZE,
             writemap=True,  # Avoid Windows file reservation issues
             map_async=True,  # Better write performance
             sync=False,  # Bulk operations, sync manually
@@ -99,6 +97,99 @@ class LmdbSimprintIndex64:
         # Open assets database for O(1) duplicate detection and counting
         # Key: iscc_id_body (8 bytes as 64-bit integer), Value: empty (existence matters)
         self.assets_db = self.env.open_db(self._DB_ASSETS, integerkey=True)
+
+    def add_raw(self, entries):
+        # type: (list[SimprintEntryRaw]) -> None
+        """
+        Add entries to the index with add-once semantics.
+
+        Uses batch operations for optimal performance.
+        Silently ignores duplicate ISCC-ID bodies.
+
+        :param entries: List of entries to add atomically
+        """
+        if not entries:
+            return
+
+        existing = self._check_existing_assets(entries)
+        new_asset_ids, simprint_pairs = self._build_insert_pairs(entries, existing)
+
+        if not new_asset_ids:
+            return  # Nothing to add
+
+        self._execute_batch_insert(new_asset_ids, simprint_pairs)
+
+    def search_raw(self, simprints, limit=10, threshold=0.8, detailed=True):
+        # type: (list[bytes], int, float, bool) -> list[SimprintMatchRaw]
+        """
+        Search for assets with similar simprints using IDF-weighted scoring.
+
+        :param simprints: Binary simprints to search for
+        :param limit: Maximum number of assets to return
+        :param threshold: Minimum similarity score (0.0 to 1.0)
+        :param detailed: If True, include individual chunk matches
+        :return: List of matched assets ordered by similarity
+        """
+        if not simprints:
+            return []
+
+        query_simprints = [s[:8] for s in simprints]
+        asset_matches, doc_frequencies = self._fetch_matches_and_frequencies(query_simprints)
+
+        total_assets = max(len(self), 1)
+        results = []
+
+        for iscc_id_body, matches in asset_matches.items():
+            score = self._calculate_idf_score(matches, doc_frequencies, total_assets, len(query_simprints))
+
+            if score >= threshold:
+                result = self._format_match_result(
+                    iscc_id_body, matches, score, doc_frequencies, len(query_simprints), detailed
+                )
+                results.append(result)
+
+        results.sort(key=lambda x: (-x.score, x.iscc_id_body))
+        return results[:limit]
+
+    def close(self):
+        # type: () -> None
+        """Close the index and release resources."""
+        self.env.sync(True)
+        self.env.close()
+
+    def __contains__(self, iscc_id_body):
+        # type: (bytes) -> bool
+        """
+        Check if an ISCC-ID body exists in the index.
+
+        O(1) lookup using assets database.
+
+        :param iscc_id_body: Binary ISCC-ID body (8 bytes)
+        :return: True if the asset has been indexed
+        """
+        with self.env.begin() as txn:
+            return txn.get(iscc_id_body, db=self.assets_db) is not None
+
+    def __len__(self):
+        # type: () -> int
+        """
+        Return the number of unique assets in the index.
+
+        O(1) count using LMDB statistics.
+        """
+        with self.env.begin() as txn:
+            stats = txn.stat(db=self.assets_db)
+            return stats["entries"]
+
+    def __enter__(self):
+        # type: () -> LmdbSimprintIndex64
+        """Context manager support."""
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        # type: (type | None, Exception | None, object | None) -> None
+        """Context manager cleanup."""
+        self.close()
 
     def _pack_chunk_pointer(self, iscc_id_body, offset, size):
         # type: (bytes, int, int) -> bytes
@@ -214,27 +305,6 @@ class LmdbSimprintIndex64:
                 logger.info(f"Resizing LMDB from {old_size:,} to {new_size:,} bytes")
                 self.env.set_mapsize(new_size)
 
-    def add_raw(self, entries):
-        # type: (list[SimprintEntryRaw]) -> None
-        """
-        Add entries to the index with add-once semantics.
-
-        Uses batch operations for optimal performance.
-        Silently ignores duplicate ISCC-ID bodies.
-
-        :param entries: List of entries to add atomically
-        """
-        if not entries:
-            return
-
-        existing = self._check_existing_assets(entries)
-        new_asset_ids, simprint_pairs = self._build_insert_pairs(entries, existing)
-
-        if not new_asset_ids:
-            return  # Nothing to add
-
-        self._execute_batch_insert(new_asset_ids, simprint_pairs)
-
     def _fetch_matches_and_frequencies(self, query_simprints):
         # type: (list[bytes]) -> tuple[dict[bytes, list[tuple[bytes, bytes, int, int]]], dict[bytes, int]]
         """
@@ -333,75 +403,3 @@ class LmdbSimprintIndex64:
             matches=len(matches),
             chunks=chunks,
         )
-
-    def search_raw(self, simprints, limit=10, threshold=0.8, detailed=True):
-        # type: (list[bytes], int, float, bool) -> list[SimprintMatchRaw]
-        """
-        Search for assets with similar simprints using IDF-weighted scoring.
-
-        :param simprints: Binary simprints to search for
-        :param limit: Maximum number of assets to return
-        :param threshold: Minimum similarity score (0.0 to 1.0)
-        :param detailed: If True, include individual chunk matches
-        :return: List of matched assets ordered by similarity
-        """
-        if not simprints:
-            return []
-
-        query_simprints = [s[:8] for s in simprints]
-        asset_matches, doc_frequencies = self._fetch_matches_and_frequencies(query_simprints)
-
-        total_assets = max(len(self), 1)
-        results = []
-
-        for iscc_id_body, matches in asset_matches.items():
-            score = self._calculate_idf_score(matches, doc_frequencies, total_assets, len(query_simprints))
-
-            if score >= threshold:
-                result = self._format_match_result(
-                    iscc_id_body, matches, score, doc_frequencies, len(query_simprints), detailed
-                )
-                results.append(result)
-
-        results.sort(key=lambda x: (-x.score, x.iscc_id_body))
-        return results[:limit]
-
-    def __contains__(self, iscc_id_body):
-        # type: (bytes) -> bool
-        """
-        Check if an ISCC-ID body exists in the index.
-
-        O(1) lookup using assets database.
-
-        :param iscc_id_body: Binary ISCC-ID body (8 bytes)
-        :return: True if the asset has been indexed
-        """
-        with self.env.begin() as txn:
-            return txn.get(iscc_id_body, db=self.assets_db) is not None
-
-    def __len__(self):
-        # type: () -> int
-        """
-        Return the number of unique assets in the index.
-
-        O(1) count using LMDB statistics.
-        """
-        with self.env.begin() as txn:
-            stats = txn.stat(db=self.assets_db)
-            return stats["entries"]
-
-    def close(self):
-        # type: () -> None
-        """Close the index and release resources."""
-        self.env.sync(True)
-        self.env.close()
-
-    def __enter__(self):
-        # type: () -> LmdbSimprintIndex64
-        """Context manager support."""
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        # type: (type | None, Exception | None, object | None) -> None
-        """Context manager cleanup."""
-        self.close()

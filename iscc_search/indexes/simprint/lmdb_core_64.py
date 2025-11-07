@@ -287,9 +287,14 @@ class LmdbSimprintIndex64:
         # Calculate match ratio
         match_ratio = len(matches) / num_queried
 
-        # Normalize IDF to [0, 1] range
-        max_idf = math.log(total_assets)
-        normalized_idf = avg_idf / max_idf if max_idf > 0 else 1.0
+        # Normalize IDF against best achievable case (df=1 for all simprints)
+        # This allows perfect matches with rare simprints to reach 1.0
+        if total_assets > 2:
+            max_idf = math.log(total_assets / 2)
+            normalized_idf = min(avg_idf / max_idf, 1.0)
+        else:
+            # Edge case: 1-2 assets, treat as perfect match
+            normalized_idf = 1.0
 
         # Blend match ratio with IDF weighting
         return match_ratio * (0.5 + 0.5 * normalized_idf)

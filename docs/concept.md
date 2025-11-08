@@ -1,4 +1,11 @@
-# ISCC-SEARCH Concept
+# ISCC- SEARCH
+
+## Reverse Content Discovery at Web Scale
+
+Most identifier systems tell you where to find content when you have an ID. ISCC-SEARCH solves the reverse
+problem: finding identifiers when you have the content itself - even when that content has been edited,
+compressed, or reformatted. Doing this efficiently at web scale, with millisecond-scale response times across
+billions of indexed items, is the core challenge this project addresses.
 
 ## Introduction
 
@@ -7,7 +14,32 @@ content-based discovery of digital assets. Instead of relying solely on names, U
 identifiers (PIDs), ISCC allows you to find content by what it *is* - its actual characteristics and similarity
 to other content.
 
-### Four Types of ISCCs
+## Core ISCC Concepts
+
+The ISCC offers a collection of similarity-preserving codes and identifiers that are organized into a hierarchy:
+
+```mermaid
+graph TB
+    ID[<b>ISCC-ID</b><br/>Persistent Identifier<br/><i>who • what • when • where</i>]
+
+CODE[<b>ISCC-CODE</b><br/>Multi-component Fingerprint<br/><i>deterministic content descriptor</i>]
+
+META[<b>META-CODE</b><br/><i>title, description</i>]
+SEMANTIC[<b>SEMANTIC-CODE</b><br/><i>semantic similarity</i>]
+CONTENT[<b>CONTENT-CODE</b><br/><i>perceptual similarity</i>]
+DATA[<b>DATA-CODE</b><br/><i>bitstream similarity</i>]
+INSTANCE[<b>INSTANCE-CODE</b><br/><i>exact identity</i>]
+
+SEM_SIM[<b>SEMANTIC-SIMPRINTS</b><br/><i>Segment-level Semantic</i>]
+CON_SIM[<b>CONTENT-SIMPRINTS</b><br/><i>Segment-level Perceptual</i>]
+DAT_SIM[<b>DATA-SIMPRINTS</b><br/><i>Segment-level Bitstream</i>]
+
+ID -.->|references|CODE
+CODE -->|composed of| META & SEMANTIC & CONTENT & DATA & INSTANCE
+SEMANTIC -.->|many segments|SEM_SIM
+CONTENT -.-> |many segments|CON_SIM
+DATA -.->|many segments|DAT_SIM
+```
 
 ISCC distinguishes four broad categories, each serving a different purpose:
 
@@ -20,44 +52,18 @@ Think of it as a machine-readable descriptor optimized for similarity matching.
 - **Media-specific units**: Text, image, audio, or video fingerprints
 - **Generic units**: Work with any bitstream regardless of media type
 - **Similarity-preserving**: Most units are binary codes (bit-vectors) that support similarity matching via
-    hamming distance
-- **Exact matching**: Instance-Code is the exception - a cryptographic hash (blake3) for exact duplicate
+    Hamming distance
+- **Exact matching**: INSTANCE-CODE is the exception - a cryptographic hash (BLAKE3) for exact duplicate
     detection
 
 **ISCC-ID**: A persistent identifier (PID) that answers *who declared what content when and where*. Unlike
-ISCC-CODEs and UNITs (which are deterministic fingerprints), ISCC-IDs are issued by a distributed network of
-ISCC-HUBs. Each ISCC-ID encodes a microsecond timestamp and the identifier of the issuing hub, linking to
+ISCC-CODEs and ISCC-UNITs (which are deterministic fingerprints), ISCC-IDs are issued by a distributed network
+of ISCC-HUBs. Each ISCC-ID encodes a microsecond timestamp and the identifier of the issuing hub, linking to
 metadata and services.
 
-**ISCC-SIMPRINT**: A similarity hash that identifies content at the granular segment level. While ISCC-CODEs and
-ISCC-UNITs identify entire assets (documents, images, videos), ISCC-SIMPRINTs identify segments within those
-assets - text passages, image regions, video scenes, or audio clips. Like ISCC-UNITs, different simprint types
-operate at different abstraction levels (semantic, content, data) with specialized segmentation strategies. A
-single asset typically generates many simprints, enabling discovery of where specific content appears within
-larger works.
-
-```mermaid
-graph TB
-    ID[<b>ISCC-ID</b><br/>Persistent Identifier<br/><i>who • what • when • where</i>]
-
-    CODE[<b>ISCC-CODE</b><br/>Multi-component Fingerprint<br/><i>deterministic content descriptor</i>]
-
-    META[<b>META-CODE</b><br/><i>title, description</i>]
-    SEMANTIC[<b>SEMANTIC-CODE</b><br/><i>semantic similarity</i>]
-    CONTENT[<b>CONTENT-CODE</b><br/><i>perceptual similarity</i>]
-    DATA[<b>DATA-CODE</b><br/><i>bitstream similarity</i>]
-    INSTANCE[<b>INSTANCE-CODE</b><br/><i>exact identity</i>]
-
-    SEM_SIM[<b>SEMANTIC-SIMPRINTS</b><br/><i>segment-level semantic</i>]
-    CON_SIM[<b>CONTENT-SIMPRINTS</b><br/><i>segment-level perceptual</i>]
-    DAT_SIM[<b>DATA-SIMPRINTS</b><br/><i>segment-level bitstream</i>]
-
-    ID -.-> |references| CODE
-    CODE --> |composed of| META & SEMANTIC & CONTENT & DATA & INSTANCE
-    SEMANTIC -.-> |many segments| SEM_SIM
-    CONTENT -.-> |many segments| CON_SIM
-    DATA -.-> |many segments| DAT_SIM
-```
+**ISCC-SIMPRINT**: A granular similarity hash for content segments. Unlike the other three types that identify
+entire assets, simprints identify segments within assets—text passages, image regions, or audio clips. A single
+asset generates many simprints, enabling discovery of where specific content appears within larger works.
 
 ### Technical Structure
 
@@ -66,8 +72,8 @@ followed by an **ISCC-BODY**. This structure makes ISCCs self-describing: the he
 specifying its MainType, SubType, Version, and Length. The body contains the actual payload - the fingerprint
 data that identifies or references digital content.
 
-**ISCC-SIMPRINTs are the exception**: They are headerless base64-encoded hashes where type information must be
-tracked externally (typically by the index/collection in which they are stored).
+**ISCC-SIMPRINTs are the exception**: They are headerless base64url-encoded hashes where type information must
+be tracked externally (typically by the index/collection in which they are stored).
 
 ## The Problem: Bidirectional Content Discovery
 
@@ -93,7 +99,7 @@ ISCC-SEARCH implements custom indexing techniques optimized for ISCC structure, 
 - Unified interface across multiple storage backends
 - Bidirectional prefix matching for variable-length codes
 - Parallel search across unit-specific indexes with aggregated ranking
-- Sub-millisecond query performance at scale
+- Millisecond-scale query performance at scale
 
 ## Example Use Case
 
@@ -106,7 +112,7 @@ Consider a digital content platform with millions of images:
 
     - Exact duplicates (INSTANCE match: 100% identical binary)
     - Edited versions (CONTENT match: 95% perceptual similarity)
-    - Similar images (DATA match: 85% structural similarity)
+    - Similar images (DATA match: 85% bitstream-level similarity)
     - Related metadata (META match: 80% title/creator similarity)
 
 3. **Result Ranking**: Aggregates scores across unit types, prioritizing stronger signals (INSTANCE > CONTENT >
@@ -147,16 +153,16 @@ index types, each making different tradeoffs in the solution space.
 
 Generally an ISCC index has to manage multiple internal indexes because only ISCC-UNITs of the same type can be
 searched and matched against each other. The input for a search can be an ISCC-CODE or a set of extended
-ISCC-UNITs that belong to a given ISCC-CODE. The engine will than dispatch multiple searches against the
-internal UNIT-specific indexes in parallel. The results are than aggregated and ranked before being returned to
+ISCC-UNITs that belong to a given ISCC-CODE. The engine will then dispatch multiple searches against the
+internal UNIT-specific indexes in parallel. The results are then aggregated and ranked before being returned to
 the client.
 
 Another special requirement for an ISCC index is the capability to match ISCC-UNITs of variable lengths against
-each other. An ISCC-UNIT may be extracted from an ISCC-CODE with a length of only 64-bit while an individual
+each other. An ISCC-UNIT may be extracted from an ISCC-CODE with a length of only 64 bits while an individual
 ISCC-UNIT may come with a 256-bit ISCC-BODY. The ISCC system guarantees that longer versions of ISCC-UNITs of
 the same type are extensions of their shorter counterparts such that their common prefix is compatible. This
 means that, while the statistical probability of unintended collisions is higher with shorter codes, we can
-still match and compare short ISCC-UNITs against long ISCC-UNITS.
+still match and compare short ISCC-UNITs against long ISCC-UNITs.
 
 **ISCC-SIMPRINT indexes** have different requirements and present unique scalability challenges:
 
@@ -274,13 +280,13 @@ Best for:
 - Embedded applications
 - Local development with persistent data
 
-### Usearch Index
+### USEARCH Index
 
-A high-performance hybrid index combining **LMDB** for metadata and exact matching with **HNSW-based NphdIndex**
-for similarity search. Designed for:
+A high-performance hybrid index combining **LMDB** for metadata and exact matching with **HNSW-based NPHD
+index** for similarity search. Designed for:
 
 - Large-scale similarity search with millions of vectors
-- Sub-millisecond query latency for similarity matching
+- Low-millisecond query latency for similarity matching
 - NPHD-based matching of variable-length codes (64-256 bits)
 - Exact INSTANCE matching via LMDB dupsort
 - Persistent storage with automatic save/reload
@@ -288,7 +294,7 @@ for similarity search. Designed for:
 **Architecture**: Hybrid dual-storage system
 
 - **LMDB**: Stores asset metadata, index configuration, and INSTANCE units for exact duplicate detection
-- **NphdIndex**: Separate `.usearch` files per unit-type (META, CONTENT, DATA) for similarity search
+- **NPHD index**: Separate `.usearch` files per unit-type (META, CONTENT, DATA) for similarity search
 - **Unified keys**: ISCC-ID body as uint64 consistently across both storage systems
 
 **Configuration**: `ISCC_SEARCH_INDEX_URI=usearch:///path/to/index_data`
@@ -298,8 +304,8 @@ for similarity search. Designed for:
 ```
 index_name/
 ├── index.lmdb          # LMDB with __metadata__, __assets__, __instance__ databases
-├── CONTENT_TEXT_V0.usearch    # NphdIndex for CONTENT-TEXT units
-├── DATA_NONE_V0.usearch       # NphdIndex for DATA units
+├── CONTENT_TEXT_V0.usearch    # NPHD index for CONTENT-TEXT units
+├── DATA_NONE_V0.usearch       # NPHD index for DATA units
 └── ...                        # Additional unit-type indexes (lazy-created)
 ```
 

@@ -7,6 +7,15 @@ problem: finding identifiers when you have the content itself - even when that c
 compressed, or reformatted. Doing this efficiently at web scale, with millisecond-scale response times across
 billions of indexed items, is the core challenge this project addresses.
 
+**ISCC-SEARCH supports**:
+
+- **Content-Based Discovery**: Find content by its intrinsic characteristics, as opposed to its name or
+    location.
+- **Bidirectional Search**: Go from a content fingerprint (ISCC-CODE) back to a persistent identifier (ISCC-ID).
+- **Variable-Length Codes**: Index and match ISCCs with different lengths (e.g., 64 to 256 bits).
+- **Granular & Holistic**: Search for entire assets (with ISCC-CODEs) or for tiny segments within them (with
+    ISCC-SIMPRINTs).
+
 ## About the ISCC
 
 The International Standard Content Code (ISCC) is an open source content identification system that enables
@@ -16,13 +25,8 @@ to other content.
 
 ## Core ISCC Concepts
 
-The ISCC system provides three functional categories organized by role:
-
-**Identifiers**: ISCC-ID links content declarations to actors and services
-
-**Fingerprints (asset-level)**: ISCC-CODE and ISCC-UNIT enable similarity matching across entire digital assets
-
-**Fingerprints (segment-level)**: ISCC-SIMPRINT enables granular matching of content segments within assets
+The ISCC system provides a number of codes and identifiers that work together to identify and match digital
+content:
 
 ```mermaid
 graph TB
@@ -30,14 +34,14 @@ graph TB
 
 CODE[<b>ISCC-CODE</b><br/>Multi-component Fingerprint<br/><i>deterministic content descriptor</i>]
 
-META[<b>META-CODE</b><br/><i>title, description</i>]
-SEMANTIC[<b>SEMANTIC-CODE</b><br/><i>semantic similarity</i>]
-CONTENT[<b>CONTENT-CODE</b><br/><i>perceptual similarity</i>]
-DATA[<b>DATA-CODE</b><br/><i>bitstream similarity</i>]
-INSTANCE[<b>INSTANCE-CODE</b><br/><i>exact identity</i>]
+META[<b>META-UNIT</b><br/><i>title, description</i>]
+SEMANTIC[<b>SEMANTIC-UNIT</b><br/><i>semantic similarity</i>]
+CONTENT[<b>CONTENT-UNIT</b><br/><i>structural similarity</i>]
+DATA[<b>DATA-UNIT</b><br/><i>bitstream similarity</i>]
+INSTANCE[<b>INSTANCE-UNIT</b><br/><i>exact identity</i>]
 
 SEM_SIM[<b>SEMANTIC-SIMPRINTS</b><br/><i>Segment-level Semantic</i>]
-CON_SIM[<b>CONTENT-SIMPRINTS</b><br/><i>Segment-level Perceptual</i>]
+CON_SIM[<b>CONTENT-SIMPRINTS</b><br/><i>Segment-level Structural</i>]
 DAT_SIM[<b>DATA-SIMPRINTS</b><br/><i>Segment-level Bitstream</i>]
 
 ID -.->|references|CODE

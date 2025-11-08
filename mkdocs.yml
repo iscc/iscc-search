@@ -9,6 +9,7 @@ copyright: Maintained by <a href="https://iscc.io">ISCC Foundation</a>.
 
 nav:
   - Home: index.md
+  - Concept: concept.md
   - Modules: modules.md
 plugins:
   - search
@@ -50,3 +51,8 @@ markdown_extensions:
       permalink: true
   - pymdownx.arithmatex:
       generic: true
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format

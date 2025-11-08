@@ -7,7 +7,7 @@ problem: finding identifiers when you have the content itself - even when that c
 compressed, or reformatted. Doing this efficiently at web scale, with millisecond-scale response times across
 billions of indexed items, is the core challenge this project addresses.
 
-## Introduction
+## About the ISCC
 
 The International Standard Content Code (ISCC) is an open source content identification system that enables
 content-based discovery of digital assets. Instead of relying solely on names, URLs, or traditional persistent
@@ -16,7 +16,13 @@ to other content.
 
 ## Core ISCC Concepts
 
-The ISCC offers a collection of similarity-preserving codes and identifiers that are organized into a hierarchy:
+The ISCC system provides three functional categories organized by role:
+
+**Identifiers**: ISCC-ID links content declarations to actors and services
+
+**Fingerprints (asset-level)**: ISCC-CODE and ISCC-UNIT enable similarity matching across entire digital assets
+
+**Fingerprints (segment-level)**: ISCC-SIMPRINT enables granular matching of content segments within assets
 
 ```mermaid
 graph TB
@@ -41,7 +47,14 @@ CONTENT -.-> |many segments|CON_SIM
 DATA -.->|many segments|DAT_SIM
 ```
 
-ISCC distinguishes four broad categories, each serving a different purpose:
+### Identifiers
+
+**ISCC-ID**: A persistent identifier (PID) that answers *who declared what content when and where*. Unlike
+ISCC-CODEs and ISCC-UNITs (which are deterministic fingerprints), ISCC-IDs are issued by a distributed network
+of ISCC-HUBs. Each ISCC-ID encodes a microsecond timestamp and the identifier of the issuing hub, linking to
+metadata and services.
+
+### Fingerprints (Asset-Level)
 
 **ISCC-CODE**: A multi-component fingerprint derived from digital content itself. When you process a digital
 asset (text, image, audio, video), you generate an ISCC-CODE that captures multiple facets of that content.
@@ -56,14 +69,12 @@ Think of it as a machine-readable descriptor optimized for similarity matching.
 - **Exact matching**: INSTANCE-CODE is the exception - a cryptographic hash (BLAKE3) for exact duplicate
     detection
 
-**ISCC-ID**: A persistent identifier (PID) that answers *who declared what content when and where*. Unlike
-ISCC-CODEs and ISCC-UNITs (which are deterministic fingerprints), ISCC-IDs are issued by a distributed network
-of ISCC-HUBs. Each ISCC-ID encodes a microsecond timestamp and the identifier of the issuing hub, linking to
-metadata and services.
+### Fingerprints (Segment-Level)
 
-**ISCC-SIMPRINT**: A granular similarity hash for content segments. Unlike the other three types that identify
-entire assets, simprints identify segments within assets—text passages, image regions, or audio clips. A single
-asset generates many simprints, enabling discovery of where specific content appears within larger works.
+**ISCC-SIMPRINT**: A granular similarity hash for content segments. Unlike identifiers and asset-level
+fingerprints that work with entire assets, simprints identify segments within assets—text passages, image
+regions, or audio clips. A single asset generates many simprints, enabling discovery of where specific content
+appears within larger works.
 
 ### Technical Structure
 
@@ -181,6 +192,36 @@ still match and compare short ISCC-UNITs against long ISCC-UNITs.
 The optimal indexing strategy requires experimentation and evaluation based on specific use cases and scale
 requirements.
 
+### The NPHD Distance Metric
+
+ISCC uses **prefix-compatible variable-length codes**: shorter codes are valid prefixes of longer ones. A 64-bit
+ISCC-UNIT embedded in an ISCC-CODE shares its prefix with the same content's standalone 256-bit ISCC-UNIT. Think
+of it like nested dolls—the shorter code is fully contained within the longer version.
+
+This prefix compatibility enables:
+
+- **Adaptive precision**: Use 64-bit codes for fast, broad matching; 256-bit codes for high-precision search
+- **Mixed-length queries**: Search with short codes, match against longer indexed codes (or vice versa)
+- **Cost-performance tradeoff**: Shorter codes mean faster processing and lower storage with acceptable
+    precision loss
+
+This design parallels **Matryoshka Representation Learning (MRL)**, where embeddings can be truncated to
+different dimensions while maintaining compatibility—but applied to discrete binary codes rather than continuous
+vector spaces.
+
+However, standard Hamming distance fails with variable-length codes—it treats all bit differences equally
+regardless of vector length, producing incorrect similarity scores when comparing codes of different lengths.
+
+**Normalized Prefix Hamming Distance (NPHD)** solves this by:
+
+1. **Prefix alignment**: Comparing only the common prefix length of two codes
+2. **Length normalization**: Dividing bit differences by common prefix length
+3. **Metric properties**: Satisfying all metric axioms (non-negativity, identity, symmetry, triangle inequality)
+
+Like truncating MRL embeddings adjusts granularity while preserving compatibility, shortening an ISCC adjusts
+precision without breaking matchability. NPHD makes this multi-scale matching mathematically sound for discrete
+binary codes.
+
 ### Hard vs. Soft Boundaries
 
 Similarity-preserving hashes deliberately create collisions—similar content collapses into identical hashes.
@@ -213,36 +254,6 @@ pgvector for remote).
 
 Note: True exact matching (cryptographic-level identity) only occurs with INSTANCE units of sufficient
 bit-length, which are cryptographic hashes rather than similarity-preserving codes.
-
-### The NPHD Distance Metric
-
-ISCC uses **prefix-compatible variable-length codes**: shorter codes are valid prefixes of longer ones. A 64-bit
-ISCC-UNIT embedded in an ISCC-CODE shares its prefix with the same content's standalone 256-bit ISCC-UNIT. Think
-of it like nested dolls—the shorter code is fully contained within the longer version.
-
-This prefix compatibility enables:
-
-- **Adaptive precision**: Use 64-bit codes for fast, broad matching; 256-bit codes for high-precision search
-- **Mixed-length queries**: Search with short codes, match against longer indexed codes (or vice versa)
-- **Cost-performance tradeoff**: Shorter codes mean faster processing and lower storage with acceptable
-    precision loss
-
-This design parallels **Matryoshka Representation Learning (MRL)**, where embeddings can be truncated to
-different dimensions while maintaining compatibility—but applied to discrete binary codes rather than continuous
-vector spaces.
-
-However, standard Hamming distance fails with variable-length codes—it treats all bit differences equally
-regardless of vector length, producing incorrect similarity scores when comparing codes of different lengths.
-
-**Normalized Prefix Hamming Distance (NPHD)** solves this by:
-
-1. **Prefix alignment**: Comparing only the common prefix length of two codes
-2. **Length normalization**: Dividing bit differences by common prefix length
-3. **Metric properties**: Satisfying all metric axioms (non-negativity, identity, symmetry, triangle inequality)
-
-Like truncating MRL embeddings adjusts granularity while preserving compatibility, shortening an ISCC adjusts
-precision without breaking matchability. NPHD makes this multi-scale matching mathematically sound for discrete
-binary codes.
 
 ## Implementation Choices
 

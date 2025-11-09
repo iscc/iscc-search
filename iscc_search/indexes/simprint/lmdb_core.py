@@ -410,11 +410,13 @@ class LmdbSimprintIndex:
                     raise RuntimeError(f"Failed to add after {self.MAX_RESIZE_RETRIES} resize attempts")
 
                 old_size = self.env.info()["map_size"]
-                new_size = min(old_size * 2, self.MAX_MAP_SIZE)
+                # Limit resize increment to max 1GB to avoid wasting space
+                increase = min(old_size, 1024 * 1024 * 1024)
+                new_size = min(old_size + increase, self.MAX_MAP_SIZE)
                 if new_size == old_size:
                     raise RuntimeError(f"Cannot resize beyond {self.MAX_MAP_SIZE} bytes")
 
-                logger.info(f"Resizing LMDB from {old_size:,} to {new_size:,} bytes")
+                logger.info(f"Resizing LMDB from {old_size:,} to {new_size:,} bytes (increase: {increase:,})")
                 self.env.set_mapsize(new_size)
 
     def _fetch_matches_and_frequencies(self, query_simprints):

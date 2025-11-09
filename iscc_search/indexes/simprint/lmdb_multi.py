@@ -13,7 +13,6 @@ from loguru import logger
 
 from iscc_search.indexes.simprint.lmdb_core import LmdbSimprintIndex
 from iscc_search.indexes.simprint.models import (
-    SimprintEntryMulti,
     SimprintEntryRaw,
     SimprintMatchMulti,
     TypeMatchResult,
@@ -82,11 +81,14 @@ class LmdbSimprintIndexMulti:
         if self.realm_id is None:
             self._extract_realm_id(entries[0].iscc_id)
 
+        # Batch validate all realm_ids upfront (fail fast before processing)
+        for entry in entries:
+            self._validate_realm_id(entry.iscc_id)
+
         # Group entries by type for batch processing
         type_entries = defaultdict(list)  # type: dict[str, list[SimprintEntryRaw]]
 
         for entry in entries:
-            self._validate_realm_id(entry.iscc_id)
             iscc_id_body = entry.iscc_id[2:]  # Strip 2-byte header
 
             for simprint_type, simprints in entry.simprints.items():
@@ -192,45 +194,6 @@ class LmdbSimprintIndexMulti:
 
         iscc_id_body = iscc_id[2:]
         return any(iscc_id_body in index for index in self.indexes.values())
-
-    def get_raw_multi(self, iscc_ids):
-        # type: (list[bytes]) -> list[SimprintEntryMulti]
-        """
-        Retrieve indexed entries by their ISCC-IDs across all types.
-
-        :param iscc_ids: Full ISCC-ID digests (10 bytes each)
-        :return: List of entries (empty simprints dict for non-existent ISCC-IDs)
-        """
-        results = []
-
-        for iscc_id in iscc_ids:
-            iscc_id_body = iscc_id[2:]
-            simprints_by_type = {}  # type: dict[str, list[SimprintRaw]]
-
-            # Query each type-specific index
-            for simprint_type, index in self.indexes.items():
-                # LmdbSimprintIndex doesn't have get_raw, so we check containment only
-                # For full implementation, we'd need to add get_raw to LmdbSimprintIndex
-                if iscc_id_body in index:
-                    # Placeholder: actual retrieval would require get_raw method
-                    simprints_by_type[simprint_type] = []
-
-            results.append(SimprintEntryMulti(iscc_id=iscc_id, simprints=simprints_by_type))
-
-        return results
-
-    def delete_raw_multi(self, iscc_ids):
-        # type: (list[bytes]) -> None
-        """
-        Remove assets from all type-specific indexes by their ISCC-IDs.
-
-        :param iscc_ids: Full ISCC-ID digests (10 bytes each)
-        """
-        # Delete from each type-specific index
-        for index in self.indexes.values():
-            # LmdbSimprintIndex doesn't have delete_raw yet
-            # For full implementation, we'd need to add delete_raw to LmdbSimprintIndex
-            pass
 
     def close(self):
         # type: () -> None

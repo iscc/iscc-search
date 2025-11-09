@@ -307,44 +307,6 @@ def test_contains_invalid_length(temp_index_path):
     index.close()
 
 
-def test_get_raw_multi(temp_index_path, sample_entries):
-    # type: (Path, list[SimprintEntryMulti]) -> None
-    """Test get_raw_multi retrieves entries."""
-    index = LmdbSimprintIndexMulti(str(temp_index_path))
-    index.add_raw_multi(sample_entries)
-
-    results = index.get_raw_multi([sample_entries[0].iscc_id])
-    assert len(results) == 1
-    assert results[0].iscc_id == sample_entries[0].iscc_id
-    index.close()
-
-
-def test_get_raw_multi_non_existing(temp_index_path, sample_entries):
-    # type: (Path, list[SimprintEntryMulti]) -> None
-    """Test get_raw_multi with non-existing ISCC-IDs."""
-    index = LmdbSimprintIndexMulti(str(temp_index_path))
-    index.add_raw_multi(sample_entries)
-
-    non_existing = b"\x00\x10\xaa\xbb\xcc\xdd\xee\xff\x00\x11"
-    results = index.get_raw_multi([non_existing])
-
-    assert len(results) == 1
-    assert results[0].iscc_id == non_existing
-    assert results[0].simprints == {}
-    index.close()
-
-
-def test_delete_raw_multi(temp_index_path, sample_entries):
-    # type: (Path, list[SimprintEntryMulti]) -> None
-    """Test delete_raw_multi removes entries (currently a no-op)."""
-    index = LmdbSimprintIndexMulti(str(temp_index_path))
-    index.add_raw_multi(sample_entries)
-
-    # Delete doesn't raise error (even though not fully implemented)
-    index.delete_raw_multi([sample_entries[0].iscc_id])
-    index.close()
-
-
 def test_close_releases_resources(temp_index_path, sample_entries):
     # type: (Path, list[SimprintEntryMulti]) -> None
     """Test close releases all index resources."""
@@ -472,20 +434,6 @@ def test_search_result_ordering(temp_index_path):
 
     assert len(results) == 2
     assert results[0].score >= results[1].score
-    index.close()
-
-
-def test_delete_raw_multi_with_indexes(temp_index_path, sample_entries):
-    # type: (Path, list[SimprintEntryMulti]) -> None
-    """Test delete_raw_multi with populated indexes."""
-    index = LmdbSimprintIndexMulti(str(temp_index_path))
-    index.add_raw_multi(sample_entries)
-
-    # Ensure indexes exist
-    assert len(index.indexes) > 0
-
-    # Delete should iterate over indexes (even if not fully implemented)
-    index.delete_raw_multi([sample_entries[0].iscc_id])
     index.close()
 
 

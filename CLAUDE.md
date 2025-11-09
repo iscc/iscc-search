@@ -228,6 +228,8 @@ project architecture, desing, maintainability, testability, or implementation.
     - loguru -> Delgan/loguru
     - msgspec -> jcrist/msgspec
 
+@.claude/learnings.md
+
 ## Use the MAP
 
 If you need a quick overview of the project structure, read the MAP from .claude/map.md to get a high-level

@@ -1,7 +1,7 @@
 """
 LMDB-Based Multi-Type Simprint Index Coordinator
 
-Manages multiple LmdbSimprintIndex64 instances with transparent type routing.
+Manages multiple LmdbSimprintIndex instances with transparent type routing.
 Coordinates realm_id handling and aggregates results across simprint types.
 """
 
@@ -12,7 +12,7 @@ from collections import defaultdict
 
 from loguru import logger
 
-from iscc_search.indexes.simprint.lmdb_core_64 import LmdbSimprintIndex64
+from iscc_search.indexes.simprint.lmdb_core import LmdbSimprintIndex
 from iscc_search.indexes.simprint.models import (
     SimprintEntryMulti,
     SimprintEntryRaw,
@@ -25,16 +25,16 @@ if TYPE_CHECKING:
     from iscc_search.protocols.simprint_multi import SimprintIndexMulti  # noqa: F401
 
 
-class LmdbSimprintIndexMulti64:
+class LmdbSimprintIndexMulti:
     """
-    Multi-type simprint index coordinator for 64-bit simprints.
+    Multi-type simprint index coordinator for variable-length simprints.
 
-    Manages separate LmdbSimprintIndex64 instances for each simprint type and coordinates
+    Manages separate LmdbSimprintIndex instances for each simprint type and coordinates
     realm_id handling, type routing, and result aggregation.
 
     Architecture:
-    - Root directory contains metadata.json with realm_id and indexed types
-    - Each simprint type gets a subdirectory with its own LmdbSimprintIndex64
+    - Root directory contains metadata.json with realm_id, indexed types, and ndim per type
+    - Each simprint type gets a subdirectory with its own LmdbSimprintIndex
     - Realm ID extracted from first entry's ISCC-ID header and persisted
     - Sub-indexes work with 8-byte bodies only (headers stripped)
     - Results reconstruct full 10-byte ISCC-IDs using stored realm_id
@@ -62,7 +62,8 @@ class LmdbSimprintIndexMulti64:
 
         # Load or initialize metadata
         self.realm_id = None  # type: bytes | None
-        self.indexes = {}  # type: dict[str, LmdbSimprintIndex64]
+        self.indexes = {}  # type: dict[str, LmdbSimprintIndex]
+        self.type_ndims = {}  # type: dict[str, int]
 
         self._load_metadata()
         self._open_existing_indexes()
@@ -74,6 +75,8 @@ class LmdbSimprintIndexMulti64:
 
         Extracts realm_id from first entry, routes simprints to type-specific indexes,
         and enforces add-once semantics per type.
+
+        Auto-detects ndim for each type from first simprints added.
 
         :param entries: List of multi-type entries to add
         """
@@ -96,7 +99,7 @@ class LmdbSimprintIndexMulti64:
 
         # Add to type-specific indexes
         for simprint_type, type_entry_list in type_entries.items():
-            index = self._get_or_create_index(simprint_type)
+            index = self._get_or_create_index(simprint_type, type_entry_list)
             index.add_raw(type_entry_list)
 
     def search_raw_multi(self, simprints, limit=10, threshold=0.8, detailed=True):
@@ -211,8 +214,8 @@ class LmdbSimprintIndexMulti64:
 
             # Query each type-specific index
             for simprint_type, index in self.indexes.items():
-                # LmdbSimprintIndex64 doesn't have get_raw, so we check containment only
-                # For full implementation, we'd need to add get_raw to LmdbSimprintIndex64
+                # LmdbSimprintIndex doesn't have get_raw, so we check containment only
+                # For full implementation, we'd need to add get_raw to LmdbSimprintIndex
                 if iscc_id_body in index:
                     # Placeholder: actual retrieval would require get_raw method
                     simprints_by_type[simprint_type] = []
@@ -230,8 +233,8 @@ class LmdbSimprintIndexMulti64:
         """
         # Delete from each type-specific index
         for index in self.indexes.values():
-            # LmdbSimprintIndex64 doesn't have delete_raw yet
-            # For full implementation, we'd need to add delete_raw to LmdbSimprintIndex64
+            # LmdbSimprintIndex doesn't have delete_raw yet
+            # For full implementation, we'd need to add delete_raw to LmdbSimprintIndex
             pass
 
     def close(self):
@@ -244,7 +247,7 @@ class LmdbSimprintIndexMulti64:
         self.indexes.clear()
 
     def __enter__(self):
-        # type: () -> LmdbSimprintIndexMulti64
+        # type: () -> LmdbSimprintIndexMulti
         """Context manager support."""
         return self
 
@@ -260,6 +263,8 @@ class LmdbSimprintIndexMulti64:
             data = json.loads(self.metadata_path.read_text())
             if "realm_id" in data and data["realm_id"]:
                 self.realm_id = bytes.fromhex(data["realm_id"])
+            if "type_ndims" in data and data["type_ndims"]:
+                self.type_ndims = data["type_ndims"]
 
     def _save_metadata(self):
         # type: () -> None
@@ -267,6 +272,7 @@ class LmdbSimprintIndexMulti64:
         data = {
             "realm_id": self.realm_id.hex() if self.realm_id else None,
             "indexed_types": self.get_indexed_types(),
+            "type_ndims": self.type_ndims,
         }
         self.metadata_path.write_text(json.dumps(data, indent=2))
 
@@ -306,28 +312,47 @@ class LmdbSimprintIndexMulti64:
         for entry in self.path.iterdir():
             if entry.is_dir() and entry.name != "__pycache__":
                 try:
-                    index = LmdbSimprintIndex64(str(entry))
+                    # Get ndim for this type from metadata if available
+                    ndim = self.type_ndims.get(entry.name)
+                    index = LmdbSimprintIndex(str(entry), ndim=ndim)
                     self.indexes[entry.name] = index
                     logger.debug(f"Opened existing index: {entry.name}")
                 except Exception as e:  # pragma: no cover
                     logger.warning(f"Failed to open index {entry.name}: {e}")
 
-    def _get_or_create_index(self, simprint_type):
-        # type: (str) -> LmdbSimprintIndex64
+    def _get_or_create_index(self, simprint_type, entries=None):
+        # type: (str, list[SimprintEntryRaw] | None) -> LmdbSimprintIndex
         """
         Get existing index or create new one for simprint type.
 
         :param simprint_type: Type identifier (e.g., "CONTENT_TEXT_V0")
+        :param entries: Optional entries to detect ndim from (for auto-detection)
         :return: Type-specific index instance
         """
         if simprint_type in self.indexes:
             return self.indexes[simprint_type]
 
+        # Determine ndim for new index
+        ndim = self.type_ndims.get(simprint_type)
+
+        # If not in metadata, try to auto-detect from entries
+        if ndim is None and entries:
+            for entry in entries:
+                if entry.simprints:
+                    ndim = len(entry.simprints[0].simprint) * 8
+                    self.type_ndims[simprint_type] = ndim
+                    logger.debug(f"Auto-detected ndim={ndim} for type {simprint_type}")
+                    break
+
         # Create new index
         type_path = self.path / simprint_type
-        index = LmdbSimprintIndex64(str(type_path))
+        index = LmdbSimprintIndex(str(type_path), ndim=ndim)
         self.indexes[simprint_type] = index
-        self._save_metadata()
-        logger.debug(f"Created new index: {simprint_type}")
+
+        # Save metadata if ndim was detected/changed
+        if ndim is not None:
+            self._save_metadata()
+
+        logger.debug(f"Created new index: {simprint_type} (ndim={ndim})")
 
         return index

@@ -1,20 +1,22 @@
 """
-High-Performance LMDB-Based 64-bit Simprint Index
+High-Performance LMDB-Based Variable-Length Simprint Index
 
-A hard-boundary simprint index optimized for 64-bit simprints with IDF-weighted scoring.
-Uses LMDB's dupsort and integerkey features for maximum performance.
+A hard-boundary simprint index optimized for variable-length simprints with IDF-weighted scoring.
+Uses LMDB's dupsort and dupfixed features for maximum performance.
 
 Key Features:
-- 64-bit simprints stored as integer keys (integerkey optimization)
+- Variable-length simprints (configurable via ndim parameter in bits)
 - 16-byte ChunkPointer values (ISCC-ID body + offset + size) with dupfixed
 - Dedicated assets database for O(1) duplicate detection and asset counting
 - IDF-weighted scoring based on document frequency
 - Batch operations using putmulti/getmulti
 - Automatic map_size expansion on MapFullError
 - Thread-safe read operations
+- Auto-detection of simprint length from first entry
 """
 
 import struct
+import json
 from pathlib import Path
 from typing import TYPE_CHECKING
 from collections import defaultdict
@@ -30,17 +32,17 @@ if TYPE_CHECKING:
     from iscc_search.protocols.simprint_core import SimprintEntryRaw  # noqa: F401
 
 
-class LmdbSimprintIndex64:
+class LmdbSimprintIndex:
     """
-    High-performance LMDB-based 64-bit simprint index with IDF-weighted scoring.
+    High-performance LMDB-based variable-length simprint index with IDF-weighted scoring.
 
     This implementation uses hard boundaries (exact hash collisions) for clustering
-    similar content, optimized for 64-bit simprints with chunk location tracking.
+    similar content, optimized for variable-length simprints with chunk location tracking.
 
     Architecture:
-    - Simprints DB: simprint (64-bit int) -> ChunkPointer (16 bytes) with dupsort+dupfixed
+    - Simprints DB: simprint (variable-length bytes) -> ChunkPointer (16 bytes) with dupsort+dupfixed
     - Assets DB: iscc_id_body (64-bit int) -> empty value, for O(1) duplicate detection
-    - Global metadata (simprint_type, realm_id) managed externally by coordinators
+    - Global metadata (simprint_type, realm_id, ndim) managed in metadata.json
 
     Scoring:
     - IDF (Inverse Document Frequency) weighting reduces impact of common simprints
@@ -49,7 +51,6 @@ class LmdbSimprintIndex64:
     """
 
     # Constants
-    SIMPRINT_BYTES = 8  # 64-bit simprints
     CHUNK_POINTER_BYTES = 16  # 8 bytes ISCC-ID + 4 bytes offset + 4 bytes size
     MAX_OFFSET = 2**32 - 1  # 4 GB max offset
     MAX_SIZE = 2**32 - 1  # 4 GB max size
@@ -57,13 +58,16 @@ class LmdbSimprintIndex64:
     MAX_MAP_SIZE = 1024 * 1024 * 1024 * 1024  # 1 TB
     _DB_SIMPRINTS = b"simprints"  # LMDB database name for simprint mappings
     _DB_ASSETS = b"assets"  # LMDB database name for asset tracking
+    _METADATA_FILE = "metadata.json"
 
-    def __init__(self, uri, **kwargs):
-        # type: (str, ...) -> None
+    def __init__(self, uri, ndim=None, **kwargs):
+        # type: (str, int | None, ...) -> None
         """
         Open or create a simprint index at the specified location.
 
         :param uri: Index location (path or file:// URI)
+        :param ndim: Simprint dimensions in bits (e.g., 64, 128, 256).
+                     If None, auto-detect from first simprint added.
         :param kwargs: Backend-specific configuration options (currently unused)
         """
         # Parse URI
@@ -75,6 +79,20 @@ class LmdbSimprintIndex64:
             self.path = Path(uri)
 
         self.path.mkdir(parents=True, exist_ok=True)
+        self.metadata_path = self.path / self._METADATA_FILE
+
+        # Load or initialize ndim
+        self.ndim = ndim  # type: int | None
+        self.simprint_bytes = None  # type: int | None
+        self._load_metadata()
+
+        # If ndim provided in constructor, override metadata
+        if ndim is not None:
+            if self.ndim is not None and self.ndim != ndim:
+                raise ValueError(f"Index has ndim={self.ndim} but constructor specified ndim={ndim}")
+            self.ndim = ndim
+            self.simprint_bytes = ndim // 8
+            self._save_metadata()
 
         # Open LMDB environment with 2 named databases
         # Use writemap=True and map_async=True for better Windows compatibility
@@ -87,7 +105,7 @@ class LmdbSimprintIndex64:
             metasync=False,
         )
 
-        # Open simprints database with optimal flags for 64-bit keys and fixed values
+        # Open simprints database with optimal flags for variable-length keys and fixed values
         self.simprints_db = self.env.open_db(
             self._DB_SIMPRINTS,
             dupsort=True,  # Allow duplicate keys for multiple chunks per simprint
@@ -106,10 +124,16 @@ class LmdbSimprintIndex64:
         Uses batch operations for optimal performance.
         Silently ignores duplicate ISCC-ID bodies.
 
+        Auto-detects ndim from first simprint if not yet configured.
+
         :param entries: List of entries to add atomically
         """
         if not entries:
             return
+
+        # Auto-detect ndim from first simprint if not configured
+        if self.ndim is None:
+            self._auto_detect_ndim(entries)
 
         existing = self._check_existing_assets(entries)
         new_asset_ids, simprint_pairs = self._build_insert_pairs(entries, existing)
@@ -133,7 +157,12 @@ class LmdbSimprintIndex64:
         if not simprints:
             return []
 
-        query_simprints = [s[:8] for s in simprints]
+        # Validate simprint lengths if ndim is configured
+        if self.ndim is not None:
+            query_simprints = self._validate_simprints(simprints)
+        else:
+            query_simprints = simprints
+
         asset_matches, doc_frequencies = self._fetch_matches_and_frequencies(query_simprints)
 
         total_assets = max(len(self), 1)
@@ -182,7 +211,7 @@ class LmdbSimprintIndex64:
             return stats["entries"]
 
     def __enter__(self):
-        # type: () -> LmdbSimprintIndex64
+        # type: () -> LmdbSimprintIndex
         """Context manager support."""
         return self
 
@@ -190,6 +219,59 @@ class LmdbSimprintIndex64:
         # type: (type | None, Exception | None, object | None) -> None
         """Context manager cleanup."""
         self.close()
+
+    def _load_metadata(self):
+        # type: () -> None
+        """Load metadata from disk or initialize empty."""
+        if self.metadata_path.exists():
+            data = json.loads(self.metadata_path.read_text())
+            if "ndim" in data and data["ndim"]:
+                self.ndim = data["ndim"]
+                self.simprint_bytes = self.ndim // 8
+                logger.debug(f"Loaded ndim={self.ndim} from metadata")
+
+    def _save_metadata(self):
+        # type: () -> None
+        """Save metadata to disk."""
+        data = {"ndim": self.ndim}
+        self.metadata_path.write_text(json.dumps(data, indent=2))
+        logger.debug(f"Saved ndim={self.ndim} to metadata")
+
+    def _auto_detect_ndim(self, entries):
+        # type: (list[SimprintEntryRaw]) -> None
+        """
+        Auto-detect ndim from first simprint in entries.
+
+        :param entries: List of entries with simprints
+        """
+        for entry in entries:
+            if entry.simprints:
+                first_simprint = entry.simprints[0].simprint
+                self.ndim = len(first_simprint) * 8
+                self.simprint_bytes = len(first_simprint)
+                self._save_metadata()
+                logger.debug(f"Auto-detected ndim={self.ndim} from first simprint")
+                return
+
+        raise ValueError("Cannot auto-detect ndim: no simprints in entries")
+
+    def _validate_simprints(self, simprints):
+        # type: (list[bytes]) -> list[bytes]
+        """
+        Validate that all simprints match configured ndim.
+
+        :param simprints: List of binary simprints
+        :return: Validated simprints
+        :raises ValueError: If any simprint has wrong length
+        """
+        expected_bytes = self.simprint_bytes
+        for simprint in simprints:
+            if len(simprint) != expected_bytes:
+                raise ValueError(
+                    f"Simprint length mismatch: expected {expected_bytes} bytes "
+                    f"(ndim={self.ndim}), got {len(simprint)} bytes"
+                )
+        return simprints
 
     def _pack_chunk_pointer(self, iscc_id_body, offset, size):
         # type: (bytes, int, int) -> bytes
@@ -258,8 +340,13 @@ class LmdbSimprintIndex64:
             seen_in_batch.add(entry.iscc_id_body)
             new_asset_ids.append(entry.iscc_id_body)
             for simprint in entry.simprints:
-                # Ensure simprint is 64-bit
-                simprint_key = simprint.simprint[:8]
+                # Validate simprint length if ndim is configured
+                if self.ndim is not None and len(simprint.simprint) != self.simprint_bytes:
+                    raise ValueError(
+                        f"Simprint length mismatch: expected {self.simprint_bytes} bytes "
+                        f"(ndim={self.ndim}), got {len(simprint.simprint)} bytes"
+                    )
+                simprint_key = simprint.simprint
                 chunk_ptr = self._pack_chunk_pointer(entry.iscc_id_body, simprint.offset, simprint.size)
                 simprint_pairs.append((simprint_key, chunk_ptr))
 
@@ -307,7 +394,7 @@ class LmdbSimprintIndex64:
         """
         Fetch matches from database and calculate document frequencies.
 
-        :param query_simprints: List of 64-bit simprint queries
+        :param query_simprints: List of variable-length simprint queries
         :return: (asset_matches, doc_frequencies)
         """
         asset_matches = defaultdict(list)  # type: dict[bytes, list[tuple[bytes, bytes, int, int]]]

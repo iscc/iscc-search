@@ -1,8 +1,8 @@
-"""Tests for LMDB-based 64-bit simprint index."""
+"""Tests for LMDB-based variable-length simprint index."""
 
 import struct
 import pytest
-from iscc_search.indexes.simprint.lmdb_core_64 import LmdbSimprintIndex64
+from iscc_search.indexes.simprint.lmdb_core import LmdbSimprintIndex
 
 
 class MockSimprintRaw:
@@ -33,9 +33,9 @@ def temp_index_path(tmp_path):
 
 @pytest.fixture
 def index(temp_index_path):
-    # type: (Path) -> LmdbSimprintIndex64
+    # type: (Path) -> LmdbSimprintIndex
     """Create and return a fresh index instance."""
-    idx = LmdbSimprintIndex64(str(temp_index_path))
+    idx = LmdbSimprintIndex(str(temp_index_path))
     yield idx
     idx.close()
 
@@ -43,7 +43,7 @@ def index(temp_index_path):
 def test_init_creates_directory(temp_index_path):
     # type: (Path) -> None
     """Test that __init__ creates the index directory."""
-    idx = LmdbSimprintIndex64(str(temp_index_path))
+    idx = LmdbSimprintIndex(str(temp_index_path))
     assert temp_index_path.exists()
     assert temp_index_path.is_dir()
     idx.close()
@@ -54,7 +54,7 @@ def test_init_with_file_uri(tmp_path):
     """Test initialization with file:// URI."""
     path = tmp_path / "file_uri_index"
     uri = f"file://{path}"
-    idx = LmdbSimprintIndex64(uri)
+    idx = LmdbSimprintIndex(uri)
     assert path.exists()
     idx.close()
 
@@ -64,13 +64,23 @@ def test_init_with_lmdb_uri(tmp_path):
     """Test initialization with lmdb:// URI."""
     path = tmp_path / "lmdb_uri_index"
     uri = f"lmdb://{path}"
-    idx = LmdbSimprintIndex64(uri)
+    idx = LmdbSimprintIndex(uri)
     assert path.exists()
     idx.close()
 
 
+def test_init_with_explicit_ndim(tmp_path):
+    # type: (Path) -> None
+    """Test initialization with explicit ndim parameter."""
+    path = tmp_path / "ndim_index"
+    idx = LmdbSimprintIndex(str(path), ndim=128)
+    assert idx.ndim == 128
+    assert idx.simprint_bytes == 16
+    idx.close()
+
+
 def test_pack_chunk_pointer_valid(index):
-    # type: (LmdbSimprintIndex64) -> None
+    # type: (LmdbSimprintIndex) -> None
     """Test packing chunk pointer with valid inputs."""
     iscc_id_body = b"\x01\x02\x03\x04\x05\x06\x07\x08"
     offset = 1024
@@ -84,14 +94,14 @@ def test_pack_chunk_pointer_valid(index):
 
 
 def test_pack_chunk_pointer_invalid_iscc_id_length(index):
-    # type: (LmdbSimprintIndex64) -> None
+    # type: (LmdbSimprintIndex) -> None
     """Test packing with incorrect ISCC-ID body length."""
     with pytest.raises(ValueError, match="ISCC-ID body must be 8 bytes"):
         index._pack_chunk_pointer(b"\x01\x02", 0, 0)
 
 
 def test_pack_chunk_pointer_offset_exceeds_max(index):
-    # type: (LmdbSimprintIndex64) -> None
+    # type: (LmdbSimprintIndex) -> None
     """Test packing with offset exceeding maximum."""
     iscc_id_body = b"\x01\x02\x03\x04\x05\x06\x07\x08"
     with pytest.raises(ValueError, match="Offset .* exceeds max"):
@@ -99,7 +109,7 @@ def test_pack_chunk_pointer_offset_exceeds_max(index):
 
 
 def test_pack_chunk_pointer_size_exceeds_max(index):
-    # type: (LmdbSimprintIndex64) -> None
+    # type: (LmdbSimprintIndex) -> None
     """Test packing with size exceeding maximum."""
     iscc_id_body = b"\x01\x02\x03\x04\x05\x06\x07\x08"
     with pytest.raises(ValueError, match="Size .* exceeds max"):
@@ -107,7 +117,7 @@ def test_pack_chunk_pointer_size_exceeds_max(index):
 
 
 def test_unpack_chunk_pointer_valid(index):
-    # type: (LmdbSimprintIndex64) -> None
+    # type: (LmdbSimprintIndex) -> None
     """Test unpacking chunk pointer."""
     iscc_id_body = b"\xaa\xbb\xcc\xdd\xee\xff\x00\x11"
     offset = 2048
@@ -122,22 +132,22 @@ def test_unpack_chunk_pointer_valid(index):
 
 
 def test_unpack_chunk_pointer_invalid_length(index):
-    # type: (LmdbSimprintIndex64) -> None
+    # type: (LmdbSimprintIndex) -> None
     """Test unpacking with incorrect data length."""
     with pytest.raises(ValueError, match="Expected 16 bytes"):
         index._unpack_chunk_pointer(b"\x01\x02\x03")
 
 
 def test_add_raw_empty_list(index):
-    # type: (LmdbSimprintIndex64) -> None
+    # type: (LmdbSimprintIndex) -> None
     """Test adding empty entry list (no-op)."""
     index.add_raw([])
     assert len(index) == 0
 
 
-def test_add_raw_single_entry(index):
-    # type: (LmdbSimprintIndex64) -> None
-    """Test adding a single entry with simprints."""
+def test_add_raw_single_entry_auto_detect(index):
+    # type: (LmdbSimprintIndex) -> None
+    """Test adding a single entry with simprints auto-detects ndim."""
     iscc_id = b"\x01\x02\x03\x04\x05\x06\x07\x08"
     simprints = [
         MockSimprintRaw(b"\x11\x12\x13\x14\x15\x16\x17\x18", 0, 256),
@@ -149,10 +159,12 @@ def test_add_raw_single_entry(index):
 
     assert len(index) == 1
     assert iscc_id in index
+    assert index.ndim == 64  # Auto-detected from 8-byte simprint
+    assert index.simprint_bytes == 8
 
 
 def test_add_raw_duplicate_ignored(index):
-    # type: (LmdbSimprintIndex64) -> None
+    # type: (LmdbSimprintIndex) -> None
     """Test that duplicate ISCC-ID bodies are silently ignored."""
     iscc_id = b"\x01\x02\x03\x04\x05\x06\x07\x08"
     simprints = [MockSimprintRaw(b"\x11\x12\x13\x14\x15\x16\x17\x18", 0, 256)]
@@ -167,7 +179,7 @@ def test_add_raw_duplicate_ignored(index):
 
 
 def test_add_raw_multiple_entries(index):
-    # type: (LmdbSimprintIndex64) -> None
+    # type: (LmdbSimprintIndex) -> None
     """Test adding multiple unique entries in one batch."""
     entries = [
         MockSimprintEntryRaw(
@@ -185,7 +197,7 @@ def test_add_raw_multiple_entries(index):
 
 
 def test_add_raw_with_duplicates_in_batch(index):
-    # type: (LmdbSimprintIndex64) -> None
+    # type: (LmdbSimprintIndex) -> None
     """Test batch with duplicate ISCC-IDs within the batch."""
     iscc_id = b"\x01\x02\x03\x04\x05\x06\x07\x08"
     entries = [
@@ -197,15 +209,32 @@ def test_add_raw_with_duplicates_in_batch(index):
     assert len(index) == 1  # Only first occurrence counted
 
 
+def test_add_raw_validates_simprint_length(tmp_path):
+    # type: (Path) -> None
+    """Test that adding simprints with wrong length raises ValueError."""
+    path = tmp_path / "validate_index"
+    idx = LmdbSimprintIndex(str(path), ndim=64)
+
+    iscc_id = b"\x01" * 8
+    # Try to add 128-bit simprint to 64-bit index
+    simprints = [MockSimprintRaw(b"\x11" * 16, 0, 256)]
+    entry = MockSimprintEntryRaw(iscc_id, simprints)
+
+    with pytest.raises(ValueError, match="Simprint length mismatch"):
+        idx.add_raw([entry])
+
+    idx.close()
+
+
 def test_search_raw_empty_query(index):
-    # type: (LmdbSimprintIndex64) -> None
+    # type: (LmdbSimprintIndex) -> None
     """Test search with empty simprint list."""
     results = index.search_raw([])
     assert results == []
 
 
 def test_search_raw_no_matches(index):
-    # type: (LmdbSimprintIndex64) -> None
+    # type: (LmdbSimprintIndex) -> None
     """Test search when no simprints match."""
     # Add entry
     iscc_id = b"\x01\x02\x03\x04\x05\x06\x07\x08"
@@ -219,7 +248,7 @@ def test_search_raw_no_matches(index):
 
 
 def test_search_raw_exact_match(index):
-    # type: (LmdbSimprintIndex64) -> None
+    # type: (LmdbSimprintIndex) -> None
     """Test search with exact simprint match."""
     iscc_id = b"\x01\x02\x03\x04\x05\x06\x07\x08"
     simprint_bytes = b"\x11\x12\x13\x14\x15\x16\x17\x18"
@@ -237,7 +266,7 @@ def test_search_raw_exact_match(index):
 
 
 def test_search_raw_with_detailed_chunks(index):
-    # type: (LmdbSimprintIndex64) -> None
+    # type: (LmdbSimprintIndex) -> None
     """Test search returns detailed chunk information when detailed=True."""
     iscc_id = b"\x01\x02\x03\x04\x05\x06\x07\x08"
     simprint_bytes = b"\x11" * 8
@@ -256,7 +285,7 @@ def test_search_raw_with_detailed_chunks(index):
 
 
 def test_search_raw_without_detailed_chunks(index):
-    # type: (LmdbSimprintIndex64) -> None
+    # type: (LmdbSimprintIndex) -> None
     """Test search excludes chunk details when detailed=False."""
     iscc_id = b"\x01\x02\x03\x04\x05\x06\x07\x08"
     simprint_bytes = b"\x11" * 8
@@ -271,7 +300,7 @@ def test_search_raw_without_detailed_chunks(index):
 
 
 def test_search_raw_respects_limit(index):
-    # type: (LmdbSimprintIndex64) -> None
+    # type: (LmdbSimprintIndex) -> None
     """Test that search respects the limit parameter."""
     simprint_bytes = b"\x11" * 8
 
@@ -287,7 +316,7 @@ def test_search_raw_respects_limit(index):
 
 
 def test_search_raw_respects_threshold(index):
-    # type: (LmdbSimprintIndex64) -> None
+    # type: (LmdbSimprintIndex) -> None
     """Test that search respects the threshold parameter."""
     # Add one asset with single matching simprint out of query with many
     iscc_id = b"\x01" * 8
@@ -306,7 +335,7 @@ def test_search_raw_respects_threshold(index):
 
 
 def test_search_raw_multiple_matches(index):
-    # type: (LmdbSimprintIndex64) -> None
+    # type: (LmdbSimprintIndex) -> None
     """Test search with multiple matching assets."""
     simprint1 = b"\x11" * 8
     simprint2 = b"\x22" * 8
@@ -323,7 +352,7 @@ def test_search_raw_multiple_matches(index):
 
 
 def test_search_raw_idf_scoring(index):
-    # type: (LmdbSimprintIndex64) -> None
+    # type: (LmdbSimprintIndex) -> None
     """Test IDF-weighted scoring reduces impact of common simprints."""
     common_simprint = b"\xaa" * 8
     rare_simprint = b"\xbb" * 8
@@ -352,7 +381,7 @@ def test_search_raw_idf_scoring(index):
 
 
 def test_contains_existing_asset(index):
-    # type: (LmdbSimprintIndex64) -> None
+    # type: (LmdbSimprintIndex) -> None
     """Test __contains__ for existing asset."""
     iscc_id = b"\x01\x02\x03\x04\x05\x06\x07\x08"
     simprints = [MockSimprintRaw(b"\x11" * 8, 0, 256)]
@@ -363,20 +392,20 @@ def test_contains_existing_asset(index):
 
 
 def test_contains_nonexistent_asset(index):
-    # type: (LmdbSimprintIndex64) -> None
+    # type: (LmdbSimprintIndex) -> None
     """Test __contains__ for non-existent asset."""
     iscc_id = b"\x99" * 8
     assert iscc_id not in index
 
 
 def test_len_empty_index(index):
-    # type: (LmdbSimprintIndex64) -> None
+    # type: (LmdbSimprintIndex) -> None
     """Test __len__ on empty index."""
     assert len(index) == 0
 
 
 def test_len_after_additions(index):
-    # type: (LmdbSimprintIndex64) -> None
+    # type: (LmdbSimprintIndex) -> None
     """Test __len__ after adding entries."""
     entries = [MockSimprintEntryRaw(bytes([i] * 8), [MockSimprintRaw(b"\x11" * 8, 0, 256)]) for i in range(5)]
     index.add_raw(entries)
@@ -386,7 +415,7 @@ def test_len_after_additions(index):
 def test_context_manager(temp_index_path):
     # type: (Path) -> None
     """Test context manager protocol."""
-    with LmdbSimprintIndex64(str(temp_index_path)) as idx:
+    with LmdbSimprintIndex(str(temp_index_path)) as idx:
         assert idx is not None
         idx.add_raw([])
 
@@ -402,45 +431,27 @@ def test_close_and_reopen(temp_index_path):
     entry = MockSimprintEntryRaw(iscc_id, simprints)
 
     # Create and populate index
-    idx1 = LmdbSimprintIndex64(str(temp_index_path))
+    idx1 = LmdbSimprintIndex(str(temp_index_path))
     idx1.add_raw([entry])
     idx1.close()
 
     # Reopen and verify data persisted
-    idx2 = LmdbSimprintIndex64(str(temp_index_path))
+    idx2 = LmdbSimprintIndex(str(temp_index_path))
     assert len(idx2) == 1
     assert iscc_id in idx2
+    assert idx2.ndim == 64  # Should be loaded from metadata
     idx2.close()
 
 
-def test_simprint_truncation_to_64bit(index):
-    # type: (LmdbSimprintIndex64) -> None
-    """Test that simprints longer than 64-bit are truncated."""
-    iscc_id = b"\x01" * 8
-    # Provide 128-bit simprint
-    long_simprint = b"\x11" * 16
-    simprints = [MockSimprintRaw(long_simprint, 0, 256)]
-    entry = MockSimprintEntryRaw(iscc_id, simprints)
-    index.add_raw([entry])
-
-    # Search with first 8 bytes should match
-    results = index.search_raw([long_simprint[:8]])
-    assert len(results) == 1
-
-    # Search with full 16 bytes should also match (gets truncated)
-    results = index.search_raw([long_simprint])
-    assert len(results) == 1
-
-
 def test_calculate_idf_score_empty_matches(index):
-    # type: (LmdbSimprintIndex64) -> None
+    # type: (LmdbSimprintIndex) -> None
     """Test IDF score calculation with no matches."""
     score = index._calculate_idf_score([], {}, 10, 5)
     assert score == 0.0
 
 
 def test_calculate_idf_score_basic(index):
-    # type: (LmdbSimprintIndex64) -> None
+    # type: (LmdbSimprintIndex) -> None
     """Test basic IDF score calculation."""
     matches = [(b"\x11" * 8, b"\x11" * 8, 0, 256)]
     doc_frequencies = {b"\x11" * 8: 1}
@@ -456,7 +467,7 @@ def test_calculate_idf_score_basic(index):
 
 
 def test_format_match_result_with_freq(index):
-    # type: (LmdbSimprintIndex64) -> None
+    # type: (LmdbSimprintIndex) -> None
     """Test match result formatting includes frequency information."""
     iscc_id = b"\x01" * 8
     simprint_bytes = b"\x11" * 8
@@ -471,7 +482,7 @@ def test_format_match_result_with_freq(index):
 
 
 def test_add_raw_all_existing_after_check(index):
-    # type: (LmdbSimprintIndex64) -> None
+    # type: (LmdbSimprintIndex) -> None
     """Test that adding already-existing entries returns early without executing insert."""
     # First add some entries
     iscc_id1 = b"\x01" * 8
@@ -486,3 +497,230 @@ def test_add_raw_all_existing_after_check(index):
     # Try to add them again - should return early
     index.add_raw(entries)
     assert len(index) == 2
+
+
+def test_metadata_persistence(tmp_path):
+    # type: (Path) -> None
+    """Test that ndim is persisted in metadata.json."""
+    path = tmp_path / "metadata_index"
+    idx = LmdbSimprintIndex(str(path), ndim=128)
+    idx.close()
+
+    # Check metadata file exists and contains ndim
+    metadata_file = path / "metadata.json"
+    assert metadata_file.exists()
+
+    import json
+
+    metadata = json.loads(metadata_file.read_text())
+    assert metadata["ndim"] == 128
+
+
+def test_ndim_mismatch_raises_error(tmp_path):
+    # type: (Path) -> None
+    """Test that reopening with different ndim raises ValueError."""
+    path = tmp_path / "mismatch_index"
+
+    # Create with ndim=64
+    idx1 = LmdbSimprintIndex(str(path), ndim=64)
+    idx1.close()
+
+    # Try to reopen with ndim=128
+    with pytest.raises(ValueError, match="Index has ndim=64 but constructor specified ndim=128"):
+        LmdbSimprintIndex(str(path), ndim=128)
+
+
+def test_128bit_simprints(tmp_path):
+    # type: (Path) -> None
+    """Test index with 128-bit simprints."""
+    path = tmp_path / "index_128"
+    idx = LmdbSimprintIndex(str(path), ndim=128)
+
+    # Add entry with 128-bit simprints (16 bytes)
+    iscc_id = b"\x01" * 8
+    simprint_128 = b"\x11" * 16
+    simprints = [MockSimprintRaw(simprint_128, 0, 512)]
+    entry = MockSimprintEntryRaw(iscc_id, simprints)
+
+    idx.add_raw([entry])
+    assert len(idx) == 1
+    assert idx.ndim == 128
+    assert idx.simprint_bytes == 16
+
+    # Search with 128-bit simprint
+    results = idx.search_raw([simprint_128])
+    assert len(results) == 1
+    assert results[0].iscc_id_body == iscc_id
+
+    idx.close()
+
+
+def test_256bit_simprints(tmp_path):
+    # type: (Path) -> None
+    """Test index with 256-bit simprints."""
+    path = tmp_path / "index_256"
+    idx = LmdbSimprintIndex(str(path), ndim=256)
+
+    # Add entry with 256-bit simprints (32 bytes)
+    iscc_id = b"\x02" * 8
+    simprint_256 = b"\x22" * 32
+    simprints = [MockSimprintRaw(simprint_256, 0, 1024)]
+    entry = MockSimprintEntryRaw(iscc_id, simprints)
+
+    idx.add_raw([entry])
+    assert len(idx) == 1
+    assert idx.ndim == 256
+    assert idx.simprint_bytes == 32
+
+    # Search with 256-bit simprint
+    results = idx.search_raw([simprint_256])
+    assert len(results) == 1
+    assert results[0].iscc_id_body == iscc_id
+
+    idx.close()
+
+
+def test_auto_detect_128bit(tmp_path):
+    # type: (Path) -> None
+    """Test auto-detection of 128-bit simprints."""
+    path = tmp_path / "auto_128"
+    idx = LmdbSimprintIndex(str(path))
+
+    # Add entry with 128-bit simprints without specifying ndim
+    iscc_id = b"\x03" * 8
+    simprint_128 = b"\x33" * 16
+    simprints = [MockSimprintRaw(simprint_128, 0, 512)]
+    entry = MockSimprintEntryRaw(iscc_id, simprints)
+
+    idx.add_raw([entry])
+
+    # Should auto-detect ndim=128
+    assert idx.ndim == 128
+    assert idx.simprint_bytes == 16
+
+    # Verify search works
+    results = idx.search_raw([simprint_128])
+    assert len(results) == 1
+
+    idx.close()
+
+
+def test_different_lengths_different_indexes(tmp_path):
+    # type: (Path) -> None
+    """Test that different indexes can have different simprint lengths."""
+    path_64 = tmp_path / "index_64"
+    path_128 = tmp_path / "index_128"
+
+    # Create 64-bit index
+    idx_64 = LmdbSimprintIndex(str(path_64), ndim=64)
+    iscc_id1 = b"\x01" * 8
+    simprint_64 = b"\x11" * 8
+    idx_64.add_raw([MockSimprintEntryRaw(iscc_id1, [MockSimprintRaw(simprint_64, 0, 256)])])
+
+    # Create 128-bit index
+    idx_128 = LmdbSimprintIndex(str(path_128), ndim=128)
+    iscc_id2 = b"\x02" * 8
+    simprint_128 = b"\x22" * 16
+    idx_128.add_raw([MockSimprintEntryRaw(iscc_id2, [MockSimprintRaw(simprint_128, 0, 512)])])
+
+    # Verify both work correctly
+    assert idx_64.ndim == 64
+    assert idx_128.ndim == 128
+
+    results_64 = idx_64.search_raw([simprint_64])
+    assert len(results_64) == 1
+
+    results_128 = idx_128.search_raw([simprint_128])
+    assert len(results_128) == 1
+
+    idx_64.close()
+    idx_128.close()
+
+
+def test_persistence_128bit(tmp_path):
+    # type: (Path) -> None
+    """Test that 128-bit ndim persists across reopening."""
+    path = tmp_path / "persist_128"
+
+    # Create with 128-bit
+    idx1 = LmdbSimprintIndex(str(path), ndim=128)
+    iscc_id = b"\x04" * 8
+    simprint_128 = b"\x44" * 16
+    idx1.add_raw([MockSimprintEntryRaw(iscc_id, [MockSimprintRaw(simprint_128, 0, 512)])])
+    idx1.close()
+
+    # Reopen without specifying ndim
+    idx2 = LmdbSimprintIndex(str(path))
+    assert idx2.ndim == 128
+    assert idx2.simprint_bytes == 16
+
+    # Verify data is still accessible
+    results = idx2.search_raw([simprint_128])
+    assert len(results) == 1
+    assert results[0].iscc_id_body == iscc_id
+
+    idx2.close()
+
+
+def test_search_with_wrong_length_simprints(tmp_path):
+    # type: (Path) -> None
+    """Test that searching with wrong-length simprints raises ValueError."""
+    path = tmp_path / "search_validation"
+    idx = LmdbSimprintIndex(str(path), ndim=64)
+
+    # Add 64-bit entry
+    iscc_id = b"\x01" * 8
+    idx.add_raw([MockSimprintEntryRaw(iscc_id, [MockSimprintRaw(b"\x11" * 8, 0, 256)])])
+
+    # Try to search with 128-bit simprint
+    with pytest.raises(ValueError, match="Simprint length mismatch"):
+        idx.search_raw([b"\x22" * 16])
+
+    idx.close()
+
+
+def test_search_empty_index_no_ndim(tmp_path):
+    # type: (Path) -> None
+    """Test searching on empty index with no ndim configured."""
+    path = tmp_path / "empty_search"
+    idx = LmdbSimprintIndex(str(path))
+
+    # Search should work (ndim is None, so no validation)
+    results = idx.search_raw([b"\x11" * 8])
+    assert results == []
+
+    idx.close()
+
+
+def test_auto_detect_with_empty_simprints_list(tmp_path):
+    # type: (Path) -> None
+    """Test auto-detect fails when entry has no simprints."""
+    path = tmp_path / "empty_simprints"
+    idx = LmdbSimprintIndex(str(path))
+
+    # Try to add entry with empty simprints list
+    iscc_id = b"\x01" * 8
+    entry = MockSimprintEntryRaw(iscc_id, [])
+
+    with pytest.raises(ValueError, match="Cannot auto-detect ndim"):
+        idx.add_raw([entry])
+
+    idx.close()
+
+
+def test_load_metadata_without_ndim_key(tmp_path):
+    # type: (Path) -> None
+    """Test loading metadata file without ndim key."""
+    path = tmp_path / "no_ndim_key"
+    path.mkdir(parents=True, exist_ok=True)
+
+    # Create metadata file without ndim
+    import json
+
+    metadata_path = path / "metadata.json"
+    metadata_path.write_text(json.dumps({}))
+
+    # Open index - should work, ndim remains None
+    idx = LmdbSimprintIndex(str(path))
+    assert idx.ndim is None
+    idx.close()

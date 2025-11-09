@@ -3,8 +3,8 @@
 
 def test_simprint_package_imports():
     # type: () -> None
-    """Test that simprint package exports LmdbSimprintIndex64."""
-    from iscc_search.indexes.simprint import LmdbSimprintIndex64
+    """Test that simprint package exports LmdbSimprintIndex."""
+    from iscc_search.indexes.simprint import LmdbSimprintIndex
 
-    assert LmdbSimprintIndex64 is not None
-    assert LmdbSimprintIndex64.__name__ == "LmdbSimprintIndex64"
+    assert LmdbSimprintIndex is not None
+    assert LmdbSimprintIndex.__name__ == "LmdbSimprintIndex"

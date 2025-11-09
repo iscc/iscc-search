@@ -1,10 +1,10 @@
-"""Tests for LmdbSimprintIndexMulti64 multi-type simprint index."""
+"""Tests for LmdbSimprintIndexMulti multi-type simprint index."""
 
 import json
 
 import pytest
 
-from iscc_search.indexes.simprint.lmdb_multi_64 import LmdbSimprintIndexMulti64
+from iscc_search.indexes.simprint.lmdb_multi import LmdbSimprintIndexMulti
 from iscc_search.indexes.simprint.models import SimprintEntryMulti, SimprintRaw
 
 
@@ -52,7 +52,7 @@ def sample_entries():
 def test_init_creates_directory(temp_index_path):
     # type: (Path) -> None
     """Test that __init__ creates the index directory."""
-    index = LmdbSimprintIndexMulti64(str(temp_index_path))
+    index = LmdbSimprintIndexMulti(str(temp_index_path))
     assert temp_index_path.exists()
     assert temp_index_path.is_dir()
     index.close()
@@ -62,7 +62,7 @@ def test_init_with_file_uri(temp_index_path):
     # type: (Path) -> None
     """Test initialization with file:// URI."""
     uri = f"file://{temp_index_path}"
-    index = LmdbSimprintIndexMulti64(uri)
+    index = LmdbSimprintIndexMulti(uri)
     assert temp_index_path.exists()
     index.close()
 
@@ -71,7 +71,7 @@ def test_init_with_lmdb_uri(temp_index_path):
     # type: (Path) -> None
     """Test initialization with lmdb:// URI."""
     uri = f"lmdb://{temp_index_path}"
-    index = LmdbSimprintIndexMulti64(uri)
+    index = LmdbSimprintIndexMulti(uri)
     assert temp_index_path.exists()
     index.close()
 
@@ -79,7 +79,7 @@ def test_init_with_lmdb_uri(temp_index_path):
 def test_add_raw_multi_creates_type_indexes(temp_index_path, sample_entries):
     # type: (Path, list[SimprintEntryMulti]) -> None
     """Test that add_raw_multi creates type-specific subdirectories."""
-    index = LmdbSimprintIndexMulti64(str(temp_index_path))
+    index = LmdbSimprintIndexMulti(str(temp_index_path))
     index.add_raw_multi(sample_entries)
 
     assert (temp_index_path / "CONTENT_TEXT_V0").exists()
@@ -90,7 +90,7 @@ def test_add_raw_multi_creates_type_indexes(temp_index_path, sample_entries):
 def test_add_raw_multi_extracts_realm_id(temp_index_path, sample_entries):
     # type: (Path, list[SimprintEntryMulti]) -> None
     """Test realm_id extraction from first entry."""
-    index = LmdbSimprintIndexMulti64(str(temp_index_path))
+    index = LmdbSimprintIndexMulti(str(temp_index_path))
     index.add_raw_multi(sample_entries)
 
     assert index.realm_id == b"\x00\x10"
@@ -109,7 +109,7 @@ def test_add_raw_multi_extracts_realm_id(temp_index_path, sample_entries):
 def test_add_raw_multi_validates_realm_id(temp_index_path, sample_entries):
     # type: (Path, list[SimprintEntryMulti]) -> None
     """Test that mismatched realm_id raises error."""
-    index = LmdbSimprintIndexMulti64(str(temp_index_path))
+    index = LmdbSimprintIndexMulti(str(temp_index_path))
     index.add_raw_multi([sample_entries[0]])
 
     # Try to add entry with different realm_id
@@ -127,7 +127,7 @@ def test_add_raw_multi_validates_realm_id(temp_index_path, sample_entries):
 def test_add_raw_multi_invalid_iscc_id_length(temp_index_path):
     # type: (Path) -> None
     """Test that invalid ISCC-ID length raises error."""
-    index = LmdbSimprintIndexMulti64(str(temp_index_path))
+    index = LmdbSimprintIndexMulti(str(temp_index_path))
 
     bad_entry = SimprintEntryMulti(
         iscc_id=b"\x00\x10\x12",  # Only 3 bytes instead of 10
@@ -143,7 +143,7 @@ def test_add_raw_multi_invalid_iscc_id_length(temp_index_path):
 def test_add_raw_multi_empty_list(temp_index_path):
     # type: (Path) -> None
     """Test that empty entry list is handled gracefully."""
-    index = LmdbSimprintIndexMulti64(str(temp_index_path))
+    index = LmdbSimprintIndexMulti(str(temp_index_path))
     index.add_raw_multi([])
 
     assert index.realm_id is None
@@ -154,7 +154,7 @@ def test_add_raw_multi_empty_list(temp_index_path):
 def test_add_raw_multi_duplicate_entries(temp_index_path, sample_entries):
     # type: (Path, list[SimprintEntryMulti]) -> None
     """Test add-once semantics - duplicates are silently ignored."""
-    index = LmdbSimprintIndexMulti64(str(temp_index_path))
+    index = LmdbSimprintIndexMulti(str(temp_index_path))
 
     # Add same entries twice
     index.add_raw_multi(sample_entries)
@@ -169,7 +169,7 @@ def test_add_raw_multi_duplicate_entries(temp_index_path, sample_entries):
 def test_search_raw_multi_single_type(temp_index_path, sample_entries):
     # type: (Path, list[SimprintEntryMulti]) -> None
     """Test search with single simprint type."""
-    index = LmdbSimprintIndexMulti64(str(temp_index_path))
+    index = LmdbSimprintIndexMulti(str(temp_index_path))
     index.add_raw_multi(sample_entries)
 
     # Search for simprint that appears in both assets
@@ -189,7 +189,7 @@ def test_search_raw_multi_single_type(temp_index_path, sample_entries):
 def test_search_raw_multi_multiple_types(temp_index_path, sample_entries):
     # type: (Path, list[SimprintEntryMulti]) -> None
     """Test search across multiple simprint types."""
-    index = LmdbSimprintIndexMulti64(str(temp_index_path))
+    index = LmdbSimprintIndexMulti(str(temp_index_path))
     index.add_raw_multi(sample_entries)
 
     # Search both types
@@ -213,7 +213,7 @@ def test_search_raw_multi_multiple_types(temp_index_path, sample_entries):
 def test_search_raw_multi_empty_query(temp_index_path, sample_entries):
     # type: (Path, list[SimprintEntryMulti]) -> None
     """Test search with empty query."""
-    index = LmdbSimprintIndexMulti64(str(temp_index_path))
+    index = LmdbSimprintIndexMulti(str(temp_index_path))
     index.add_raw_multi(sample_entries)
 
     results = index.search_raw_multi({}, limit=10, threshold=0.8, detailed=True)
@@ -224,7 +224,7 @@ def test_search_raw_multi_empty_query(temp_index_path, sample_entries):
 def test_search_raw_multi_unknown_type(temp_index_path, sample_entries):
     # type: (Path, list[SimprintEntryMulti]) -> None
     """Test search with type that hasn't been indexed."""
-    index = LmdbSimprintIndexMulti64(str(temp_index_path))
+    index = LmdbSimprintIndexMulti(str(temp_index_path))
     index.add_raw_multi(sample_entries)
 
     results = index.search_raw_multi(
@@ -240,7 +240,7 @@ def test_search_raw_multi_unknown_type(temp_index_path, sample_entries):
 def test_search_raw_multi_detailed_false(temp_index_path, sample_entries):
     # type: (Path, list[SimprintEntryMulti]) -> None
     """Test search with detailed=False excludes chunk details."""
-    index = LmdbSimprintIndexMulti64(str(temp_index_path))
+    index = LmdbSimprintIndexMulti(str(temp_index_path))
     index.add_raw_multi(sample_entries)
 
     results = index.search_raw_multi(
@@ -260,7 +260,7 @@ def test_search_raw_multi_detailed_false(temp_index_path, sample_entries):
 def test_get_indexed_types(temp_index_path, sample_entries):
     # type: (Path, list[SimprintEntryMulti]) -> None
     """Test get_indexed_types returns sorted list."""
-    index = LmdbSimprintIndexMulti64(str(temp_index_path))
+    index = LmdbSimprintIndexMulti(str(temp_index_path))
     assert index.get_indexed_types() == []
 
     index.add_raw_multi(sample_entries)
@@ -273,7 +273,7 @@ def test_get_indexed_types(temp_index_path, sample_entries):
 def test_contains_existing_iscc_id(temp_index_path, sample_entries):
     # type: (Path, list[SimprintEntryMulti]) -> None
     """Test __contains__ with existing ISCC-ID."""
-    index = LmdbSimprintIndexMulti64(str(temp_index_path))
+    index = LmdbSimprintIndexMulti(str(temp_index_path))
     index.add_raw_multi(sample_entries)
 
     assert sample_entries[0].iscc_id in index
@@ -284,7 +284,7 @@ def test_contains_existing_iscc_id(temp_index_path, sample_entries):
 def test_contains_non_existing_iscc_id(temp_index_path, sample_entries):
     # type: (Path, list[SimprintEntryMulti]) -> None
     """Test __contains__ with non-existing ISCC-ID."""
-    index = LmdbSimprintIndexMulti64(str(temp_index_path))
+    index = LmdbSimprintIndexMulti(str(temp_index_path))
     index.add_raw_multi(sample_entries)
 
     non_existing = b"\x00\x10\xaa\xbb\xcc\xdd\xee\xff\x00\x11"
@@ -295,7 +295,7 @@ def test_contains_non_existing_iscc_id(temp_index_path, sample_entries):
 def test_contains_invalid_length(temp_index_path):
     # type: (Path) -> None
     """Test __contains__ with invalid ISCC-ID length."""
-    index = LmdbSimprintIndexMulti64(str(temp_index_path))
+    index = LmdbSimprintIndexMulti(str(temp_index_path))
 
     assert b"\x00\x10\x12" not in index  # Only 3 bytes
     index.close()
@@ -304,7 +304,7 @@ def test_contains_invalid_length(temp_index_path):
 def test_get_raw_multi(temp_index_path, sample_entries):
     # type: (Path, list[SimprintEntryMulti]) -> None
     """Test get_raw_multi retrieves entries."""
-    index = LmdbSimprintIndexMulti64(str(temp_index_path))
+    index = LmdbSimprintIndexMulti(str(temp_index_path))
     index.add_raw_multi(sample_entries)
 
     results = index.get_raw_multi([sample_entries[0].iscc_id])
@@ -316,7 +316,7 @@ def test_get_raw_multi(temp_index_path, sample_entries):
 def test_get_raw_multi_non_existing(temp_index_path, sample_entries):
     # type: (Path, list[SimprintEntryMulti]) -> None
     """Test get_raw_multi with non-existing ISCC-IDs."""
-    index = LmdbSimprintIndexMulti64(str(temp_index_path))
+    index = LmdbSimprintIndexMulti(str(temp_index_path))
     index.add_raw_multi(sample_entries)
 
     non_existing = b"\x00\x10\xaa\xbb\xcc\xdd\xee\xff\x00\x11"
@@ -331,7 +331,7 @@ def test_get_raw_multi_non_existing(temp_index_path, sample_entries):
 def test_delete_raw_multi(temp_index_path, sample_entries):
     # type: (Path, list[SimprintEntryMulti]) -> None
     """Test delete_raw_multi removes entries (currently a no-op)."""
-    index = LmdbSimprintIndexMulti64(str(temp_index_path))
+    index = LmdbSimprintIndexMulti(str(temp_index_path))
     index.add_raw_multi(sample_entries)
 
     # Delete doesn't raise error (even though not fully implemented)
@@ -342,7 +342,7 @@ def test_delete_raw_multi(temp_index_path, sample_entries):
 def test_close_releases_resources(temp_index_path, sample_entries):
     # type: (Path, list[SimprintEntryMulti]) -> None
     """Test close releases all index resources."""
-    index = LmdbSimprintIndexMulti64(str(temp_index_path))
+    index = LmdbSimprintIndexMulti(str(temp_index_path))
     index.add_raw_multi(sample_entries)
 
     assert len(index.indexes) == 2
@@ -353,7 +353,7 @@ def test_close_releases_resources(temp_index_path, sample_entries):
 def test_context_manager(temp_index_path, sample_entries):
     # type: (Path, list[SimprintEntryMulti]) -> None
     """Test context manager support."""
-    with LmdbSimprintIndexMulti64(str(temp_index_path)) as index:
+    with LmdbSimprintIndexMulti(str(temp_index_path)) as index:
         index.add_raw_multi(sample_entries)
         assert len(index.indexes) == 2
 
@@ -365,13 +365,13 @@ def test_reopen_index_loads_metadata(temp_index_path, sample_entries):
     # type: (Path, list[SimprintEntryMulti]) -> None
     """Test reopening index loads existing metadata and indexes."""
     # Create and populate index
-    index1 = LmdbSimprintIndexMulti64(str(temp_index_path))
+    index1 = LmdbSimprintIndexMulti(str(temp_index_path))
     index1.add_raw_multi(sample_entries)
     realm_id = index1.realm_id
     index1.close()
 
     # Reopen and verify
-    index2 = LmdbSimprintIndexMulti64(str(temp_index_path))
+    index2 = LmdbSimprintIndexMulti(str(temp_index_path))
     assert index2.realm_id == realm_id
     assert len(index2.indexes) == 2
     assert sample_entries[0].iscc_id in index2
@@ -381,7 +381,7 @@ def test_reopen_index_loads_metadata(temp_index_path, sample_entries):
 def test_metadata_persistence(temp_index_path, sample_entries):
     # type: (Path, list[SimprintEntryMulti]) -> None
     """Test metadata.json is correctly saved and loaded."""
-    index = LmdbSimprintIndexMulti64(str(temp_index_path))
+    index = LmdbSimprintIndexMulti(str(temp_index_path))
     index.add_raw_multi(sample_entries)
     index.close()
 
@@ -397,7 +397,7 @@ def test_metadata_persistence(temp_index_path, sample_entries):
 def test_add_raw_multi_entry_without_simprints(temp_index_path):
     # type: (Path) -> None
     """Test adding entry with empty simprints dict."""
-    index = LmdbSimprintIndexMulti64(str(temp_index_path))
+    index = LmdbSimprintIndexMulti(str(temp_index_path))
 
     entry = SimprintEntryMulti(
         iscc_id=b"\x00\x10\x12\x34\x56\x78\x9a\xbc\xde\xf0",
@@ -413,7 +413,7 @@ def test_add_raw_multi_entry_without_simprints(temp_index_path):
 def test_search_result_ordering(temp_index_path):
     # type: (Path) -> None
     """Test that search results are ordered by score descending."""
-    index = LmdbSimprintIndexMulti64(str(temp_index_path))
+    index = LmdbSimprintIndexMulti(str(temp_index_path))
 
     # Create entries with varying simprint overlap
     entries = [
@@ -454,7 +454,7 @@ def test_search_result_ordering(temp_index_path):
 def test_delete_raw_multi_with_indexes(temp_index_path, sample_entries):
     # type: (Path, list[SimprintEntryMulti]) -> None
     """Test delete_raw_multi with populated indexes."""
-    index = LmdbSimprintIndexMulti64(str(temp_index_path))
+    index = LmdbSimprintIndexMulti(str(temp_index_path))
     index.add_raw_multi(sample_entries)
 
     # Ensure indexes exist
@@ -469,7 +469,7 @@ def test_context_manager_with_exception(temp_index_path, sample_entries):
     # type: (Path, list[SimprintEntryMulti]) -> None
     """Test context manager properly closes even with exception."""
     try:
-        with LmdbSimprintIndexMulti64(str(temp_index_path)) as index:
+        with LmdbSimprintIndexMulti(str(temp_index_path)) as index:
             index.add_raw_multi(sample_entries)
             raise ValueError("Test exception")
     except ValueError:
@@ -488,7 +488,7 @@ def test_load_metadata_with_null_realm_id(temp_index_path):
     metadata_path.write_text('{"realm_id": null, "indexed_types": []}')
 
     # Open index - should load but realm_id remains None
-    index = LmdbSimprintIndexMulti64(str(temp_index_path))
+    index = LmdbSimprintIndexMulti(str(temp_index_path))
     assert index.realm_id is None
     index.close()
 
@@ -502,7 +502,7 @@ def test_load_metadata_with_empty_realm_id(temp_index_path):
     metadata_path.write_text('{"realm_id": "", "indexed_types": []}')
 
     # Open index - should load but realm_id remains None
-    index = LmdbSimprintIndexMulti64(str(temp_index_path))
+    index = LmdbSimprintIndexMulti(str(temp_index_path))
     assert index.realm_id is None
     index.close()
 
@@ -510,7 +510,7 @@ def test_load_metadata_with_empty_realm_id(temp_index_path):
 def test_validate_realm_id_when_none(temp_index_path):
     # type: (Path) -> None
     """Test _validate_realm_id when realm_id is None (defensive check)."""
-    index = LmdbSimprintIndexMulti64(str(temp_index_path))
+    index = LmdbSimprintIndexMulti(str(temp_index_path))
     assert index.realm_id is None
 
     # Should return early without error
@@ -521,7 +521,7 @@ def test_validate_realm_id_when_none(temp_index_path):
 def test_validate_realm_id_invalid_length(temp_index_path, sample_entries):
     # type: (Path, list[SimprintEntryMulti]) -> None
     """Test _validate_realm_id with invalid ISCC-ID length after realm_id is set."""
-    index = LmdbSimprintIndexMulti64(str(temp_index_path))
+    index = LmdbSimprintIndexMulti(str(temp_index_path))
 
     # Set realm_id first
     index.add_raw_multi([sample_entries[0]])
@@ -530,5 +530,52 @@ def test_validate_realm_id_invalid_length(temp_index_path, sample_entries):
     # Now try to validate an invalid length ISCC-ID
     with pytest.raises(ValueError, match="must be 10 bytes"):
         index._validate_realm_id(b"\x00\x10\x12")  # Only 3 bytes
+
+    index.close()
+
+
+def test_get_or_create_index_without_entries(temp_index_path):
+    # type: (Path) -> None
+    """Test _get_or_create_index when called without entries."""
+    index = LmdbSimprintIndexMulti(str(temp_index_path))
+
+    # Create index without providing entries (ndim=None)
+    sub_index = index._get_or_create_index("TEST_TYPE_V0", entries=None)
+
+    assert sub_index is not None
+    assert "TEST_TYPE_V0" in index.indexes
+    assert sub_index.ndim is None  # No auto-detection without entries
+
+    index.close()
+
+
+def test_get_or_create_index_with_empty_entries_list(temp_index_path):
+    # type: (Path) -> None
+    """Test _get_or_create_index with empty entries list."""
+    index = LmdbSimprintIndexMulti(str(temp_index_path))
+
+    # Create index with empty entries list
+    sub_index = index._get_or_create_index("TEST_TYPE_V0", entries=[])
+
+    assert sub_index is not None
+    assert sub_index.ndim is None  # Can't auto-detect from empty list
+
+    index.close()
+
+
+def test_get_or_create_index_with_entries_no_simprints(temp_index_path):
+    # type: (Path) -> None
+    """Test _get_or_create_index when entries have no simprints."""
+    index = LmdbSimprintIndexMulti(str(temp_index_path))
+
+    # Create entries with empty simprints
+    from iscc_search.indexes.simprint.models import SimprintEntryRaw
+
+    entries = [SimprintEntryRaw(iscc_id_body=b"\x01" * 8, simprints=[])]
+
+    sub_index = index._get_or_create_index("TEST_TYPE_V0", entries=entries)
+
+    assert sub_index is not None
+    assert sub_index.ndim is None  # Can't auto-detect without simprints
 
     index.close()

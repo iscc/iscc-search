@@ -73,7 +73,10 @@ class SimprintIndexMulti(Protocol):
     def __init__(self, uri, **kwargs):
         # type: (str, ...) -> None
         """
-        Open or create a simprint index at the specified location.
+        Open or create a multi-type simprint index at the specified location.
+
+        Note: Multi-type indexes manage ndim per simprint type (auto-detected).
+        realm_id is extracted from first entry and validated across all entries.
 
         :param uri: Index location as URI:
           - File path: '/path/to/index' or 'file:///path/to/index'

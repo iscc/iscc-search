@@ -90,14 +90,13 @@ class LmdbSimprintIndex64:
         # Open simprints database with optimal flags for 64-bit keys and fixed values
         self.simprints_db = self.env.open_db(
             self._DB_SIMPRINTS,
-            integerkey=True,  # 64-bit integer keys (simprints)
             dupsort=True,  # Allow duplicate keys for multiple chunks per simprint
             dupfixed=True,  # Fixed 16-byte values (ChunkPointer)
         )
 
         # Open assets database for O(1) duplicate detection and counting
         # Key: iscc_id_body (8 bytes as 64-bit integer), Value: empty (existence matters)
-        self.assets_db = self.env.open_db(self._DB_ASSETS, integerkey=True)
+        self.assets_db = self.env.open_db(self._DB_ASSETS)
 
     def add_raw(self, entries):
         # type: (list[SimprintEntryRaw]) -> None

@@ -501,19 +501,27 @@ def test_add_raw_all_existing_after_check(index):
 
 def test_metadata_persistence(tmp_path):
     # type: (Path) -> None
-    """Test that ndim is persisted in metadata.json."""
+    """Test that ndim is persisted in LMDB metadata database."""
+    import json
+    import lmdb
+
     path = tmp_path / "metadata_index"
     idx = LmdbSimprintIndex(str(path), ndim=128)
     idx.close()
 
-    # Check metadata file exists and contains ndim
+    # Verify metadata is stored in LMDB database, not JSON file
     metadata_file = path / "metadata.json"
-    assert metadata_file.exists()
+    assert not metadata_file.exists()
 
-    import json
-
-    metadata = json.loads(metadata_file.read_text())
-    assert metadata["ndim"] == 128
+    # Open LMDB and check metadata database
+    env = lmdb.open(str(path), max_dbs=3, readonly=True)
+    metadata_db = env.open_db(b"index_metadata")
+    with env.begin() as txn:
+        raw_data = txn.get(b"ndim", db=metadata_db)
+        assert raw_data is not None
+        metadata = json.loads(raw_data.decode("utf-8"))
+        assert metadata["ndim"] == 128
+    env.close()
 
 
 def test_ndim_mismatch_raises_error(tmp_path):
@@ -710,15 +718,20 @@ def test_auto_detect_with_empty_simprints_list(tmp_path):
 
 def test_load_metadata_without_ndim_key(tmp_path):
     # type: (Path) -> None
-    """Test loading metadata file without ndim key."""
+    """Test loading LMDB metadata without ndim key."""
+    import json
+    import lmdb
+
     path = tmp_path / "no_ndim_key"
     path.mkdir(parents=True, exist_ok=True)
 
-    # Create metadata file without ndim
-    import json
-
-    metadata_path = path / "metadata.json"
-    metadata_path.write_text(json.dumps({}))
+    # Pre-create LMDB with empty metadata
+    env = lmdb.open(str(path), max_dbs=3)
+    metadata_db = env.open_db(b"index_metadata")
+    with env.begin(write=True) as txn:
+        # Store metadata without ndim key
+        txn.put(b"ndim", json.dumps({}).encode("utf-8"), db=metadata_db)
+    env.close()
 
     # Open index - should work, ndim remains None
     idx = LmdbSimprintIndex(str(path))

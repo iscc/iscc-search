@@ -2,6 +2,7 @@
 
 import struct
 import pytest
+from pathlib import Path
 from iscc_search.indexes.simprint.lmdb_core import LmdbSimprintIndex
 
 
@@ -27,8 +28,8 @@ class MockSimprintEntryRaw:
 @pytest.fixture
 def temp_index_path(tmp_path):
     # type: (Path) -> Path
-    """Create a temporary directory for index storage."""
-    return tmp_path / "simprint_index"
+    """Create a temporary file path for index storage (flat file with subdir=False)."""
+    return tmp_path / "simprint_index.lmdb"
 
 
 @pytest.fixture
@@ -40,39 +41,44 @@ def index(temp_index_path):
     idx.close()
 
 
-def test_init_creates_directory(temp_index_path):
+def test_init_creates_file(temp_index_path):
     # type: (Path) -> None
-    """Test that __init__ creates the index directory."""
+    """Test that __init__ creates the index file with subdir=False."""
     idx = LmdbSimprintIndex(str(temp_index_path))
     assert temp_index_path.exists()
-    assert temp_index_path.is_dir()
+    assert temp_index_path.is_file()
+    # Lock file should also be created
+    lock_file = Path(str(temp_index_path) + "-lock")
+    assert lock_file.exists()
     idx.close()
 
 
 def test_init_with_file_uri(tmp_path):
     # type: (Path) -> None
     """Test initialization with file:// URI."""
-    path = tmp_path / "file_uri_index"
+    path = tmp_path / "file_uri_index.lmdb"
     uri = f"file://{path}"
     idx = LmdbSimprintIndex(uri)
     assert path.exists()
+    assert path.is_file()
     idx.close()
 
 
 def test_init_with_lmdb_uri(tmp_path):
     # type: (Path) -> None
     """Test initialization with lmdb:// URI."""
-    path = tmp_path / "lmdb_uri_index"
+    path = tmp_path / "lmdb_uri_index.lmdb"
     uri = f"lmdb://{path}"
     idx = LmdbSimprintIndex(uri)
     assert path.exists()
+    assert path.is_file()
     idx.close()
 
 
 def test_init_with_explicit_ndim(tmp_path):
     # type: (Path) -> None
     """Test initialization with explicit ndim parameter."""
-    path = tmp_path / "ndim_index"
+    path = tmp_path / "ndim_index.lmdb"
     idx = LmdbSimprintIndex(str(path), ndim=128)
     assert idx.ndim == 128
     assert idx.simprint_bytes == 16
@@ -212,7 +218,7 @@ def test_add_raw_with_duplicates_in_batch(index):
 def test_add_raw_validates_simprint_length(tmp_path):
     # type: (Path) -> None
     """Test that adding simprints with wrong length raises ValueError."""
-    path = tmp_path / "validate_index"
+    path = tmp_path / "validate_index.lmdb"
     idx = LmdbSimprintIndex(str(path), ndim=64)
 
     iscc_id = b"\x01" * 8
@@ -501,33 +507,31 @@ def test_add_raw_all_existing_after_check(index):
 
 def test_metadata_persistence(tmp_path):
     # type: (Path) -> None
-    """Test that ndim is persisted in LMDB metadata database."""
+    """Test that ndim and realm_id are persisted in LMDB metadata database."""
     import json
     import lmdb
 
-    path = tmp_path / "metadata_index"
-    idx = LmdbSimprintIndex(str(path), ndim=128)
+    path = tmp_path / "metadata_index.lmdb"
+    realm_id = b"\xaa\xbb"
+    idx = LmdbSimprintIndex(str(path), ndim=128, realm_id=realm_id)
     idx.close()
 
-    # Verify metadata is stored in LMDB database, not JSON file
-    metadata_file = path / "metadata.json"
-    assert not metadata_file.exists()
-
     # Open LMDB and check metadata database
-    env = lmdb.open(str(path), max_dbs=3, readonly=True)
+    env = lmdb.open(str(path), max_dbs=3, readonly=True, subdir=False)
     metadata_db = env.open_db(b"index_metadata")
     with env.begin() as txn:
-        raw_data = txn.get(b"ndim", db=metadata_db)
+        raw_data = txn.get(b"metadata", db=metadata_db)
         assert raw_data is not None
         metadata = json.loads(raw_data.decode("utf-8"))
         assert metadata["ndim"] == 128
+        assert metadata["realm_id"] == "aabb"
     env.close()
 
 
 def test_ndim_mismatch_raises_error(tmp_path):
     # type: (Path) -> None
     """Test that reopening with different ndim raises ValueError."""
-    path = tmp_path / "mismatch_index"
+    path = tmp_path / "mismatch_index.lmdb"
 
     # Create with ndim=64
     idx1 = LmdbSimprintIndex(str(path), ndim=64)
@@ -541,7 +545,7 @@ def test_ndim_mismatch_raises_error(tmp_path):
 def test_128bit_simprints(tmp_path):
     # type: (Path) -> None
     """Test index with 128-bit simprints."""
-    path = tmp_path / "index_128"
+    path = tmp_path / "index_128.lmdb"
     idx = LmdbSimprintIndex(str(path), ndim=128)
 
     # Add entry with 128-bit simprints (16 bytes)
@@ -566,7 +570,7 @@ def test_128bit_simprints(tmp_path):
 def test_256bit_simprints(tmp_path):
     # type: (Path) -> None
     """Test index with 256-bit simprints."""
-    path = tmp_path / "index_256"
+    path = tmp_path / "index_256.lmdb"
     idx = LmdbSimprintIndex(str(path), ndim=256)
 
     # Add entry with 256-bit simprints (32 bytes)
@@ -591,7 +595,7 @@ def test_256bit_simprints(tmp_path):
 def test_auto_detect_128bit(tmp_path):
     # type: (Path) -> None
     """Test auto-detection of 128-bit simprints."""
-    path = tmp_path / "auto_128"
+    path = tmp_path / "auto_128.lmdb"
     idx = LmdbSimprintIndex(str(path))
 
     # Add entry with 128-bit simprints without specifying ndim
@@ -616,8 +620,8 @@ def test_auto_detect_128bit(tmp_path):
 def test_different_lengths_different_indexes(tmp_path):
     # type: (Path) -> None
     """Test that different indexes can have different simprint lengths."""
-    path_64 = tmp_path / "index_64"
-    path_128 = tmp_path / "index_128"
+    path_64 = tmp_path / "index_64.lmdb"
+    path_128 = tmp_path / "index_128.lmdb"
 
     # Create 64-bit index
     idx_64 = LmdbSimprintIndex(str(path_64), ndim=64)
@@ -648,7 +652,7 @@ def test_different_lengths_different_indexes(tmp_path):
 def test_persistence_128bit(tmp_path):
     # type: (Path) -> None
     """Test that 128-bit ndim persists across reopening."""
-    path = tmp_path / "persist_128"
+    path = tmp_path / "persist_128.lmdb"
 
     # Create with 128-bit
     idx1 = LmdbSimprintIndex(str(path), ndim=128)
@@ -673,7 +677,7 @@ def test_persistence_128bit(tmp_path):
 def test_search_with_wrong_length_simprints(tmp_path):
     # type: (Path) -> None
     """Test that searching with wrong-length simprints raises ValueError."""
-    path = tmp_path / "search_validation"
+    path = tmp_path / "search_validation.lmdb"
     idx = LmdbSimprintIndex(str(path), ndim=64)
 
     # Add 64-bit entry
@@ -690,7 +694,7 @@ def test_search_with_wrong_length_simprints(tmp_path):
 def test_search_empty_index_no_ndim(tmp_path):
     # type: (Path) -> None
     """Test searching on empty index with no ndim configured."""
-    path = tmp_path / "empty_search"
+    path = tmp_path / "empty_search.lmdb"
     idx = LmdbSimprintIndex(str(path))
 
     # Search should work (ndim is None, so no validation)
@@ -703,7 +707,7 @@ def test_search_empty_index_no_ndim(tmp_path):
 def test_auto_detect_with_empty_simprints_list(tmp_path):
     # type: (Path) -> None
     """Test auto-detect fails when entry has no simprints."""
-    path = tmp_path / "empty_simprints"
+    path = tmp_path / "empty_simprints.lmdb"
     idx = LmdbSimprintIndex(str(path))
 
     # Try to add entry with empty simprints list
@@ -722,18 +726,66 @@ def test_load_metadata_without_ndim_key(tmp_path):
     import json
     import lmdb
 
-    path = tmp_path / "no_ndim_key"
-    path.mkdir(parents=True, exist_ok=True)
+    path = tmp_path / "no_ndim_key.lmdb"
 
-    # Pre-create LMDB with empty metadata
-    env = lmdb.open(str(path), max_dbs=3)
+    # Pre-create LMDB with empty metadata (flat file with subdir=False)
+    env = lmdb.open(str(path), max_dbs=3, subdir=False)
     metadata_db = env.open_db(b"index_metadata")
     with env.begin(write=True) as txn:
-        # Store metadata without ndim key
-        txn.put(b"ndim", json.dumps({}).encode("utf-8"), db=metadata_db)
+        # Store metadata without ndim key (using new "metadata" key)
+        txn.put(b"metadata", json.dumps({}).encode("utf-8"), db=metadata_db)
     env.close()
 
     # Open index - should work, ndim remains None
     idx = LmdbSimprintIndex(str(path))
     assert idx.ndim is None
+    assert idx.realm_id is None
     idx.close()
+
+
+def test_realm_id_parameter(tmp_path):
+    # type: (Path) -> None
+    """Test initialization with realm_id parameter."""
+    path = tmp_path / "realm_index.lmdb"
+    realm_id = b"\xaa\xbb"
+    idx = LmdbSimprintIndex(str(path), realm_id=realm_id)
+    assert idx.realm_id == realm_id
+    idx.close()
+
+
+def test_realm_id_invalid_length(tmp_path):
+    # type: (Path) -> None
+    """Test that realm_id with wrong length raises ValueError."""
+    path = tmp_path / "bad_realm.lmdb"
+    with pytest.raises(ValueError, match="realm_id must be 2 bytes"):
+        LmdbSimprintIndex(str(path), realm_id=b"\xaa")
+
+
+def test_realm_id_mismatch_raises_error(tmp_path):
+    # type: (Path) -> None
+    """Test that reopening with different realm_id raises ValueError."""
+    path = tmp_path / "realm_mismatch.lmdb"
+
+    # Create with realm_id
+    idx1 = LmdbSimprintIndex(str(path), realm_id=b"\xaa\xbb")
+    idx1.close()
+
+    # Try to reopen with different realm_id
+    with pytest.raises(ValueError, match="Index has realm_id=aabb but constructor specified realm_id=ccdd"):
+        LmdbSimprintIndex(str(path), realm_id=b"\xcc\xdd")
+
+
+def test_realm_id_persistence(tmp_path):
+    # type: (Path) -> None
+    """Test that realm_id persists across reopening."""
+    path = tmp_path / "realm_persist.lmdb"
+    realm_id = b"\xaa\xbb"
+
+    # Create with realm_id
+    idx1 = LmdbSimprintIndex(str(path), ndim=64, realm_id=realm_id)
+    idx1.close()
+
+    # Reopen without specifying realm_id
+    idx2 = LmdbSimprintIndex(str(path))
+    assert idx2.realm_id == realm_id
+    idx2.close()

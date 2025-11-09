@@ -42,7 +42,8 @@ class LmdbSimprintIndex:
     Architecture:
     - Simprints DB: simprint (variable-length bytes) -> ChunkPointer (16 bytes) with dupsort+dupfixed
     - Assets DB: iscc_id_body (64-bit int) -> empty value, for O(1) duplicate detection
-    - Metadata DB: Self-describing index metadata (ndim) stored in LMDB database
+    - Metadata DB: Self-describing index metadata (ndim, realm_id) stored in LMDB database
+    - File Structure: Flat file with subdir=False (index.lmdb + index.lmdb-lock)
 
     Scoring:
     - IDF (Inverse Document Frequency) weighting reduces impact of common simprints
@@ -60,14 +61,15 @@ class LmdbSimprintIndex:
     _DB_ASSETS = b"assets"  # LMDB database name for asset tracking
     _DB_INDEX_METADATA = b"index_metadata"  # LMDB database name for index metadata
 
-    def __init__(self, uri, ndim=None, **kwargs):
-        # type: (str, int | None, ...) -> None
+    def __init__(self, uri, ndim=None, realm_id=None, **kwargs):
+        # type: (str, int | None, bytes | None, ...) -> None
         """
         Open or create a simprint index at the specified location.
 
-        :param uri: Index location (path or file:// URI)
+        :param uri: Index location (path or file:// URI) - should point to .lmdb file
         :param ndim: Simprint dimensions in bits (e.g., 64, 128, 256).
                      If None, auto-detect from first simprint added.
+        :param realm_id: ISCC-ID realm identifier (2 bytes). If None, loaded from metadata.
         :param kwargs: Backend-specific configuration options (currently unused)
         """
         # Parse URI
@@ -78,13 +80,15 @@ class LmdbSimprintIndex:
         else:
             self.path = Path(uri)
 
-        self.path.mkdir(parents=True, exist_ok=True)
+        # Ensure parent directory exists
+        self.path.parent.mkdir(parents=True, exist_ok=True)
 
-        # Open LMDB environment with 3 named databases
+        # Open LMDB environment with subdir=False for flat file structure
         # Use writemap=True and map_async=True for better Windows compatibility
         self.env = lmdb.open(
             str(self.path),
             max_dbs=3,  # simprints, assets, index_metadata
+            subdir=False,  # Use flat file structure
             writemap=True,  # Avoid Windows file reservation issues
             map_async=True,  # Better write performance
             sync=False,  # Bulk operations, sync manually
@@ -105,17 +109,29 @@ class LmdbSimprintIndex:
         # Open metadata database for self-describing index metadata
         self.metadata_db = self.env.open_db(self._DB_INDEX_METADATA)
 
-        # Load or initialize ndim
+        # Load or initialize ndim and realm_id
         self.ndim = ndim  # type: int | None
         self.simprint_bytes = None  # type: int | None
+        self.realm_id = realm_id  # type: bytes | None
         self._load_metadata()
 
-        # If ndim provided in constructor, override metadata
+        # If ndim provided in constructor, validate and override metadata
         if ndim is not None:
             if self.ndim is not None and self.ndim != ndim:
                 raise ValueError(f"Index has ndim={self.ndim} but constructor specified ndim={ndim}")
             self.ndim = ndim
             self.simprint_bytes = ndim // 8
+            self._save_metadata()
+
+        # If realm_id provided in constructor, validate and store
+        if realm_id is not None:
+            if len(realm_id) != 2:
+                raise ValueError(f"realm_id must be 2 bytes, got {len(realm_id)}")
+            if self.realm_id is not None and self.realm_id != realm_id:
+                raise ValueError(
+                    f"Index has realm_id={self.realm_id.hex()} but constructor specified realm_id={realm_id.hex()}"
+                )
+            self.realm_id = realm_id
             self._save_metadata()
 
     def add_raw(self, entries):
@@ -226,22 +242,28 @@ class LmdbSimprintIndex:
         # type: () -> None
         """Load metadata from LMDB database or initialize empty."""
         with self.env.begin() as txn:
-            raw_data = txn.get(b"ndim", db=self.metadata_db)
+            raw_data = txn.get(b"metadata", db=self.metadata_db)
             if raw_data:
                 data = json.loads(raw_data.decode("utf-8"))
                 if "ndim" in data and data["ndim"]:
                     self.ndim = data["ndim"]
                     self.simprint_bytes = self.ndim // 8
                     logger.debug(f"Loaded ndim={self.ndim} from LMDB metadata")
+                if "realm_id" in data and data["realm_id"]:
+                    self.realm_id = bytes.fromhex(data["realm_id"])
+                    logger.debug(f"Loaded realm_id={self.realm_id.hex()} from LMDB metadata")
 
     def _save_metadata(self):
         # type: () -> None
         """Save metadata to LMDB database."""
-        data = {"ndim": self.ndim}
+        data = {
+            "ndim": self.ndim,
+            "realm_id": self.realm_id.hex() if self.realm_id else None,
+        }
         raw_data = json.dumps(data).encode("utf-8")
         with self.env.begin(write=True) as txn:
-            txn.put(b"ndim", raw_data, db=self.metadata_db)
-        logger.debug(f"Saved ndim={self.ndim} to LMDB metadata")
+            txn.put(b"metadata", raw_data, db=self.metadata_db)
+        logger.debug(f"Saved metadata: ndim={self.ndim}, realm_id={self.realm_id.hex() if self.realm_id else None}")
 
     def _auto_detect_ndim(self, entries):
         # type: (list[SimprintEntryRaw]) -> None

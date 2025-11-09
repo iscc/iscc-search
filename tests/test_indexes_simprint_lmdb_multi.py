@@ -78,31 +78,37 @@ def test_init_with_lmdb_uri(temp_index_path):
 
 def test_add_raw_multi_creates_type_indexes(temp_index_path, sample_entries):
     # type: (Path, list[SimprintEntryMulti]) -> None
-    """Test that add_raw_multi creates type-specific subdirectories."""
+    """Test that add_raw_multi creates type-specific flat files."""
     index = LmdbSimprintIndexMulti(str(temp_index_path))
     index.add_raw_multi(sample_entries)
 
-    assert (temp_index_path / "CONTENT_TEXT_V0").exists()
-    assert (temp_index_path / "SEMANTIC_TEXT_V0").exists()
+    # Verify flat file structure (SIMPRINT_{type}.lmdb)
+    assert (temp_index_path / "SIMPRINT_CONTENT_TEXT_V0.lmdb").exists()
+    assert (temp_index_path / "SIMPRINT_SEMANTIC_TEXT_V0.lmdb").exists()
+    # Lock files should also exist
+    assert (temp_index_path / "SIMPRINT_CONTENT_TEXT_V0.lmdb-lock").exists()
+    assert (temp_index_path / "SIMPRINT_SEMANTIC_TEXT_V0.lmdb-lock").exists()
     index.close()
 
 
 def test_add_raw_multi_extracts_realm_id(temp_index_path, sample_entries):
     # type: (Path, list[SimprintEntryMulti]) -> None
-    """Test realm_id extraction from first entry."""
+    """Test realm_id extraction from first entry and propagation to sub-indexes."""
     index = LmdbSimprintIndexMulti(str(temp_index_path))
     index.add_raw_multi(sample_entries)
 
     assert index.realm_id == b"\x00\x10"
 
-    # Check metadata file
-    metadata_path = temp_index_path / "metadata.json"
-    assert metadata_path.exists()
+    # Verify realm_id propagated to sub-indexes
+    assert "CONTENT_TEXT_V0" in index.indexes
+    assert "SEMANTIC_TEXT_V0" in index.indexes
+    assert index.indexes["CONTENT_TEXT_V0"].realm_id == b"\x00\x10"
+    assert index.indexes["SEMANTIC_TEXT_V0"].realm_id == b"\x00\x10"
 
-    metadata = json.loads(metadata_path.read_text())
-    assert metadata["realm_id"] == "0010"
-    assert "CONTENT_TEXT_V0" in metadata["indexed_types"]
-    assert "SEMANTIC_TEXT_V0" in metadata["indexed_types"]
+    # Verify flat file structure
+    assert (temp_index_path / "SIMPRINT_CONTENT_TEXT_V0.lmdb").exists()
+    assert (temp_index_path / "SIMPRINT_SEMANTIC_TEXT_V0.lmdb").exists()
+
     index.close()
 
 
@@ -363,35 +369,53 @@ def test_context_manager(temp_index_path, sample_entries):
 
 def test_reopen_index_loads_metadata(temp_index_path, sample_entries):
     # type: (Path, list[SimprintEntryMulti]) -> None
-    """Test reopening index loads existing metadata and indexes."""
+    """Test reopening index discovers existing sub-indexes and loads realm_id."""
     # Create and populate index
     index1 = LmdbSimprintIndexMulti(str(temp_index_path))
     index1.add_raw_multi(sample_entries)
     realm_id = index1.realm_id
     index1.close()
 
-    # Reopen and verify
+    # Reopen and verify - should auto-discover flat files and load realm_id from sub-indexes
     index2 = LmdbSimprintIndexMulti(str(temp_index_path))
     assert index2.realm_id == realm_id
     assert len(index2.indexes) == 2
     assert sample_entries[0].iscc_id in index2
+    # Verify realm_id consistency across sub-indexes
+    for idx in index2.indexes.values():
+        assert idx.realm_id == realm_id
     index2.close()
 
 
 def test_metadata_persistence(temp_index_path, sample_entries):
     # type: (Path, list[SimprintEntryMulti]) -> None
-    """Test metadata.json is correctly saved and loaded."""
+    """Test that realm_id and ndim are persisted in sub-index LMDB metadata."""
     index = LmdbSimprintIndexMulti(str(temp_index_path))
     index.add_raw_multi(sample_entries)
     index.close()
 
-    # Verify metadata file
+    # Verify no JSON metadata file (coordinator is stateless)
     metadata_path = temp_index_path / "metadata.json"
-    assert metadata_path.exists()
+    assert not metadata_path.exists()
 
-    metadata = json.loads(metadata_path.read_text())
-    assert metadata["realm_id"] == "0010"
-    assert set(metadata["indexed_types"]) == {"CONTENT_TEXT_V0", "SEMANTIC_TEXT_V0"}
+    # Verify flat file structure exists
+    assert (temp_index_path / "SIMPRINT_CONTENT_TEXT_V0.lmdb").exists()
+    assert (temp_index_path / "SIMPRINT_SEMANTIC_TEXT_V0.lmdb").exists()
+
+    # Reopen and verify sub-indexes have correct realm_id and ndim
+    import lmdb
+
+    for simprint_type in ["CONTENT_TEXT_V0", "SEMANTIC_TEXT_V0"]:
+        subindex_path = temp_index_path / f"SIMPRINT_{simprint_type}.lmdb"
+        env = lmdb.open(str(subindex_path), max_dbs=3, readonly=True, subdir=False)
+        metadata_db = env.open_db(b"index_metadata")
+        with env.begin() as txn:
+            raw_data = txn.get(b"metadata", db=metadata_db)
+            assert raw_data is not None
+            metadata = json.loads(raw_data.decode("utf-8"))
+            assert metadata["realm_id"] == "0010"
+            assert metadata["ndim"] == 64  # From sample_entries
+        env.close()
 
 
 def test_add_raw_multi_entry_without_simprints(temp_index_path):
@@ -481,11 +505,9 @@ def test_context_manager_with_exception(temp_index_path, sample_entries):
 
 def test_load_metadata_with_null_realm_id(temp_index_path):
     # type: (Path) -> None
-    """Test loading metadata file with null realm_id."""
-    # Create metadata file with null realm_id
+    """Test opening empty index with no realm_id (no sub-indexes exist)."""
+    # Create empty directory
     temp_index_path.mkdir(parents=True, exist_ok=True)
-    metadata_path = temp_index_path / "metadata.json"
-    metadata_path.write_text('{"realm_id": null, "indexed_types": []}')
 
     # Open index - should load but realm_id remains None
     index = LmdbSimprintIndexMulti(str(temp_index_path))
@@ -495,11 +517,9 @@ def test_load_metadata_with_null_realm_id(temp_index_path):
 
 def test_load_metadata_with_empty_realm_id(temp_index_path):
     # type: (Path) -> None
-    """Test loading metadata file with empty string realm_id."""
-    # Create metadata file with empty realm_id
+    """Test opening index with no sub-indexes (empty directory)."""
+    # Create empty directory
     temp_index_path.mkdir(parents=True, exist_ok=True)
-    metadata_path = temp_index_path / "metadata.json"
-    metadata_path.write_text('{"realm_id": "", "indexed_types": []}')
 
     # Open index - should load but realm_id remains None
     index = LmdbSimprintIndexMulti(str(temp_index_path))

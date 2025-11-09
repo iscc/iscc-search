@@ -43,6 +43,11 @@ class MatchedChunkRaw(Protocol):
 
     Represents a single simprint from the query that matched a simprint
     in the index, including similarity score and location information.
+
+    Document Frequency:
+        freq indicates how many assets contain this simprint (document frequency).
+        Used for IDF-weighted scoring in inverted indexes.
+        Defaults to 1 when implementation doesn't track frequency (assumes unique).
     """
 
     query: bytes  # Binary simprint from the search query
@@ -50,6 +55,7 @@ class MatchedChunkRaw(Protocol):
     score: float  # Similarity score (0.0 to 1.0) at chunk level
     offset: int  # Byte offset of matched chunk in the asset
     size: int  # Size in bytes of the matched chunk
+    freq: int  # Document frequency (defaults to 1 when unavailable)
 
 
 class SimprintMatchRaw(Protocol):
@@ -86,8 +92,8 @@ class SimprintIndexRaw(Protocol):
         - All operations must be thread-safe for concurrent access
     """
 
-    def __init__(self, uri, **kwargs):
-        # type: (str, ...) -> None
+    def __init__(self, uri, ndim=None, realm_id=None, **kwargs):
+        # type: (str, int | None, bytes | None, ...) -> None
         """
         Open or create a simprint index at the specified location.
 
@@ -96,6 +102,9 @@ class SimprintIndexRaw(Protocol):
           - LMDB: 'lmdb:///path/to/index'
           - PostgreSQL: 'postgresql://user:pass@host:5432/dbname'
           - Future: 'redis://host:6379/0', 's3://bucket/prefix', etc.
+        :param ndim: Simprint dimensions in bits (e.g., 64, 128, 256).
+                     If None, auto-detect from first simprint added.
+        :param realm_id: ISCC-ID realm identifier (2 bytes). If None, loaded from metadata.
         :param kwargs: Backend-specific configuration options
         """
 

@@ -1,0 +1,23 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "http://purl.org/iscc/schema/common-properties.json"
+title: "CommonProperties"
+type: object
+description: |
+  Shared properties used across ISCC schema definitions.
+
+  These properties provide common fields for ISCC declarations and receipts.
+properties:
+  iscc_id:
+    type: string
+    description: Globally unique digital asset identifier (ISCC-ID)
+    pattern: "^ISCC:[A-Z2-7]{16,}$"
+    example: "ISCC:MAIGIIFJRDGEQQAA"
+  iscc_code:
+    type: string
+    description: Composite ISCC-CODE combining multiple ISCC-UNITs
+    pattern: "^ISCC:[A-Z2-7]{16,}$"
+    example: "ISCC:KECYCMZIOY36XXGZ7S6QJQ2AEEXPOVEHZYPK6GMSFLU3WF54UPZMTPY"
+  iscc_unit:
+    type: string
+    description: Individual ISCC-UNIT in canonical format (variable-length, 64-256 bits)
+    example: "ISCC:AADYCMZIOY36XXGZ5B5BME7EIPPXRFKYQZ7VXKI7V55AEQQE67A33BY"

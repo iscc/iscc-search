@@ -37,57 +37,6 @@ class IsccIndex(BaseModel):
     ] = None
 
 
-class IsccAsset(BaseModel):
-    model_config = ConfigDict(
-        extra="forbid",
-    )
-    iscc_id: Annotated[
-        str | None,
-        Field(
-            description="Globally unique digital asset identifier (ISCC-ID). Required when adding assets, optional for search queries.",
-            examples=["ISCC:MAIGIIFJRDGEQQAA"],
-            pattern="^ISCC:[A-Z2-7]{16,}$",
-        ),
-    ] = None
-    iscc_code: Annotated[
-        str | None,
-        Field(
-            description="Composite ISCC-CODE combining multiple ISCC-UNITs (wide format, 128-bit Data + 128-bit Instance)",
-            examples=["ISCC:KECYCMZIOY36XXGZ7S6QJQ2AEEXPOVEHZYPK6GMSFLU3WF54UPZMTPY"],
-            pattern="^ISCC:[A-Z2-7]{16,}$",
-        ),
-    ] = None
-    units: Annotated[
-        list[str] | None,
-        Field(
-            description="List of ISCC-UNITs as canonical strings (variable-length, 64-256 bits)",
-            examples=[
-                [
-                    "ISCC:AADYCMZIOY36XXGZ5B5BME7EIPPXRFKYQZ7VXKI7V55AEQQE67A33BY",
-                    "ISCC:EED7ZPIEYNACCLXXZSS2LIM6JVXDYGCG2QSMC7DCPER4MYJPJATIM4Y",
-                    "ISCC:GADVJB6OD2XRTERK3G4KOFHGDJCBYEXAZCZLVVSA7MMURDPMJ5S5JWI",
-                    "ISCC:IAD6TOYXXSR7FSN7TRRRNOKQ6JCFK3ZF4KRFVEQRQ4M4PDPUR5H7GHQ",
-                ]
-            ],
-            min_length=2,
-        ),
-    ] = None
-    metadata: Annotated[
-        dict[str, Any] | None,
-        Field(
-            description="Optional application-specific metadata. This field allows clients to store\ncustom data without requiring API changes. The server stores this data\nopaquely without validation.\n",
-            examples=[
-                {
-                    "source": "example.com",
-                    "uploaded_by": "user123",
-                    "content_type": "image/jpeg",
-                    "tags": ["nature", "landscape"],
-                }
-            ],
-        ),
-    ] = None
-
-
 class Status(str, Enum):
     created = "created"
     updated = "updated"
@@ -147,6 +96,46 @@ class Metric(str, Enum):
     nphd = "nphd"
     hamming = "hamming"
     bitlength = "bitlength"
+
+
+class IsccAsset(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    iscc_id: Annotated[
+        str | None,
+        Field(
+            description="Globally unique digital asset identifier (ISCC-ID)",
+            examples=["ISCC:MAIGIIFJRDGEQQAA"],
+            pattern="^ISCC:[A-Z2-7]{16,}$",
+        ),
+    ] = None
+    iscc_code: Annotated[
+        str | None,
+        Field(
+            description="Composite ISCC-CODE combining multiple ISCC-UNITs",
+            examples=["ISCC:KECYCMZIOY36XXGZ7S6QJQ2AEEXPOVEHZYPK6GMSFLU3WF54UPZMTPY"],
+            pattern="^ISCC:[A-Z2-7]{16,}$",
+        ),
+    ] = None
+    units: Annotated[
+        list[str] | None,
+        Field(description="List of ISCC-UNITs as canonical strings (variable-length, 64-256 bits)", min_length=2),
+    ] = None
+    metadata: Annotated[
+        dict[str, Any] | None,
+        Field(
+            description="Optional application-specific metadata. This field allows clients to store\ncustom data without requiring API changes. The server stores this data\nopaquely without validation.\n",
+            examples=[
+                {
+                    "source": "example.com",
+                    "uploaded_by": "user123",
+                    "content_type": "image/jpeg",
+                    "tags": ["nature", "landscape"],
+                }
+            ],
+        ),
+    ] = None
 
 
 class IsccSearchResult(BaseModel):

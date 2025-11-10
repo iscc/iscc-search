@@ -125,6 +125,7 @@ input = "iscc_search/openapi/openapi.yaml"
 input-file-type = "openapi"
 output = "iscc_search/schema.py"
 output-model-type = "pydantic_v2.BaseModel"
+collapse-root-models = true
 disable-timestamp = true
 target-python-version = "3.12"
 use-subclass-enum = true

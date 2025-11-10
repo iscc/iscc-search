@@ -11,7 +11,7 @@ required:
   - matches
 properties:
   query:
-    $ref: "./IsccAsset.yaml"
+    $ref: "./IsccEntry.yaml"
     description: The original query asset (may include auto-generated iscc_id)
   metric:
     type: string

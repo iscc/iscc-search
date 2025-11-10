@@ -149,7 +149,7 @@ iscc_search/
 │
 ├── protocol.py              # IsccIndexProtocol definition
 ├── settings.py              # Pydantic settings and index factory
-├── models.py                # Existing data models (IsccAsset, etc.)
+├── models.py                # Existing data models (IsccEntry, etc.)
 ├── schema.py                # Generated Pydantic models from OpenAPI
 │
 ├── cli/
@@ -183,7 +183,7 @@ iscc_search/
 
 The schema is generated from OpenAPI specifications and defines the core data models:
 
-**IsccAsset** - Represents an ISCC asset with metadata:
+**IsccEntry** - Represents an ISCC asset with metadata:
 
 - `iscc_id` (str | None): Required when adding assets, optional for search queries
 - `iscc_code` (str | None): Composite ISCC-CODE combining multiple ISCC-UNITs
@@ -203,7 +203,7 @@ The schema is generated from OpenAPI specifications and defines the core data mo
 
 **IsccSearchResult** - Search results:
 
-- `query` (IsccAsset): The original query asset (may include auto-generated iscc_id)
+- `query` (IsccEntry): The original query asset (may include auto-generated iscc_id)
 - `metric` (Metric): Distance metric used (nphd, hamming, bitlength)
 - `matches` (list[IsccMatch]): List of matched ISCC-IDs with scores
 
@@ -248,7 +248,7 @@ All methods are synchronous. Backends may use threading/connection pools interna
 
 **LmdbIndex**: Single LMDB file containing:
 
-- `__assets__` database: ISCC-ID → IsccAsset JSON
+- `__assets__` database: ISCC-ID → IsccEntry JSON
 - `__metadata__` database: realm_id, created_at timestamps
 - Per-unit-type databases: unit_body → [iscc_id_body, ...] (dupsort enabled)
 
@@ -279,7 +279,7 @@ All methods are synchronous. Backends may use threading/connection pools interna
 
 - No persistence - data lost on process exit
 - Simple exact-match search (no similarity)
-- Dict storage: `{index_name: {assets: {iscc_id: IsccAsset}}}`
+- Dict storage: `{index_name: {assets: {iscc_id: IsccEntry}}}`
 - Fast, zero dependencies, ideal for unit tests
 - No `close()` cleanup needed
 

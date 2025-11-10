@@ -309,7 +309,7 @@ def test_client(backend_index):
 def sample_assets(sample_iscc_ids, sample_iscc_codes, sample_content_units):
     # type: (list[str], list[str], list[str]) -> list[typing.Any]
     """
-    Generate list of IsccAsset objects with valid ISCC data for testing.
+    Generate list of IsccEntry objects with valid ISCC data for testing.
 
     Creates assets with iscc_id, iscc_code, units, and metadata fields populated
     from existing ISCC fixtures.
@@ -317,14 +317,14 @@ def sample_assets(sample_iscc_ids, sample_iscc_codes, sample_content_units):
     :param sample_iscc_ids: Fixture providing ISCC-IDs
     :param sample_iscc_codes: Fixture providing ISCC-CODEs
     :param sample_content_units: Fixture providing ISCC-UNITs
-    :return: List of IsccAsset objects
+    :return: List of IsccEntry objects
     """
-    from iscc_search.schema import IsccAsset
+    from iscc_search.schema import IsccEntry
 
     assets = []
     for i in range(5):
         # Provide at least 2 units (schema requires min_length=2)
-        asset = IsccAsset(
+        asset = IsccEntry(
             iscc_id=sample_iscc_ids[i],
             iscc_code=sample_iscc_codes[i],
             units=[
@@ -347,7 +347,7 @@ def populated_index(memory_index_instance, sample_assets):
     sample assets. Useful for testing search and retrieval operations.
 
     :param memory_index_instance: Fresh MemoryIndex instance
-    :param sample_assets: Sample IsccAsset objects
+    :param sample_assets: Sample IsccEntry objects
     :return: MemoryIndex with data
     """
     from iscc_search.schema import IsccIndex

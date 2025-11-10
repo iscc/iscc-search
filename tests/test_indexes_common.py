@@ -6,12 +6,12 @@ Tests serialization, ISCC parsing, validation, and error handling.
 
 import pytest
 import iscc_core as ic
-from iscc_search.schema import IsccAsset
+from iscc_search.schema import IsccEntry
 from iscc_search.indexes import common
 
 
 def test_serialize_deserialize_asset_roundtrip(sample_assets):
-    """Test IsccAsset serialization and deserialization roundtrip."""
+    """Test IsccEntry serialization and deserialization roundtrip."""
     asset = sample_assets[0]
 
     # Serialize
@@ -30,7 +30,7 @@ def test_serialize_deserialize_asset_roundtrip(sample_assets):
 
 def test_serialize_asset_minimal(sample_iscc_ids):
     """Test serialization with minimal asset (only iscc_id)."""
-    asset = IsccAsset(iscc_id=sample_iscc_ids[0])
+    asset = IsccEntry(iscc_id=sample_iscc_ids[0])
 
     data = common.serialize_asset(asset)
     restored = common.deserialize_asset(data)
@@ -290,7 +290,7 @@ def test_roundtrip_iscc_id_body_reconstruction(sample_iscc_ids):
 
 def test_normalize_query_asset_with_iscc_code_only(sample_iscc_codes):
     """Test normalize_query_asset derives units from iscc_code."""
-    query = IsccAsset(iscc_code=sample_iscc_codes[0])
+    query = IsccEntry(iscc_code=sample_iscc_codes[0])
     normalized = common.normalize_query_asset(query)
 
     # Should have both iscc_code and units after normalization
@@ -308,7 +308,7 @@ def test_normalize_query_asset_with_units_only(sample_iscc_codes):
     units = [str(unit) for unit in code_obj.units]
 
     # Query with units only (no iscc_code)
-    query = IsccAsset(units=units)
+    query = IsccEntry(units=units)
     normalized = common.normalize_query_asset(query)
 
     # Should have both units and iscc_code after normalization
@@ -325,7 +325,7 @@ def test_normalize_query_asset_with_both(sample_iscc_codes):
     code_obj = IsccCode(sample_iscc_codes[0])
     units = [str(u) for u in code_obj.units]
 
-    query = IsccAsset(iscc_code=sample_iscc_codes[0], units=units)
+    query = IsccEntry(iscc_code=sample_iscc_codes[0], units=units)
     normalized = common.normalize_query_asset(query)
 
     # Should preserve both
@@ -336,6 +336,6 @@ def test_normalize_query_asset_with_both(sample_iscc_codes):
 def test_normalize_query_asset_with_neither(sample_iscc_ids):
     """Test normalize_query_asset raises error when neither iscc_code nor units provided."""
     # Query with only iscc_id (no iscc_code or units)
-    query = IsccAsset(iscc_id=sample_iscc_ids[0])
+    query = IsccEntry(iscc_id=sample_iscc_ids[0])
     with pytest.raises(ValueError, match="must have either 'iscc_code' or 'units'"):
         common.normalize_query_asset(query)

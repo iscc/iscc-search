@@ -2,7 +2,7 @@
 LMDB-backed single index implementation.
 
 Manages a single LMDB file containing:
-- Asset storage (full IsccAsset metadata)
+- Asset storage (full IsccEntry metadata)
 - Inverted indexes per ISCC-UNIT type for similarity search
 - Index metadata (realm_id, timestamps)
 
@@ -23,7 +23,7 @@ class LmdbIndex:
     Single LMDB-backed index with inverted unit-type indexes.
 
     Storage structure:
-    - __assets__ database: iscc_id → IsccAsset JSON
+    - __assets__ database: iscc_id → IsccEntry JSON
     - __metadata__ database: realm_id, created_at
     - Per unit-type databases: unit_body → [iscc_id_body, ...] (dupsort)
 
@@ -75,14 +75,14 @@ class LmdbIndex:
         self._load_metadata()
 
     def add_assets(self, assets):
-        # type: (list[IsccAsset]) -> list[IsccAddResult]
+        # type: (list[IsccEntry]) -> list[IsccAddResult]
         """
         Add assets to index with inverted unit indexing.
 
         Validates realm_id consistency across all assets.
         Auto-retries on MapFullError by doubling map_size.
 
-        :param assets: List of IsccAsset instances to add
+        :param assets: List of IsccEntry instances to add
         :return: List of IsccAddResult with created/updated status
         :raises ValueError: If realm_id inconsistent or missing iscc_id
         """
@@ -155,12 +155,12 @@ class LmdbIndex:
         return results
 
     def get_asset(self, iscc_id):
-        # type: (str) -> IsccAsset
+        # type: (str) -> IsccEntry
         """
         Get asset by ISCC-ID.
 
         :param iscc_id: ISCC-ID to retrieve
-        :return: IsccAsset with full metadata
+        :return: IsccEntry with full metadata
         :raises ValueError: If ISCC-ID realm doesn't match index realm or format invalid
         :raises FileNotFoundError: If asset not found
         """
@@ -181,7 +181,7 @@ class LmdbIndex:
             return common.deserialize_asset(asset_bytes)
 
     def search_assets(self, query, limit=100):
-        # type: (IsccAsset, int) -> IsccSearchResult
+        # type: (IsccEntry, int) -> IsccSearchResult
         """
         Search for similar assets using bidirectional prefix matching.
 
@@ -191,7 +191,7 @@ class LmdbIndex:
         Accepts query with either iscc_code or units (or both). If only iscc_code
         is provided, units are automatically derived for search.
 
-        :param query: IsccAsset with iscc_code or units (or both)
+        :param query: IsccEntry with iscc_code or units (or both)
         :param limit: Maximum number of results
         :return: IsccSearchResult with matches sorted by score (descending)
         :raises ValueError: If query has neither iscc_code nor units

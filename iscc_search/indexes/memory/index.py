@@ -24,7 +24,7 @@ class MemoryIndex:
     Storage structure:
         _indexes = {
             "index_name": {
-                "assets": {iscc_id: IsccAsset, ...},
+                "assets": {iscc_id: IsccEntry, ...},
                 "metadata": {}
             },
             ...
@@ -110,7 +110,7 @@ class MemoryIndex:
         del self._indexes[name]
 
     def add_assets(self, index_name, assets):
-        # type: (str, list[IsccAsset]) -> list[IsccAddResult]
+        # type: (str, list[IsccEntry]) -> list[IsccAddResult]
         """
         Add assets to in-memory index.
 
@@ -119,7 +119,7 @@ class MemoryIndex:
         by the client when adding assets.
 
         :param index_name: Target index name
-        :param assets: List of IsccAsset objects to add (must include iscc_id)
+        :param assets: List of IsccEntry objects to add (must include iscc_id)
         :return: List of IsccAddResult with status for each asset
         :raises FileNotFoundError: If index doesn't exist
         :raises ValueError: If asset is missing required iscc_id field
@@ -146,13 +146,13 @@ class MemoryIndex:
         return results
 
     def get_asset(self, index_name, iscc_id):
-        # type: (str, str) -> IsccAsset
+        # type: (str, str) -> IsccEntry
         """
         Get a specific asset by ISCC-ID.
 
         :param index_name: Target index name
         :param iscc_id: ISCC-ID of the asset to retrieve
-        :return: IsccAsset with all stored metadata
+        :return: IsccEntry with all stored metadata
         :raises FileNotFoundError: If index doesn't exist or asset not found
         :raises ValueError: If ISCC-ID format is invalid
         """
@@ -167,7 +167,7 @@ class MemoryIndex:
         return index_data["assets"][iscc_id]
 
     def search_assets(self, index_name, query, limit=100):
-        # type: (str, IsccAsset, int) -> IsccSearchResult
+        # type: (str, IsccEntry, int) -> IsccSearchResult
         """
         Search for similar assets (simple exact match for testing).
 
@@ -181,7 +181,7 @@ class MemoryIndex:
         ISCC-CODEs will return no matches.
 
         :param index_name: Target index name
-        :param query: IsccAsset with iscc_code or units (or both)
+        :param query: IsccEntry with iscc_code or units (or both)
         :param limit: Maximum number of results
         :return: IsccSearchResult with matches
         :raises FileNotFoundError: If index doesn't exist

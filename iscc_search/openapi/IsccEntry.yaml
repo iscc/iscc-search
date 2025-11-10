@@ -1,6 +1,6 @@
 $schema: "https://json-schema.org/draft/2020-12/schema"
-$id: "http://purl.org/iscc/schema/iscc-asset.json"
-title: "IsccAsset"
+$id: "http://purl.org/iscc/schema/iscc-entry.json"
+title: "IsccEntry"
 type: object
 description: |
   ISCC asset data for indexing and search.

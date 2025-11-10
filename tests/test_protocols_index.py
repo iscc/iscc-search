@@ -1,7 +1,7 @@
 """Test ISCC Index Protocol definition and runtime checking."""
 
 from iscc_search.protocols.index import IsccIndexProtocol
-from iscc_search.schema import IsccAddResult, IsccAsset, IsccIndex, IsccSearchResult, Metric
+from iscc_search.schema import IsccAddResult, IsccEntry, IsccIndex, IsccSearchResult, Metric
 
 
 def test_protocol_is_runtime_checkable():
@@ -26,15 +26,15 @@ def test_protocol_is_runtime_checkable():
             pass
 
         def add_assets(self, index_name, assets):
-            # type: (str, list[IsccAsset]) -> list[IsccAddResult]
+            # type: (str, list[IsccEntry]) -> list[IsccAddResult]
             return []
 
         def get_asset(self, index_name, iscc_id):
-            # type: (str, str) -> IsccAsset
-            return IsccAsset(iscc_id=iscc_id)
+            # type: (str, str) -> IsccEntry
+            return IsccEntry(iscc_id=iscc_id)
 
         def search_assets(self, index_name, query, limit=100):
-            # type: (str, IsccAsset, int) -> IsccSearchResult
+            # type: (str, IsccEntry, int) -> IsccSearchResult
             return IsccSearchResult(query=query, metric=Metric.bitlength, matches=[])
 
         def close(self):
@@ -100,11 +100,11 @@ def test_protocol_accepts_complete_implementation():
             return [IsccAddResult(iscc_id="ISCC:MAIGIIFJRDGEQQAA", status="created")]
 
         def get_asset(self, index_name, iscc_id):
-            return IsccAsset(iscc_id=iscc_id)
+            return IsccEntry(iscc_id=iscc_id)
 
         def search_assets(self, index_name, query, limit=100):
             return IsccSearchResult(
-                query=IsccAsset(iscc_id="ISCC:MAIGIIFJRDGEQQAA", units=["ISCC:AADYCMZIOY36XXGZ"]),
+                query=IsccEntry(iscc_id="ISCC:MAIGIIFJRDGEQQAA", units=["ISCC:AADYCMZIOY36XXGZ"]),
                 metric=Metric.nphd,
                 matches=[],
             )
@@ -136,7 +136,7 @@ def test_protocol_method_signatures():
             return []
 
         def get_asset(self, index_name, iscc_id):
-            return IsccAsset(iscc_id=iscc_id)
+            return IsccEntry(iscc_id=iscc_id)
 
         def search_assets(self, index_name, query, limit=100):
             return IsccSearchResult(query=query, metric=Metric.bitlength, matches=[])
@@ -240,7 +240,7 @@ def test_protocol_with_extra_methods():
             return []
 
         def get_asset(self, index_name, iscc_id):
-            return IsccAsset(iscc_id=iscc_id)
+            return IsccEntry(iscc_id=iscc_id)
 
         def search_assets(self, index_name, query, limit=100):
             return IsccSearchResult(query=query, metric=Metric.bitlength, matches=[])

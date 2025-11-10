@@ -7,7 +7,7 @@ and INSTANCE special handling.
 
 import iscc_core as ic
 import pytest
-from iscc_search.schema import IsccIndex, IsccAsset, Status
+from iscc_search.schema import IsccIndex, IsccEntry, Status
 from iscc_search.indexes.usearch import UsearchIndexManager
 from iscc_search.protocols.index import IsccIndexProtocol
 
@@ -179,7 +179,7 @@ def test_delete_index_with_cached_instance(manager, tmp_path, sample_iscc_ids, s
     manager.create_index(IsccIndex(name="cached"))
 
     # Add asset to populate cache
-    asset = IsccAsset(
+    asset = IsccEntry(
         iscc_id=sample_iscc_ids[0],
         units=[sample_content_units[0], sample_content_units[1]],
     )
@@ -204,7 +204,7 @@ def test_add_assets_basic(manager, sample_iscc_ids, sample_content_units):
     manager.create_index(IsccIndex(name="test"))
 
     assets = [
-        IsccAsset(
+        IsccEntry(
             iscc_id=sample_iscc_ids[0],
             units=[sample_content_units[0], sample_content_units[1]],  # Need min 2 units
         )
@@ -220,7 +220,7 @@ def test_add_assets_basic(manager, sample_iscc_ids, sample_content_units):
 def test_add_assets_index_not_found(manager, sample_iscc_ids, sample_content_units):
     """Test add_assets with non-existent index raises FileNotFoundError."""
     assets = [
-        IsccAsset(
+        IsccEntry(
             iscc_id=sample_iscc_ids[0],
             units=[sample_content_units[0], sample_content_units[1]],
         )
@@ -234,7 +234,7 @@ def test_get_asset_success(manager, sample_iscc_ids, sample_content_units):
     """Test retrieving asset by ISCC-ID."""
     manager.create_index(IsccIndex(name="test"))
 
-    original = IsccAsset(
+    original = IsccEntry(
         iscc_id=sample_iscc_ids[0],
         units=[sample_content_units[0], sample_content_units[1]],
         metadata={"title": "Test Asset"},
@@ -267,7 +267,7 @@ def test_search_assets_empty_index(manager, sample_content_units):
     """Test search on empty index returns empty results."""
     manager.create_index(IsccIndex(name="test"))
 
-    query = IsccAsset(units=[sample_content_units[0], sample_content_units[1]])
+    query = IsccEntry(units=[sample_content_units[0], sample_content_units[1]])
     result = manager.search_assets("test", query)
 
     assert result.matches == []
@@ -282,15 +282,15 @@ def test_search_assets_similarity_matching(manager, gen_iscc_id_realm_0, gen_con
 
     # Add multiple assets with similar CONTENT units
     assets = [
-        IsccAsset(
+        IsccEntry(
             iscc_id=gen_iscc_id_realm_0(),
             units=[gen_content_text("Hello World"), instance],
         ),
-        IsccAsset(
+        IsccEntry(
             iscc_id=gen_iscc_id_realm_0(),
             units=[gen_content_text("Hello World!"), instance],  # Similar
         ),
-        IsccAsset(
+        IsccEntry(
             iscc_id=gen_iscc_id_realm_0(),
             units=[gen_content_text("Completely Different"), instance],
         ),
@@ -299,7 +299,7 @@ def test_search_assets_similarity_matching(manager, gen_iscc_id_realm_0, gen_con
     manager.add_assets("test", assets)
 
     # Search with similar query
-    query = IsccAsset(units=[gen_content_text("Hello World"), instance])
+    query = IsccEntry(units=[gen_content_text("Hello World"), instance])
     result = manager.search_assets("test", query, limit=10)
 
     # Should find matches, ordered by similarity
@@ -319,14 +319,14 @@ def test_search_assets_instance_exact_matching(manager, gen_iscc_id_realm_0, gen
     content_unit = gen_content_text("Test")  # Need 2 units minimum
 
     # Add asset with INSTANCE unit
-    asset = IsccAsset(
+    asset = IsccEntry(
         iscc_id=gen_iscc_id_realm_0(),
         units=[instance_unit, content_unit],
     )
     manager.add_assets("test", [asset])
 
     # Search with same units
-    query = IsccAsset(units=[instance_unit, content_unit])
+    query = IsccEntry(units=[instance_unit, content_unit])
     result = manager.search_assets("test", query)
 
     # Should find exact match with high score
@@ -344,14 +344,14 @@ def test_search_assets_hybrid(manager, gen_iscc_id_realm_0, gen_content_text, ge
     instance_unit = gen_instance(b"unused")
 
     # Add asset with both unit types
-    asset = IsccAsset(
+    asset = IsccEntry(
         iscc_id=gen_iscc_id_realm_0(),
         units=[content_unit, instance_unit],
     )
     manager.add_assets("test", [asset])
 
     # Search with same units
-    query = IsccAsset(units=[content_unit, instance_unit])
+    query = IsccEntry(units=[content_unit, instance_unit])
     result = manager.search_assets("test", query)
 
     # Should find match with aggregated score
@@ -363,7 +363,7 @@ def test_search_assets_hybrid(manager, gen_iscc_id_realm_0, gen_content_text, ge
 
 def test_search_assets_index_not_found(manager, sample_content_units):
     """Test search_assets with non-existent index raises FileNotFoundError."""
-    query = IsccAsset(units=[sample_content_units[0], sample_content_units[1]])
+    query = IsccEntry(units=[sample_content_units[0], sample_content_units[1]])
 
     with pytest.raises(FileNotFoundError, match="not found"):
         manager.search_assets("nonexistent", query)
@@ -386,7 +386,7 @@ def test_persistence_after_close(manager, tmp_path, sample_iscc_ids, sample_cont
     """Test index persists after close and can be reopened."""
     manager.create_index(IsccIndex(name="test"))
 
-    asset = IsccAsset(
+    asset = IsccEntry(
         iscc_id=sample_iscc_ids[0],
         units=[sample_content_units[0], sample_content_units[1]],
     )
@@ -403,7 +403,7 @@ def test_persistence_after_close(manager, tmp_path, sample_iscc_ids, sample_cont
         assert retrieved.iscc_id == iscc_id
 
         # Search should also work
-        query = IsccAsset(units=[sample_content_units[0], sample_content_units[1]])
+        query = IsccEntry(units=[sample_content_units[0], sample_content_units[1]])
         result = manager2.search_assets("test", query)
         assert len(result.matches) > 0
     finally:
@@ -415,14 +415,14 @@ def test_multiple_indexes_isolation(manager, sample_iscc_ids, sample_content_uni
     manager.create_index(IsccIndex(name="index1"))
     manager.create_index(IsccIndex(name="index2"))
 
-    asset1 = IsccAsset(
+    asset1 = IsccEntry(
         iscc_id=sample_iscc_ids[0],
         units=[sample_content_units[0], sample_content_units[1]],
     )
     manager.add_assets("index1", [asset1])
 
     # index2 should be empty
-    query = IsccAsset(units=[sample_content_units[0], sample_content_units[1]])
+    query = IsccEntry(units=[sample_content_units[0], sample_content_units[1]])
     result = manager.search_assets("index2", query)
     assert result.matches == []
 
@@ -464,7 +464,7 @@ def test_add_assets_missing_iscc_id(manager, sample_content_units):
 
     # Asset without iscc_id should raise ValueError
     assets = [
-        IsccAsset(
+        IsccEntry(
             units=[sample_content_units[0], sample_content_units[1]],
         )
     ]
@@ -478,14 +478,14 @@ def test_add_assets_missing_iscc_id_after_realm_set(manager, sample_iscc_ids, sa
     manager.create_index(IsccIndex(name="test"))
 
     # First add valid asset to set realm_id
-    valid_asset = IsccAsset(
+    valid_asset = IsccEntry(
         iscc_id=sample_iscc_ids[0],
         units=[sample_content_units[0], sample_content_units[1]],
     )
     manager.add_assets("test", [valid_asset])
 
     # Now try to add asset without iscc_id - should raise ValueError
-    invalid_asset = IsccAsset(
+    invalid_asset = IsccEntry(
         units=[sample_content_units[2], sample_content_units[3]],
     )
 
@@ -498,7 +498,7 @@ def test_add_assets_realm_mismatch(manager, sample_iscc_ids, sample_content_unit
     manager.create_index(IsccIndex(name="test"))
 
     # Add asset with realm 0
-    asset1 = IsccAsset(
+    asset1 = IsccEntry(
         iscc_id=sample_iscc_ids[0],  # realm 0
         units=[sample_content_units[0], sample_content_units[1]],
     )
@@ -506,7 +506,7 @@ def test_add_assets_realm_mismatch(manager, sample_iscc_ids, sample_content_unit
 
     # Try to add asset with realm 1 - should fail
     realm_1_id = ic.gen_iscc_id(timestamp=9000000, hub_id=1, realm_id=1)["iscc"]
-    asset2 = IsccAsset(
+    asset2 = IsccEntry(
         iscc_id=realm_1_id,
         units=[sample_content_units[2], sample_content_units[3]],
     )

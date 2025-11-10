@@ -8,7 +8,7 @@ import io
 import pytest
 import iscc_core as ic
 from iscc_search.indexes.usearch.index import UsearchIndex
-from iscc_search.schema import IsccAsset
+from iscc_search.schema import IsccEntry
 
 
 @pytest.fixture
@@ -72,26 +72,26 @@ def test_usearch_index_bidirectional_instance_matching_256bit(usearch_index, sam
 
     # Add asset with 256-bit INSTANCE
     content_unit = ic.gen_text_code_v0("Test content")["iscc"]
-    asset = IsccAsset(
+    asset = IsccEntry(
         iscc_id=sample_iscc_ids[0],
         units=[instance_str, content_unit],
     )
     usearch_index.add_assets([asset])
 
     # Search with 256-bit query - should match itself
-    query = IsccAsset(units=[instance_str, content_unit])
+    query = IsccEntry(units=[instance_str, content_unit])
     result = usearch_index.search_assets(query, limit=10)
 
     assert len(result.matches) == 1
     assert result.matches[0].iscc_id == sample_iscc_ids[0]
 
     # Search with 128-bit - tests the reverse matching code path (query_len == 32 branch)
-    query_128 = IsccAsset(units=[instance_128, content_unit])
+    query_128 = IsccEntry(units=[instance_128, content_unit])
     _ = usearch_index.search_assets(query_128, limit=10)
     # May or may not match depending on prefix - just testing code path executes
 
     # Search with 64-bit - tests the reverse matching code path (query_len >= 16 branch)
-    query_64 = IsccAsset(units=[instance_64, content_unit])
+    query_64 = IsccEntry(units=[instance_64, content_unit])
     _ = usearch_index.search_assets(query_64, limit=10)
     # May or may not match depending on prefix - just testing code path executes
 
@@ -104,14 +104,14 @@ def test_usearch_index_bidirectional_instance_matching_128bit(usearch_index, sam
 
     # Add asset with 128-bit INSTANCE
     content_unit = ic.gen_text_code_v0("Test content 128")["iscc"]
-    asset = IsccAsset(
+    asset = IsccEntry(
         iscc_id=sample_iscc_ids[1],
         units=[instance_str, content_unit],
     )
     usearch_index.add_assets([asset])
 
     # Search with 128-bit query - should match itself
-    query = IsccAsset(units=[instance_str, content_unit])
+    query = IsccEntry(units=[instance_str, content_unit])
     result = usearch_index.search_assets(query, limit=10)
 
     assert len(result.matches) == 1
@@ -120,7 +120,7 @@ def test_usearch_index_bidirectional_instance_matching_128bit(usearch_index, sam
     # Create a different 64-bit code to test the reverse matching path (query_len >= 16 branch)
     instance_64_obj = ic.Code.rnd(ic.MT.INSTANCE, bits=64)
     instance_64 = f"ISCC:{instance_64_obj}"
-    query_64 = IsccAsset(units=[instance_64, content_unit])
+    query_64 = IsccEntry(units=[instance_64, content_unit])
     _ = usearch_index.search_assets(query_64, limit=10)
     # Just testing the code path executes
 
@@ -141,14 +141,14 @@ def test_usearch_index_instance_proportional_scoring(usearch_index, sample_iscc_
     # Add assets with different INSTANCE lengths
     content_unit = ic.gen_text_code_v0("Shared content for scoring test")["iscc"]
 
-    asset_64 = IsccAsset(iscc_id=sample_iscc_ids[0], units=[ic_64, content_unit])
-    asset_128 = IsccAsset(iscc_id=sample_iscc_ids[1], units=[ic_128, content_unit])
-    asset_256 = IsccAsset(iscc_id=sample_iscc_ids[2], units=[ic_256, content_unit])
+    asset_64 = IsccEntry(iscc_id=sample_iscc_ids[0], units=[ic_64, content_unit])
+    asset_128 = IsccEntry(iscc_id=sample_iscc_ids[1], units=[ic_128, content_unit])
+    asset_256 = IsccEntry(iscc_id=sample_iscc_ids[2], units=[ic_256, content_unit])
 
     usearch_index.add_assets([asset_64, asset_128, asset_256])
 
     # Test 1: 64-bit exact match should score 0.25
-    query_64 = IsccAsset(units=[ic_64, content_unit])
+    query_64 = IsccEntry(units=[ic_64, content_unit])
     result_64 = usearch_index.search_assets(query_64, limit=10)
 
     # Find the exact match
@@ -156,14 +156,14 @@ def test_usearch_index_instance_proportional_scoring(usearch_index, sample_iscc_
     assert match_64.matches["INSTANCE_NONE_V0"] == 0.25, "64-bit exact match should score 0.25"
 
     # Test 2: 128-bit exact match should score 0.5
-    query_128 = IsccAsset(units=[ic_128, content_unit])
+    query_128 = IsccEntry(units=[ic_128, content_unit])
     result_128 = usearch_index.search_assets(query_128, limit=10)
 
     match_128 = next(m for m in result_128.matches if m.iscc_id == sample_iscc_ids[1])
     assert match_128.matches["INSTANCE_NONE_V0"] == 0.5, "128-bit exact match should score 0.5"
 
     # Test 3: 256-bit exact match should score 1.0
-    query_256 = IsccAsset(units=[ic_256, content_unit])
+    query_256 = IsccEntry(units=[ic_256, content_unit])
     result_256 = usearch_index.search_assets(query_256, limit=10)
 
     match_256 = next(m for m in result_256.matches if m.iscc_id == sample_iscc_ids[2])
@@ -255,7 +255,7 @@ def test_usearch_index_search_with_no_similarity_units(tmp_path):
     instance_unit = f"ISCC:{ic.Code.rnd(ic.MT.INSTANCE, bits=128)}"
     content_unit = ic.gen_text_code_v0("Test content no sim unique")["iscc"]
 
-    asset = IsccAsset(
+    asset = IsccEntry(
         iscc_id=iscc_id,
         units=[instance_unit, content_unit],
     )
@@ -264,7 +264,7 @@ def test_usearch_index_search_with_no_similarity_units(tmp_path):
     # Search with CONTENT unit that doesn't exist in index (unit type not in _nphd_indexes)
     # This tests the branch: if unit_type in self._nphd_indexes
     different_content = ic.gen_text_code_v0("Different content completely unique")["iscc"]
-    query = IsccAsset(units=[different_content, instance_unit])
+    query = IsccEntry(units=[different_content, instance_unit])
     result = idx.search_assets(query, limit=10)
 
     # Should still find via INSTANCE match even though CONTENT not in index
@@ -300,7 +300,7 @@ def test_usearch_index_max_dim_persistence(tmp_path, sample_iscc_ids):
     # Add some data to create unit indexes
     instance_unit = f"ISCC:{ic.Code.rnd(ic.MT.INSTANCE, bits=128)}"
     content_unit = ic.gen_text_code_v0("Test content for max_dim")["iscc"]
-    asset1 = IsccAsset(
+    asset1 = IsccEntry(
         iscc_id=sample_iscc_ids[0],
         units=[instance_unit, content_unit],
     )
@@ -321,7 +321,7 @@ def test_usearch_index_max_dim_persistence(tmp_path, sample_iscc_ids):
     # Add data that creates a NEW unit index to verify it uses loaded max_dim
     instance_unit2 = f"ISCC:{ic.Code.rnd(ic.MT.INSTANCE, bits=128)}"
     data_unit = ic.gen_data_code_v0(io.BytesIO(b"Some binary data for testing"))["iscc"]
-    asset2 = IsccAsset(
+    asset2 = IsccEntry(
         iscc_id=sample_iscc_ids[1],
         units=[instance_unit2, data_unit],
     )
@@ -345,17 +345,17 @@ def test_usearch_index_duplicate_iscc_ids_in_batch(usearch_index, sample_iscc_id
     instance_unit = f"ISCC:{ic.Code.rnd(ic.MT.INSTANCE, bits=128)}"
 
     # Create three assets with the same ISCC-ID
-    asset1 = IsccAsset(
+    asset1 = IsccEntry(
         iscc_id=sample_iscc_ids[0],
         units=[instance_unit, content_unit_1],
         metadata={"version": 1},
     )
-    asset2 = IsccAsset(
+    asset2 = IsccEntry(
         iscc_id=sample_iscc_ids[0],  # Same ISCC-ID
         units=[instance_unit, content_unit_2],
         metadata={"version": 2},
     )
-    asset3 = IsccAsset(
+    asset3 = IsccEntry(
         iscc_id=sample_iscc_ids[0],  # Same ISCC-ID
         units=[instance_unit, content_unit_3],
         metadata={"version": 3},
@@ -375,7 +375,7 @@ def test_usearch_index_duplicate_iscc_ids_in_batch(usearch_index, sample_iscc_id
     assert retrieved.metadata["version"] == 3
 
     # Verify search works (last content unit should be indexed)
-    query = IsccAsset(units=[instance_unit, content_unit_3])
+    query = IsccEntry(units=[instance_unit, content_unit_3])
     result = usearch_index.search_assets(query, limit=10)
     assert len(result.matches) >= 1
     assert sample_iscc_ids[0] in [m.iscc_id for m in result.matches]
@@ -395,7 +395,7 @@ def test_usearch_index_infer_realm_from_first_asset(tmp_path, sample_iscc_ids):
     content_unit = ic.gen_text_code_v0("First asset content")["iscc"]
     instance_unit = f"ISCC:{ic.Code.rnd(ic.MT.INSTANCE, bits=128)}"
 
-    asset = IsccAsset(
+    asset = IsccEntry(
         iscc_id=sample_iscc_ids[0],  # Has realm_id=0
         units=[instance_unit, content_unit],
     )
@@ -450,7 +450,7 @@ def test_usearch_index_migration_from_legacy_index(tmp_path, sample_iscc_ids):
         # Create a test asset
         content_unit = ic.gen_text_code_v0("Legacy asset content")["iscc"]
         instance_unit = f"ISCC:{ic.Code.rnd(ic.MT.INSTANCE, bits=128)}"
-        asset = IsccAsset(
+        asset = IsccEntry(
             iscc_id=sample_iscc_ids[0],
             units=[instance_unit, content_unit],
             metadata={"legacy": True},
@@ -479,7 +479,7 @@ def test_usearch_index_migration_from_legacy_index(tmp_path, sample_iscc_ids):
     # Should be able to add new assets
     new_content = ic.gen_text_code_v0("New asset after migration")["iscc"]
     new_instance = f"ISCC:{ic.Code.rnd(ic.MT.INSTANCE, bits=128)}"
-    new_asset = IsccAsset(
+    new_asset = IsccEntry(
         iscc_id=sample_iscc_ids[1],
         units=[new_instance, new_content],
     )
@@ -530,7 +530,7 @@ def test_usearch_index_migration_missing_created_at(tmp_path, sample_iscc_ids):
         # Add an asset
         content_unit = ic.gen_text_code_v0("Asset without timestamp")["iscc"]
         instance_unit = f"ISCC:{ic.Code.rnd(ic.MT.INSTANCE, bits=128)}"
-        asset = IsccAsset(
+        asset = IsccEntry(
             iscc_id=sample_iscc_ids[0],
             units=[instance_unit, content_unit],
         )
@@ -585,7 +585,7 @@ def test_usearch_index_migration_missing_max_dim(tmp_path, sample_iscc_ids):
         # Add an asset
         content_unit = ic.gen_text_code_v0("Asset without max_dim")["iscc"]
         instance_unit = f"ISCC:{ic.Code.rnd(ic.MT.INSTANCE, bits=128)}"
-        asset = IsccAsset(
+        asset = IsccEntry(
             iscc_id=sample_iscc_ids[0],
             units=[instance_unit, content_unit],
         )
@@ -643,7 +643,7 @@ def test_usearch_index_migration_invalid_asset_no_iscc_id(tmp_path):
         # Add an asset WITHOUT iscc_id (invalid for migration)
         content_unit = ic.gen_text_code_v0("Asset without iscc_id")["iscc"]
         instance_unit = f"ISCC:{ic.Code.rnd(ic.MT.INSTANCE, bits=128)}"
-        asset = IsccAsset(
+        asset = IsccEntry(
             iscc_id=None,  # No iscc_id!
             units=[instance_unit, content_unit],
         )
@@ -674,7 +674,7 @@ def test_usearch_index_explicit_realm_id_first_add(tmp_path, sample_iscc_ids):
     content_unit = ic.gen_text_code_v0("First asset with explicit realm")["iscc"]
     instance_unit = f"ISCC:{ic.Code.rnd(ic.MT.INSTANCE, bits=128)}"
 
-    asset = IsccAsset(
+    asset = IsccEntry(
         iscc_id=sample_iscc_ids[0],
         units=[instance_unit, content_unit],
     )
@@ -721,7 +721,7 @@ def test_usearch_index_migration_with_existing_created_at(tmp_path, sample_iscc_
         # Add an asset
         content_unit = ic.gen_text_code_v0("Asset with existing timestamp")["iscc"]
         instance_unit = f"ISCC:{ic.Code.rnd(ic.MT.INSTANCE, bits=128)}"
-        asset = IsccAsset(
+        asset = IsccEntry(
             iscc_id=sample_iscc_ids[0],
             units=[instance_unit, content_unit],
         )

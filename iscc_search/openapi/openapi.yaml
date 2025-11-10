@@ -180,7 +180,7 @@ paths:
             schema:
               type: array
               items:
-                $ref: '#/components/schemas/IsccAsset'
+                $ref: '#/components/schemas/IsccEntry'
             example:
               - iscc_id: "ISCC:MAIGIJ2FJ5R6BMAA"
                 iscc_code: "ISCC:KECYCMZIOY36XXGZ7S6QJQ2AEEXPOVEHZYPK6GMSFLU3WF54UPZMTPY"
@@ -255,7 +255,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/IsccAsset'
+                $ref: '#/components/schemas/IsccEntry'
               example:
                 iscc_id: "ISCC:MAIGIIFJRDGEQQAA"
                 iscc_code: "ISCC:KECYCMZIOY36XXGZ7S6QJQ2AEEXPOVEHZYPK6GMSFLU3WF54UPZMTPY"
@@ -312,7 +312,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/IsccAsset'
+              $ref: '#/components/schemas/IsccEntry'
             example:
               iscc_code: "ISCC:KECYCMZIOY36XXGZ7S6QJQ2AEEXPOVEHZYPK6GMSFLU3WF54UPZMTPY"
               units:
@@ -426,8 +426,8 @@ components:
       $ref: './HttpError.yaml'
     IsccIndex:
       $ref: './IsccIndex.yaml'
-    IsccAsset:
-      $ref: './IsccAsset.yaml'
+    IsccEntry:
+      $ref: './IsccEntry.yaml'
     IsccAddResult:
       $ref: './IsccAddResult.yaml'
     IsccMatch:

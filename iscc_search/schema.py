@@ -98,7 +98,7 @@ class Metric(str, Enum):
     bitlength = "bitlength"
 
 
-class IsccAsset(BaseModel):
+class IsccEntry(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -142,7 +142,7 @@ class IsccSearchResult(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    query: Annotated[IsccAsset, Field(description="The original query asset (may include auto-generated iscc_id)")]
+    query: Annotated[IsccEntry, Field(description="The original query asset (may include auto-generated iscc_id)")]
     metric: Annotated[
         Metric,
         Field(

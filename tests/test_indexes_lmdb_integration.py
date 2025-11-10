@@ -6,7 +6,7 @@ Tests end-to-end workflows, settings integration, and real-world scenarios.
 
 import pytest
 import iscc_core as ic
-from iscc_search.schema import IsccAsset, IsccIndex
+from iscc_search.schema import IsccEntry, IsccIndex
 from iscc_search.indexes.lmdb import LmdbIndexManager
 from iscc_search.settings import SearchSettings, get_index
 
@@ -31,7 +31,7 @@ def test_full_workflow_create_add_search_get_delete(manager, sample_assets):
     assert len(results) == 5
 
     # 3. Search
-    query = IsccAsset(units=sample_assets[0].units)
+    query = IsccEntry(units=sample_assets[0].units)
     search_result = manager.search_assets("workflow", query, limit=10)
     assert len(search_result.matches) >= 1
 
@@ -60,17 +60,17 @@ def test_multi_index_scenario(manager, sample_iscc_ids, sample_content_units, sa
     manager.create_index(IsccIndex(name="videos"))
 
     # Add different assets to each
-    image_asset = IsccAsset(
+    image_asset = IsccEntry(
         iscc_id=sample_iscc_ids[0],
         units=[sample_content_units[0], sample_content_units[1]],
         metadata={"type": "image"},
     )
-    doc_asset = IsccAsset(
+    doc_asset = IsccEntry(
         iscc_id=sample_iscc_ids[1],
         units=[sample_content_units[2], sample_content_units[3]],
         metadata={"type": "document"},
     )
-    video_asset = IsccAsset(
+    video_asset = IsccEntry(
         iscc_id=sample_iscc_ids[2],
         units=[sample_data_units[0], sample_data_units[1]],
         metadata={"type": "video"},
@@ -100,7 +100,7 @@ def test_large_dataset(manager, large_dataset):
     assets = []
     for i in range(len(ids)):
         # Provide at least 2 units for schema validation
-        asset = IsccAsset(
+        asset = IsccEntry(
             iscc_id=ids[i],
             units=[units[i % len(units)], units[(i + 1) % len(units)]],
             metadata={"index": i, "data": "x" * 100},
@@ -118,7 +118,7 @@ def test_large_dataset(manager, large_dataset):
     assert index_meta.assets == len(assets)
 
     # Search should return results
-    query = IsccAsset(units=[units[0], units[1]])
+    query = IsccEntry(units=[units[0], units[1]])
     result = manager.search_assets("large", query, limit=50)
     assert len(result.matches) > 0
 
@@ -128,7 +128,7 @@ def test_update_asset_metadata(manager, sample_iscc_ids, sample_content_units):
     manager.create_index(IsccIndex(name="updates"))
 
     # Add original
-    original = IsccAsset(
+    original = IsccEntry(
         iscc_id=sample_iscc_ids[0],
         units=[sample_content_units[0], sample_content_units[1]],
         metadata={"version": 1, "title": "Original"},
@@ -137,7 +137,7 @@ def test_update_asset_metadata(manager, sample_iscc_ids, sample_content_units):
     assert result1[0].status.value == "created"
 
     # Update with same ISCC-ID
-    updated = IsccAsset(
+    updated = IsccEntry(
         iscc_id=sample_iscc_ids[0],
         units=[sample_content_units[0], sample_content_units[2]],  # Changed units
         metadata={"version": 2, "title": "Updated"},
@@ -209,14 +209,14 @@ def test_search_with_no_matches(manager, sample_iscc_ids, sample_content_units, 
     manager.create_index(IsccIndex(name="search"))
 
     # Add asset with specific content units
-    asset = IsccAsset(
+    asset = IsccEntry(
         iscc_id=sample_iscc_ids[0],
         units=[sample_content_units[0], sample_content_units[1]],
     )
     manager.add_assets("search", [asset])
 
     # Search for different data units (no match)
-    query = IsccAsset(units=[sample_data_units[0], sample_data_units[1]])
+    query = IsccEntry(units=[sample_data_units[0], sample_data_units[1]])
     result = manager.search_assets("search", query)
 
     assert len(result.matches) == 0
@@ -231,7 +231,7 @@ def test_empty_index_operations(manager, sample_iscc_ids, sample_content_units):
     assert index_meta.assets == 0
 
     # Search returns no results
-    query = IsccAsset(units=[sample_content_units[0], sample_content_units[1]])
+    query = IsccEntry(units=[sample_content_units[0], sample_content_units[1]])
     result = manager.search_assets("empty", query)
     assert len(result.matches) == 0
 
@@ -244,7 +244,7 @@ def test_add_assets_without_metadata(manager, sample_iscc_ids, sample_content_un
     """Test adding assets with minimal data (no metadata)."""
     manager.create_index(IsccIndex(name="minimal"))
 
-    asset = IsccAsset(
+    asset = IsccEntry(
         iscc_id=sample_iscc_ids[0],
         units=[sample_content_units[0], sample_content_units[1]],
         # No metadata
@@ -266,7 +266,7 @@ def test_concurrent_index_access(manager, sample_iscc_ids, sample_content_units)
 
     # Add different data to each
     for i in range(5):
-        asset = IsccAsset(
+        asset = IsccEntry(
             iscc_id=sample_iscc_ids[i],
             units=[sample_content_units[0], sample_content_units[1]],
             metadata={"index_num": i},
@@ -287,14 +287,14 @@ def test_realm_consistency_across_updates(manager, sample_iscc_ids, sample_conte
     manager.create_index(IsccIndex(name="realm"))
 
     # Add first asset (realm=0)
-    asset1 = IsccAsset(
+    asset1 = IsccEntry(
         iscc_id=sample_iscc_ids[0],
         units=[sample_content_units[0], sample_content_units[1]],
     )
     manager.add_assets("realm", [asset1])
 
     # Add second asset (also realm=0)
-    asset2 = IsccAsset(
+    asset2 = IsccEntry(
         iscc_id=sample_iscc_ids[1],
         units=[sample_content_units[2], sample_content_units[3]],
     )
@@ -305,7 +305,7 @@ def test_realm_consistency_across_updates(manager, sample_iscc_ids, sample_conte
 
     # Trying to add realm=1 should still fail
     iscc_id_realm1 = ic.gen_iscc_id(timestamp=9000000, hub_id=99, realm_id=1)["iscc"]
-    asset_wrong_realm = IsccAsset(
+    asset_wrong_realm = IsccEntry(
         iscc_id=iscc_id_realm1,
         units=[sample_content_units[0], sample_content_units[1]],
     )
@@ -325,7 +325,7 @@ def test_update_removes_old_unit_postings(manager, sample_iscc_ids, sample_conte
     manager.create_index(IsccIndex(name="cleanup"))
 
     # Add original asset with units[0, 1]
-    original = IsccAsset(
+    original = IsccEntry(
         iscc_id=sample_iscc_ids[0],
         units=[sample_content_units[0], sample_content_units[1]],
         metadata={"version": 1},
@@ -333,13 +333,13 @@ def test_update_removes_old_unit_postings(manager, sample_iscc_ids, sample_conte
     manager.add_assets("cleanup", [original])
 
     # Verify original units can be searched
-    query_unit1 = IsccAsset(units=[sample_content_units[1]])
+    query_unit1 = IsccEntry(units=[sample_content_units[1]])
     result_before = manager.search_assets("cleanup", query_unit1, limit=10)
     assert len(result_before.matches) == 1
     assert result_before.matches[0].iscc_id == sample_iscc_ids[0]
 
     # Update asset with different units[0, 2] - removes unit[1], adds unit[2]
-    updated = IsccAsset(
+    updated = IsccEntry(
         iscc_id=sample_iscc_ids[0],
         units=[sample_content_units[0], sample_content_units[2]],
         metadata={"version": 2},
@@ -349,7 +349,7 @@ def test_update_removes_old_unit_postings(manager, sample_iscc_ids, sample_conte
 
     # EXPECTED BEHAVIOR: Searching for old unit[1] should return NO matches
     # because the asset no longer contains it
-    query_old_unit = IsccAsset(units=[sample_content_units[1]])
+    query_old_unit = IsccEntry(units=[sample_content_units[1]])
     result_after = manager.search_assets("cleanup", query_old_unit, limit=10)
     assert len(result_after.matches) == 0, (
         f"Expected no matches for old unit, but found {len(result_after.matches)}. "
@@ -357,7 +357,7 @@ def test_update_removes_old_unit_postings(manager, sample_iscc_ids, sample_conte
     )
 
     # Searching for new unit[2] should return the asset
-    query_new_unit = IsccAsset(units=[sample_content_units[2]])
+    query_new_unit = IsccEntry(units=[sample_content_units[2]])
     result_new = manager.search_assets("cleanup", query_new_unit, limit=10)
     assert len(result_new.matches) == 1
     assert result_new.matches[0].iscc_id == sample_iscc_ids[0]

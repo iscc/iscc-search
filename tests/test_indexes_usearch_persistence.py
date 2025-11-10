@@ -4,7 +4,7 @@ Tests for UsearchIndex persistence features: save-on-close and auto-rebuild.
 
 import iscc_core as ic
 from iscc_search.indexes.usearch.index import UsearchIndex
-from iscc_search.schema import IsccAsset
+from iscc_search.schema import IsccEntry
 
 
 def test_usearch_index_save_on_close(tmp_path, sample_iscc_ids):
@@ -15,7 +15,7 @@ def test_usearch_index_save_on_close(tmp_path, sample_iscc_ids):
     idx = UsearchIndex(index_path, realm_id=0, max_dim=256)
     content_unit = ic.gen_text_code_v0("Test content for save on close")["iscc"]
     instance_unit = f"ISCC:{ic.Code.rnd(ic.MT.INSTANCE, bits=128)}"
-    asset = IsccAsset(
+    asset = IsccEntry(
         iscc_id=sample_iscc_ids[0],
         units=[instance_unit, content_unit],
     )
@@ -30,7 +30,7 @@ def test_usearch_index_save_on_close(tmp_path, sample_iscc_ids):
 
     # Reopen index and verify data persists
     idx2 = UsearchIndex(index_path, realm_id=0, max_dim=256)
-    query = IsccAsset(units=[instance_unit, content_unit])
+    query = IsccEntry(units=[instance_unit, content_unit])
     result = idx2.search_assets(query, limit=10)
 
     assert len(result.matches) == 1
@@ -46,7 +46,7 @@ def test_usearch_index_flush_method(tmp_path, sample_iscc_ids):
     idx = UsearchIndex(index_path, realm_id=0, max_dim=256)
     content_unit = ic.gen_text_code_v0("Test content for flush")["iscc"]
     instance_unit = f"ISCC:{ic.Code.rnd(ic.MT.INSTANCE, bits=128)}"
-    asset = IsccAsset(
+    asset = IsccEntry(
         iscc_id=sample_iscc_ids[0],
         units=[instance_unit, content_unit],
     )
@@ -60,7 +60,7 @@ def test_usearch_index_flush_method(tmp_path, sample_iscc_ids):
     assert usearch_file.exists(), "NphdIndex file should exist after flush()"
 
     # Index should still be usable
-    query = IsccAsset(units=[instance_unit, content_unit])
+    query = IsccEntry(units=[instance_unit, content_unit])
     result = idx.search_assets(query, limit=10)
     assert len(result.matches) == 1
 
@@ -77,7 +77,7 @@ def test_usearch_index_auto_rebuild_on_corrupted_file(tmp_path, sample_iscc_ids)
     instance_unit = f"ISCC:{ic.Code.rnd(ic.MT.INSTANCE, bits=128)}"
 
     # Add normal asset
-    asset1 = IsccAsset(
+    asset1 = IsccEntry(
         iscc_id=sample_iscc_ids[0],
         units=[instance_unit, content_unit],
     )
@@ -93,7 +93,7 @@ def test_usearch_index_auto_rebuild_on_corrupted_file(tmp_path, sample_iscc_ids)
     idx2 = UsearchIndex(index_path, realm_id=0, max_dim=256)
 
     # Verify data is recovered via rebuild
-    query = IsccAsset(units=[instance_unit, content_unit])
+    query = IsccEntry(units=[instance_unit, content_unit])
     result = idx2.search_assets(query, limit=10)
     assert len(result.matches) == 1
     assert result.matches[0].iscc_id == sample_iscc_ids[0]
@@ -111,8 +111,8 @@ def test_usearch_index_auto_rebuild_on_count_mismatch(tmp_path, sample_iscc_ids)
     content_unit_2 = ic.gen_text_code_v0("Content 2 for count mismatch")["iscc"]
     instance_unit = f"ISCC:{ic.Code.rnd(ic.MT.INSTANCE, bits=128)}"
 
-    asset1 = IsccAsset(iscc_id=sample_iscc_ids[0], units=[instance_unit, content_unit_1])
-    asset2 = IsccAsset(iscc_id=sample_iscc_ids[1], units=[instance_unit, content_unit_2])
+    asset1 = IsccEntry(iscc_id=sample_iscc_ids[0], units=[instance_unit, content_unit_1])
+    asset2 = IsccEntry(iscc_id=sample_iscc_ids[1], units=[instance_unit, content_unit_2])
 
     idx.add_assets([asset1, asset2])
     idx.close()
@@ -133,7 +133,7 @@ def test_usearch_index_auto_rebuild_on_count_mismatch(tmp_path, sample_iscc_ids)
     idx2 = UsearchIndex(index_path, realm_id=0, max_dim=256)
 
     # Verify both assets are found (rebuild worked)
-    result = idx2.search_assets(IsccAsset(units=[instance_unit, content_unit_1, content_unit_2]), limit=10)
+    result = idx2.search_assets(IsccEntry(units=[instance_unit, content_unit_1, content_unit_2]), limit=10)
     assert len(result.matches) == 2
 
     idx2.close()
@@ -151,7 +151,7 @@ def test_usearch_index_metadata_tracking(tmp_path, sample_iscc_ids):
     # Add asset
     content_unit = ic.gen_text_code_v0("Test for metadata tracking")["iscc"]
     instance_unit = f"ISCC:{ic.Code.rnd(ic.MT.INSTANCE, bits=128)}"
-    asset = IsccAsset(iscc_id=sample_iscc_ids[0], units=[instance_unit, content_unit])
+    asset = IsccEntry(iscc_id=sample_iscc_ids[0], units=[instance_unit, content_unit])
     idx.add_assets([asset])
 
     # Metadata should be updated
@@ -160,7 +160,7 @@ def test_usearch_index_metadata_tracking(tmp_path, sample_iscc_ids):
 
     # Add another asset
     content_unit2 = ic.gen_text_code_v0("Another test for metadata tracking")["iscc"]
-    asset2 = IsccAsset(iscc_id=sample_iscc_ids[1], units=[instance_unit, content_unit2])
+    asset2 = IsccEntry(iscc_id=sample_iscc_ids[1], units=[instance_unit, content_unit2])
     idx.add_assets([asset2])
 
     # Metadata should be updated again
@@ -179,7 +179,7 @@ def test_usearch_index_rebuild_with_no_vectors(tmp_path, sample_iscc_ids):
     # Add at least one asset to initialize the database
     content_unit = ic.gen_text_code_v0("Test for rebuild with no vectors")["iscc"]
     instance_unit = f"ISCC:{ic.Code.rnd(ic.MT.INSTANCE, bits=128)}"
-    asset = IsccAsset(iscc_id=sample_iscc_ids[0], units=[instance_unit, content_unit])
+    asset = IsccEntry(iscc_id=sample_iscc_ids[0], units=[instance_unit, content_unit])
     idx.add_assets([asset])
 
     # Trigger rebuild for non-existent unit_type
@@ -198,7 +198,7 @@ def test_usearch_index_no_save_on_add(tmp_path, sample_iscc_ids):
     idx = UsearchIndex(index_path, realm_id=0, max_dim=256)
     content_unit = ic.gen_text_code_v0("Test no save on add")["iscc"]
     instance_unit = f"ISCC:{ic.Code.rnd(ic.MT.INSTANCE, bits=128)}"
-    asset = IsccAsset(iscc_id=sample_iscc_ids[0], units=[instance_unit, content_unit])
+    asset = IsccEntry(iscc_id=sample_iscc_ids[0], units=[instance_unit, content_unit])
 
     # Add asset but don't close
     idx.add_assets([asset])
@@ -229,7 +229,7 @@ def test_usearch_index_crash_recovery_rebuild_missing_files(tmp_path, sample_isc
     data_unit = f"ISCC:{ic.Code.rnd(ic.MT.DATA, bits=128)}"
     instance_unit = f"ISCC:{ic.Code.rnd(ic.MT.INSTANCE, bits=128)}"
 
-    asset = IsccAsset(
+    asset = IsccEntry(
         iscc_id=sample_iscc_ids[0],
         units=[instance_unit, content_unit, data_unit],
     )
@@ -260,7 +260,7 @@ def test_usearch_index_crash_recovery_rebuild_missing_files(tmp_path, sample_isc
     assert data_file.exists(), "Missing file should be rebuilt on startup"
 
     # Verify data is accessible via search (proving rebuild worked)
-    query = IsccAsset(units=[instance_unit, content_unit, data_unit])
+    query = IsccEntry(units=[instance_unit, content_unit, data_unit])
     result = idx2.search_assets(query, limit=10)
     assert len(result.matches) == 1
     assert result.matches[0].iscc_id == sample_iscc_ids[0]
@@ -287,11 +287,11 @@ def test_usearch_index_get_all_tracked_unit_types(tmp_path, sample_iscc_ids):
     data_unit = f"ISCC:{ic.Code.rnd(ic.MT.DATA, bits=128)}"
     instance_unit = f"ISCC:{ic.Code.rnd(ic.MT.INSTANCE, bits=128)}"
 
-    asset1 = IsccAsset(
+    asset1 = IsccEntry(
         iscc_id=sample_iscc_ids[0],
         units=[instance_unit, content_unit],
     )
-    asset2 = IsccAsset(
+    asset2 = IsccEntry(
         iscc_id=sample_iscc_ids[1],
         units=[instance_unit, data_unit],
     )
@@ -370,7 +370,7 @@ def test_usearch_index_crash_recovery_multiple_missing_files(tmp_path, sample_is
         instance_unit = f"ISCC:{ic.Code.rnd(ic.MT.INSTANCE, bits=128)}"
 
         assets.append(
-            IsccAsset(
+            IsccEntry(
                 iscc_id=sample_iscc_ids[i],
                 units=[instance_unit, content_unit, data_unit, meta_unit],
             )

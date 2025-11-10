@@ -7,7 +7,7 @@ realm validation, and auto-resize behavior.
 
 import pytest
 import iscc_core as ic
-from iscc_search.schema import IsccAsset, Status
+from iscc_search.schema import IsccEntry, Status
 from iscc_search.indexes.lmdb.index import LmdbIndex
 
 
@@ -53,7 +53,7 @@ def test_add_assets_updated_status(lmdb_index, sample_assets):
     lmdb_index.add_assets([asset])
 
     # Add again with modified metadata
-    modified = IsccAsset(
+    modified = IsccEntry(
         iscc_id=asset.iscc_id,
         iscc_code=asset.iscc_code,
         units=asset.units,
@@ -81,7 +81,7 @@ def test_add_assets_realm_id_validation(lmdb_index, sample_assets):
 
     # Create asset with realm=1 (need at least 2 units for schema validation)
     iscc_id_realm1 = ic.gen_iscc_id(timestamp=5000000, hub_id=9, realm_id=1)["iscc"]
-    asset_realm1 = IsccAsset(
+    asset_realm1 = IsccEntry(
         iscc_id=iscc_id_realm1,
         units=[sample_assets[0].units[0], sample_assets[0].units[1]],
     )
@@ -93,7 +93,7 @@ def test_add_assets_realm_id_validation(lmdb_index, sample_assets):
 
 def test_add_assets_missing_iscc_id(lmdb_index, sample_content_units):
     """Test adding asset without iscc_id raises error."""
-    asset = IsccAsset(
+    asset = IsccEntry(
         iscc_id=None,
         units=[sample_content_units[0], sample_content_units[1]],
     )
@@ -110,7 +110,7 @@ def test_add_assets_empty_list(lmdb_index):
 
 def test_add_assets_without_units(lmdb_index, sample_iscc_ids):
     """Test adding asset without units (only iscc_id)."""
-    asset = IsccAsset(iscc_id=sample_iscc_ids[0], units=None)
+    asset = IsccEntry(iscc_id=sample_iscc_ids[0], units=None)
     results = lmdb_index.add_assets([asset])
 
     assert len(results) == 1
@@ -172,7 +172,7 @@ def test_search_assets_basic(lmdb_index, sample_assets):
     lmdb_index.add_assets([asset])
 
     # Search with same units
-    query = IsccAsset(units=asset.units)
+    query = IsccEntry(units=asset.units)
     result = lmdb_index.search_assets(query, limit=10)
 
     assert len(result.matches) == 1
@@ -182,7 +182,7 @@ def test_search_assets_basic(lmdb_index, sample_assets):
 
 def test_search_assets_no_units(lmdb_index, sample_iscc_ids):
     """Test search without units or iscc_code raises error."""
-    query = IsccAsset(iscc_id=sample_iscc_ids[0])
+    query = IsccEntry(iscc_id=sample_iscc_ids[0])
 
     with pytest.raises(ValueError, match="must have either 'iscc_code' or 'units'"):
         lmdb_index.search_assets(query)
@@ -190,7 +190,7 @@ def test_search_assets_no_units(lmdb_index, sample_iscc_ids):
 
 def test_search_assets_empty_index(lmdb_index, sample_content_units):
     """Test search on empty index returns no matches."""
-    query = IsccAsset(units=[sample_content_units[0], sample_content_units[1]])
+    query = IsccEntry(units=[sample_content_units[0], sample_content_units[1]])
     result = lmdb_index.search_assets(query, limit=10)
 
     assert len(result.matches) == 0
@@ -201,7 +201,7 @@ def test_search_assets_limit(lmdb_index, sample_iscc_ids, sample_content_units):
     # Add multiple assets
     assets = []
     for i in range(10):
-        asset = IsccAsset(
+        asset = IsccEntry(
             iscc_id=sample_iscc_ids[i],
             units=[sample_content_units[0], sample_content_units[1]],  # Same units for all
         )
@@ -210,7 +210,7 @@ def test_search_assets_limit(lmdb_index, sample_iscc_ids, sample_content_units):
     lmdb_index.add_assets(assets)
 
     # Search with limit=5
-    query = IsccAsset(units=[sample_content_units[0], sample_content_units[1]])
+    query = IsccEntry(units=[sample_content_units[0], sample_content_units[1]])
     result = lmdb_index.search_assets(query, limit=5)
 
     assert len(result.matches) == 5
@@ -220,12 +220,12 @@ def test_search_assets_scoring(lmdb_index, sample_iscc_ids, sample_content_units
     """Test search results are sorted by score (descending)."""
     # Add assets with different unit overlaps
     # Asset 1: matches both units
-    asset1 = IsccAsset(
+    asset1 = IsccEntry(
         iscc_id=sample_iscc_ids[0],
         units=[sample_content_units[0], sample_content_units[1]],
     )
     # Asset 2: matches only one unit
-    asset2 = IsccAsset(
+    asset2 = IsccEntry(
         iscc_id=sample_iscc_ids[1],
         units=[sample_content_units[0], sample_content_units[2]],
     )
@@ -233,7 +233,7 @@ def test_search_assets_scoring(lmdb_index, sample_iscc_ids, sample_content_units
     lmdb_index.add_assets([asset1, asset2])
 
     # Search with both units from asset1
-    query = IsccAsset(units=[sample_content_units[0], sample_content_units[1]])
+    query = IsccEntry(units=[sample_content_units[0], sample_content_units[1]])
     result = lmdb_index.search_assets(query, limit=10)
 
     assert len(result.matches) == 2
@@ -299,7 +299,7 @@ def test_auto_resize_on_map_full(temp_lmdb_path, sample_iscc_ids, sample_content
     # Add many assets with large metadata to trigger MapFullError
     assets = []
     for i in range(min(50, len(sample_iscc_ids))):
-        asset = IsccAsset(
+        asset = IsccEntry(
             iscc_id=sample_iscc_ids[i % len(sample_iscc_ids)],
             units=[sample_content_units[0], sample_content_units[1]],
             metadata={"data": "x" * 2000, "index": i, "more": "y" * 500},  # Large metadata
@@ -336,7 +336,7 @@ def test_add_assets_with_string_units(lmdb_index, sample_iscc_ids, sample_conten
         "iscc_id": sample_iscc_ids[0],
         "units": [str(sample_content_units[0]), str(sample_content_units[1])],
     }
-    asset = IsccAsset(**asset_dict)
+    asset = IsccEntry(**asset_dict)
 
     # Units should be Unit objects after validation
     results = lmdb_index.add_assets([asset])
@@ -353,7 +353,7 @@ def test_search_with_string_units(lmdb_index, sample_assets, sample_content_unit
     query_dict = {
         "units": [str(sample_content_units[0]), str(sample_content_units[1])],
     }
-    query = IsccAsset(**query_dict)
+    query = IsccEntry(**query_dict)
 
     # Search should work
     result = lmdb_index.search_assets(query, limit=10)
@@ -382,7 +382,7 @@ def test_search_unit_no_matches(lmdb_index, sample_assets, sample_data_units):
     lmdb_index.add_assets([sample_assets[0]])
 
     # Search for completely different data units (different unit type, no matches)
-    query = IsccAsset(units=[sample_data_units[0], sample_data_units[1]])
+    query = IsccEntry(units=[sample_data_units[0], sample_data_units[1]])
     result = lmdb_index.search_assets(query, limit=10)
 
     # Should return empty results

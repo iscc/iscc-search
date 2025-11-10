@@ -5,7 +5,7 @@ Tests full protocol compliance, index lifecycle management, and multi-index scen
 """
 
 import pytest
-from iscc_search.schema import IsccIndex, IsccAsset
+from iscc_search.schema import IsccIndex, IsccEntry
 from iscc_search.indexes.lmdb import LmdbIndexManager
 from iscc_search.protocols.index import IsccIndexProtocol
 
@@ -234,7 +234,7 @@ def test_search_assets_success(manager, sample_assets):
     manager.add_assets("test", [asset])
 
     # Search
-    query = IsccAsset(units=asset.units)
+    query = IsccEntry(units=asset.units)
     result = manager.search_assets("test", query, limit=10)
 
     assert len(result.matches) == 1
@@ -243,7 +243,7 @@ def test_search_assets_success(manager, sample_assets):
 
 def test_search_assets_index_not_found(manager, sample_content_units):
     """Test search_assets with non-existent index raises FileNotFoundError."""
-    query = IsccAsset(units=[sample_content_units[0], sample_content_units[1]])
+    query = IsccEntry(units=[sample_content_units[0], sample_content_units[1]])
 
     with pytest.raises(FileNotFoundError, match="not found"):
         manager.search_assets("nonexistent", query)
@@ -319,11 +319,11 @@ def test_multiple_indexes_independent(manager, sample_iscc_ids, sample_content_u
     manager.create_index(IsccIndex(name="idx2"))
 
     # Add different assets to each
-    asset1 = IsccAsset(
+    asset1 = IsccEntry(
         iscc_id=sample_iscc_ids[0],
         units=[sample_content_units[0], sample_content_units[1]],
     )
-    asset2 = IsccAsset(
+    asset2 = IsccEntry(
         iscc_id=sample_iscc_ids[1],
         units=[sample_content_units[2], sample_content_units[3]],
     )

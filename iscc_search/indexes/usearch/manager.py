@@ -17,7 +17,7 @@ from iscc_search.indexes import common
 
 if TYPE_CHECKING:
     from iscc_search.schema import IsccAddResult  # noqa: F401
-    from iscc_search.schema import IsccAsset  # noqa: F401
+    from iscc_search.schema import IsccEntry  # noqa: F401
     from iscc_search.schema import IsccSearchResult  # noqa: F401
 
 
@@ -161,12 +161,12 @@ class UsearchIndexManager:
         shutil.rmtree(index_path)
 
     def add_assets(self, index_name, assets):
-        # type: (str, list[IsccAsset]) -> list[IsccAddResult]
+        # type: (str, list[IsccEntry]) -> list[IsccAddResult]
         """
         Add assets to index.
 
         :param index_name: Target index name
-        :param assets: List of IsccAsset objects to add
+        :param assets: List of IsccEntry objects to add
         :return: List of IsccAddResult with status for each asset
         :raises FileNotFoundError: If index doesn't exist
         :raises ValueError: If asset validation fails
@@ -178,13 +178,13 @@ class UsearchIndexManager:
         return idx.add_assets(assets)
 
     def get_asset(self, index_name, iscc_id):
-        # type: (str, str) -> IsccAsset
+        # type: (str, str) -> IsccEntry
         """
         Get a specific asset by ISCC-ID.
 
         :param index_name: Target index name
         :param iscc_id: ISCC-ID of the asset to retrieve
-        :return: IsccAsset with all stored metadata
+        :return: IsccEntry with all stored metadata
         :raises FileNotFoundError: If index doesn't exist or asset not found
         :raises ValueError: If ISCC-ID format is invalid
         """
@@ -195,12 +195,12 @@ class UsearchIndexManager:
         return idx.get_asset(iscc_id)
 
     def search_assets(self, index_name, query, limit=100):
-        # type: (str, IsccAsset, int) -> IsccSearchResult
+        # type: (str, IsccEntry, int) -> IsccSearchResult
         """
         Search for similar assets in index.
 
         :param index_name: Target index name
-        :param query: IsccAsset to search for
+        :param query: IsccEntry to search for
         :param limit: Maximum number of results
         :return: IsccSearchResult with query, metric, and list of matches
         :raises FileNotFoundError: If index doesn't exist

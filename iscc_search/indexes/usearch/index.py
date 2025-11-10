@@ -24,7 +24,7 @@ from iscc_search.indexes import common
 from iscc_search.nphd import NphdIndex
 
 if TYPE_CHECKING:
-    from iscc_search.schema import IsccAsset  # noqa: F401
+    from iscc_search.schema import IsccEntry  # noqa: F401
 
 
 class UsearchIndex:
@@ -34,7 +34,7 @@ class UsearchIndex:
     Storage structure:
     LMDB databases (in index.lmdb file):
     - __metadata__: realm_id (int), max_dim (int), created_at (float)
-    - __assets__: uint64 key → IsccAsset JSON bytes
+    - __assets__: uint64 key → IsccEntry JSON bytes
     - __instance__: instance_code digest → [iscc_id_body uint64, ...] (dupsort/dupfixed/integerdup)
 
     NphdIndex files:
@@ -98,7 +98,7 @@ class UsearchIndex:
         self._load_nphd_indexes()
 
     def add_assets(self, assets):
-        # type: (list[IsccAsset]) -> list[IsccAddResult]
+        # type: (list[IsccEntry]) -> list[IsccAddResult]
         """
         Add assets to index.
 
@@ -110,7 +110,7 @@ class UsearchIndex:
         search. This is acceptable as NphdIndex can be rebuilt from LMDB. True
         two-phase commit would add significant complexity for rare failure scenarios.
 
-        :param assets: List of IsccAsset instances to add
+        :param assets: List of IsccEntry instances to add
         :return: List of IsccAddResult with created/updated status
         :raises ValueError: If realm_id inconsistent or missing iscc_id
         """
@@ -263,12 +263,12 @@ class UsearchIndex:
         return results
 
     def get_asset(self, iscc_id):
-        # type: (str) -> IsccAsset
+        # type: (str) -> IsccEntry
         """
         Retrieve asset by ISCC-ID.
 
         :param iscc_id: ISCC-ID string
-        :return: IsccAsset instance
+        :return: IsccEntry instance
         :raises ValueError: If ISCC-ID realm doesn't match index realm or format invalid
         :raises FileNotFoundError: If asset not found
         """
@@ -294,7 +294,7 @@ class UsearchIndex:
         return common.deserialize_asset(asset_bytes)
 
     def search_assets(self, query, limit=100):
-        # type: (IsccAsset, int) -> IsccSearchResult
+        # type: (IsccEntry, int) -> IsccSearchResult
         """
         Search for similar assets using NPHD metric.
 

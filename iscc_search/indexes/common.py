@@ -2,7 +2,7 @@
 Common utilities for ISCC index implementations.
 
 Provides reusable functions for:
-- IsccAsset serialization and deserialization
+- IsccEntry serialization and deserialization
 - ISCC-ID and ISCC-UNIT parsing and reconstruction
 - Index name and ISCC format validation
 - Consistent error handling
@@ -11,7 +11,7 @@ Provides reusable functions for:
 import re
 import json
 import iscc_core as ic
-from iscc_search.schema import IsccAsset
+from iscc_search.schema import IsccEntry
 from iscc_search.models import IsccUnit, IsccCode
 
 
@@ -20,11 +20,11 @@ INDEX_NAME_PATTERN = re.compile(r"^[a-z][a-z0-9]*$")
 
 
 def serialize_asset(asset):
-    # type: (IsccAsset) -> bytes
+    # type: (IsccEntry) -> bytes
     """
-    Serialize IsccAsset to JSON bytes for storage.
+    Serialize IsccEntry to JSON bytes for storage.
 
-    :param asset: IsccAsset instance to serialize
+    :param asset: IsccEntry instance to serialize
     :return: UTF-8 encoded JSON bytes
     """
     # Use model_dump for Pydantic v2 compatibility
@@ -33,16 +33,16 @@ def serialize_asset(asset):
 
 
 def deserialize_asset(data):
-    # type: (bytes) -> IsccAsset
+    # type: (bytes) -> IsccEntry
     """
-    Deserialize JSON bytes to IsccAsset.
+    Deserialize JSON bytes to IsccEntry.
 
     :param data: UTF-8 encoded JSON bytes
-    :return: IsccAsset instance
+    :return: IsccEntry instance
     :raises ValueError: If JSON is invalid or doesn't match schema
     """
     asset_dict = json.loads(data.decode("utf-8"))
-    return IsccAsset(**asset_dict)
+    return IsccEntry(**asset_dict)
 
 
 def extract_iscc_id_body(iscc_id):
@@ -210,7 +210,7 @@ def validate_iscc_id(iscc_id, expected_realm=None):
 
 
 def normalize_query_asset(query):
-    # type: (IsccAsset) -> IsccAsset
+    # type: (IsccEntry) -> IsccEntry
     """
     Normalize query asset to ensure consistent search behavior across backends.
 

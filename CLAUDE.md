@@ -153,7 +153,7 @@ The project structure follows standard Python packaging conventions:
     from typing import TYPE_CHECKING
 
     if TYPE_CHECKING:
-        from iscc_search.schema import IsccAsset  # noqa: F401
+        from iscc_search.schema import IsccEntry  # noqa: F401
     ```
     This allows IDEs to resolve type references while preventing ruff from removing the imports
 

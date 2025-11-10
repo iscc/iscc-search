@@ -95,7 +95,7 @@ def add(
         iscc-search add /path/to/assets/
         iscc-search add asset.iscc.json
     """
-    from iscc_search.schema import IsccAsset
+    from iscc_search.schema import IsccEntry
 
     # Get or create default index
     with Progress(
@@ -148,7 +148,7 @@ def add(
                 with open(file_path, "rb") as f:
                     doc = parser.parse(f.read())
 
-                # Map JSON fields to IsccAsset - extract to plain Python types immediately
+                # Map JSON fields to IsccEntry - extract to plain Python types immediately
                 asset_data = {}
 
                 # Handle iscc_id
@@ -193,7 +193,7 @@ def add(
                 # Release proxy object before next parser reuse
                 del doc
 
-                asset = IsccAsset(**asset_data)
+                asset = IsccEntry(**asset_data)
                 assets.append(asset)
 
                 if verbose:
@@ -318,7 +318,7 @@ def search(
         iscc-search search ISCC:KECYCMZIOY36XXGZ7S6QJQ2AEEXPOVEHZYPK6GMSFLU3WF54UPZMTPY
         iscc-search search ISCC:KEC... --limit 10 --meta
     """
-    from iscc_search.schema import IsccAsset
+    from iscc_search.schema import IsccEntry
 
     # Get default index
     with Progress(
@@ -331,7 +331,7 @@ def search(
         progress.remove_task(task)
 
     # Create query asset
-    query = IsccAsset(iscc_code=iscc_code)
+    query = IsccEntry(iscc_code=iscc_code)
 
     # Search
     with Progress(

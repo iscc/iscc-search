@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from iscc_search.protocols.index import IsccIndexProtocol
-from iscc_search.schema import IsccAsset, IsccSearchResult
+from iscc_search.schema import IsccEntry, IsccSearchResult
 from iscc_search.server import get_index_from_state
 
 
@@ -12,7 +12,7 @@ router = APIRouter(tags=["search"])
 @router.post("/indexes/{name}/search", response_model=IsccSearchResult)
 def search_post(
     name: str,
-    query: IsccAsset,
+    query: IsccEntry,
     limit: int = 100,
     index: IsccIndexProtocol = Depends(get_index_from_state),
 ):
@@ -25,7 +25,7 @@ def search_post(
     relevance (highest scores first).
 
     :param name: Index name
-    :param query: IsccAsset to search for (iscc_code or units required)
+    :param query: IsccEntry to search for (iscc_code or units required)
     :param limit: Maximum number of results to return (default: 100)
     :param index: Index instance injected from app state
     :return: IsccSearchResult with matches
@@ -51,7 +51,7 @@ def search_get(
     Search for similar assets using GET with ISCC-CODE query parameter.
 
     Convenience endpoint for searching by ISCC-CODE. The ISCC-CODE is wrapped
-    in an IsccAsset and passed to the backend, which handles decomposition
+    in an IsccEntry and passed to the backend, which handles decomposition
     into units internally.
 
     :param name: Index name
@@ -63,7 +63,7 @@ def search_get(
     """
     try:
         # Create query asset with iscc_code - backend handles decomposition
-        query = IsccAsset(iscc_code=iscc_code)
+        query = IsccEntry(iscc_code=iscc_code)
         return index.search_assets(name, query, limit)
     except FileNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))

@@ -13,7 +13,7 @@ import os
 import time
 import lmdb
 from loguru import logger
-from iscc_search.schema import IsccAddResult, IsccSearchResult, IsccMatch, Status, Metric
+from iscc_search.schema import IsccAddResult, IsccGlobalMatch, IsccSearchResult, Status, Metric
 from iscc_search.models import IsccUnit
 from iscc_search.indexes import common
 
@@ -229,7 +229,7 @@ class LmdbIndex:
             for iscc_id, unit_type_scores in matches.items():
                 total_score = sum(unit_type_scores.values())
                 match_list.append(
-                    IsccMatch(
+                    IsccGlobalMatch(
                         iscc_id=iscc_id,
                         score=total_score,
                         matches=unit_type_scores,

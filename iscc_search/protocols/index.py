@@ -144,7 +144,7 @@ class IsccIndexProtocol(Protocol):
         The returned IsccSearchResult includes:
         - query: The original query asset (may have auto-generated iscc_id)
         - metric: The distance metric used (nphd, hamming, bitlength)
-        - global_matches: List of IsccMatch objects with scores and per-unit breakdowns
+        - global_matches: List of IsccGlobalMatch objects with scores and per-unit breakdowns
 
         :param index_name: Target index name
         :param query: IsccEntry to search for (either iscc_code or units required)

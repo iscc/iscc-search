@@ -1,6 +1,6 @@
 $schema: "https://json-schema.org/draft/2020-12/schema"
-$id: "http://purl.org/iscc/schema/iscc-match.json"
-title: "IsccMatch"
+$id: "http://purl.org/iscc/schema/iscc-global-match.json"
+title: "IsccGlobalMatch"
 type: object
 description: |
   A single match result from ISCC lookup search. Contains the matched ISCC-ID,

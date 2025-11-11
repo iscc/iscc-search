@@ -7,7 +7,7 @@ scenarios where persistence isn't needed.
 """
 
 import re
-from iscc_search.schema import IsccAddResult, IsccIndex, IsccMatch, IsccSearchResult, Metric, Status
+from iscc_search.schema import IsccAddResult, IsccGlobalMatch, IsccIndex, IsccSearchResult, Metric, Status
 from iscc_search.indexes import common
 
 
@@ -203,7 +203,7 @@ class MemoryIndex:
             if query.iscc_code and asset.iscc_code:
                 if asset.iscc_code == query.iscc_code:
                     match_list.append(
-                        IsccMatch(
+                        IsccGlobalMatch(
                             iscc_id=asset.iscc_id,  # type: ignore
                             score=1.0,
                             matches={},

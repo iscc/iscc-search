@@ -459,7 +459,7 @@ components:
       $ref: './IsccQuery.yaml'
     IsccAddResult:
       $ref: './IsccAddResult.yaml'
-    IsccMatch:
-      $ref: './IsccMatch.yaml'
+    IsccGlobalMatch:
+      $ref: './IsccGlobalMatch.yaml'
     IsccSearchResult:
       $ref: './IsccSearchResult.yaml'

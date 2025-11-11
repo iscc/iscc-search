@@ -27,7 +27,7 @@ properties:
     type: array
     description: Asset-level ISCC-UNIT matches, ordered by relevance (best first)
     items:
-      $ref: "./IsccMatch.yaml"
+      $ref: "./IsccGlobalMatch.yaml"
     example:
       - iscc_id: "ISCC:MAIGIIFJRDGEQQAA"
         score: 448

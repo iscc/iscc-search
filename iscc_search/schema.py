@@ -161,7 +161,7 @@ class IsccAddResult(BaseModel):
     ]
 
 
-class IsccMatch(BaseModel):
+class IsccGlobalMatch(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -267,7 +267,7 @@ class IsccSearchResult(BaseModel):
         ),
     ]
     global_matches: Annotated[
-        list[IsccMatch],
+        list[IsccGlobalMatch],
         Field(
             description="Asset-level ISCC-UNIT matches, ordered by relevance (best first)",
             examples=[

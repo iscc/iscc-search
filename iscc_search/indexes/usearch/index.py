@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 import lmdb
 from loguru import logger
-from iscc_search.schema import IsccAddResult, IsccSearchResult, IsccMatch, Status, Metric
+from iscc_search.schema import IsccAddResult, IsccGlobalMatch, IsccSearchResult, Status, Metric
 from iscc_search.models import IsccUnit, IsccID
 from iscc_search.indexes import common
 from iscc_search.nphd import NphdIndex
@@ -348,12 +348,12 @@ class UsearchIndex:
         # Take top limit results
         scored_results = scored_results[:limit]
 
-        # Build IsccMatch objects
+        # Build IsccGlobalMatch objects
         matches = []
         for key, total_score, unit_scores in scored_results:
             # Reconstruct ISCC-ID from key
             iscc_id = str(IsccID.from_int(key, self._realm_id))
-            matches.append(IsccMatch(iscc_id=iscc_id, score=total_score, matches=unit_scores))
+            matches.append(IsccGlobalMatch(iscc_id=iscc_id, score=total_score, matches=unit_scores))
 
         return IsccSearchResult(query=query, metric=Metric.nphd, global_matches=matches)
 

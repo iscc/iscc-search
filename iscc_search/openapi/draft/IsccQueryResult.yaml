@@ -139,62 +139,52 @@ example:
         filename: "9788899126995.epub"
   chunk_matches:
     - iscc_id: "ISCC:MAIGIHZPQR7XKLAB"
-      score: 0.923
+      score: 0.88
+      source: "https://example.com/9788899445566.epub"
       types:
         CONTENT_TEXT_V0:
-          score: 0.954
+          score: 1.0
           matches: 2
           queried: 2
           chunks:
-            - query_simprint: "AXvu3tp2kF8mN9qL4rT1sZ"
-              index_simprint: "AXvu3tp2kF8mN9qL4rT1sZ"
-              simprint_type: "CONTENT_TEXT_V0"
+            - query: "AXvu3tp2kF8mN9qL4rT1sZ"
+              match: "AXvu3tp2kF8mN9qL4rT1sZ"
               score: 1.0
-              idf: 9.21
+              freq: 42
               offset: 12500
               size: 350
-              source: "https://example.com/9788899445566.epub"
-              modality: "text"
-            - query_simprint: "B4kl9mQ1pP7xY3jH8vW2aF"
-              index_simprint: "B4kl9mQ1pP7xY3jH8vW2aF"
-              simprint_type: "CONTENT_TEXT_V0"
+            - query: "B4kl9mQ1pP7xY3jH8vW2aF"
+              match: "B4kl9mQ1pP7xY3jH8vW2aF"
               score: 1.0
-              idf: 8.76
+              freq: 50
               offset: 45230
               size: 412
-              source: "https://example.com/9788899445566.epub"
-              modality: "text"
         SEMANTIC_TEXT_V0:
-          score: 0.891
+          score: 0.72
           matches: 2
           queried: 3
           chunks:
-            - query_simprint: "CYhq2nR8oL3pT5mK9sX4bG"
-              index_simprint: "CYhq3nR7oL2pT5mK9sX4bG"
-              simprint_type: "SEMANTIC_TEXT_V0"
+            - query: "CYhq2nR8oL3pT5mK9sX4bG"
+              match: "CYhq3nR7oL2pT5mK9sX4bG"
               score: 0.94
-              idf: 7.83
+              freq: 86
               offset: 78900
               size: 389
-              source: "https://example.com/9788899445566.epub"
-              modality: "text"
-            - query_simprint: "D9mn7vT4qK2rU6nL1tY5cH"
-              index_simprint: "D9mn7vT4qK2rU6nL1tY5cH"
-              simprint_type: "SEMANTIC_TEXT_V0"
+            - query: "D9mn7vT4qK2rU6nL1tY5cH"
+              match: "D9mn7vT4qK2rU6nL1tY5cH"
               score: 1.0
-              idf: 6.54
+              freq: 122
               offset: 123450
               size: 301
-              source: "https://example.com/9788899445566.epub"
-              modality: "text"
       metadata:
         name: "Digital Philosophy: An Introduction"
         filename: "9788899445566.epub"
     - iscc_id: "ISCC:MAIGIH3KSTMNPQAB"
-      score: 0.487
+      score: 0.65
+      source: "https://example.com/9788877332211.epub"
       types:
         CONTENT_TEXT_V0:
-          score: 0.487
+          score: 0.65
           matches: 1
           queried: 2
       metadata:

@@ -9,45 +9,36 @@ description: |
   Extends the basic chunk location data (offset, size) with match-specific information:
   - Query and index simprint comparison
   - Score (0.0-1.0 for soft boundaries, 1.0 for exact matches)
-  - IDF weighting (inverse document frequency) for ranking
-  - Optional denormalized asset metadata (source, modality)
+  - Document frequency (rarity measure) for ranking
   - Optional content preview (data URL)
 required:
-  - query_simprint
-  - index_simprint
-  - simprint_type
+  - query
+  - match
   - score
-  - idf
+  - freq
   - offset
   - size
 properties:
-  query_simprint:
+  query:
     type: string
     description: |
       Base64-encoded simprint from the query that matched this chunk.
-      In hard-boundary indexes, equals index_simprint. In soft-boundary indexes,
+      In hard-boundary indexes, equals match. In soft-boundary indexes,
       may differ (similar but not identical).
     pattern: "^[A-Za-z0-9+/_=-]+$"
     example: "AXvu3tp2kF8mN9qL4rT1sZ"
-  index_simprint:
+  match:
     type: string
     description: |
       Base64-encoded simprint stored in the index that was matched.
-      In hard-boundary indexes, equals query_simprint. In soft-boundary indexes,
+      In hard-boundary indexes, equals query. In soft-boundary indexes,
       may differ (within similarity threshold).
     pattern: "^[A-Za-z0-9+/_=-]+$"
     example: "AXvu3tp2kF8mN9qL4rT1sZ"
-  simprint_type:
-    type: string
-    description: |
-      Type identifier for this simprint (e.g., "CONTENT_TEXT_V0", "SEMANTIC_TEXT_V0").
-      Determines matching semantics and abstraction level.
-    pattern: "^[A-Z_]+_[A-Z_]+_V[0-9]+$"
-    example: "CONTENT_TEXT_V0"
   score:
     type: number
     description: |
-      Score between query_simprint and index_simprint (0.0-1.0).
+      Similarity score between query and match simprints (0.0-1.0).
 
       **Hard-boundary indexes**: Always 1.0 (exact collision)
       **Soft-boundary indexes**: NPHD-based similarity (1.0 = identical, 0.0 = maximum distance)
@@ -56,15 +47,15 @@ properties:
     minimum: 0.0
     maximum: 1.0
     example: 1.0
-  idf:
-    type: number
+  freq:
+    type: integer
     description: |
-      Inverse Document Frequency weight for this simprint.
+      Document frequency - number of assets containing this simprint.
 
-      Measures simprint rarity: higher values indicate rarer simprints that are
-      more discriminative for ranking. Used in IDF-weighted similarity calculations.
-    minimum: 0.0
-    example: 9.21
+      Measures simprint rarity: lower values indicate rarer simprints that are
+      more discriminative for ranking. Used for IDF-weighted similarity calculations.
+    minimum: 1
+    example: 42
   offset:
     type: integer
     description: |
@@ -81,20 +72,6 @@ properties:
     minimum: 0
     maximum: 4294967295
     example: 350
-  source:
-    type: string
-    format: uri
-    description: |
-      Optional resolvable URL to the full content containing this chunk.
-      Denormalized from parent asset for convenience.
-    example: "https://example.com/9788899445566.epub"
-  modality:
-    type: string
-    enum: ["text", "image", "audio", "video", "mixed"]
-    description: |
-      Optional content modality hint for interpreting offset/size.
-      Denormalized from parent asset for convenience.
-    example: "text"
   content:
     type: string
     pattern: "^data:[^;]+;base64,.+$"
@@ -104,13 +81,10 @@ properties:
       Useful for match verification and content preview.
     example: "data:text/plain;base64,SWYgd2UgdGhpbmsgb2YgdGhlIGRpZ2l0YWwgd29ybGQgYXMgYSBuZXcgZm9ybSBvZiBwaGlsb3NvcGh5Li4u"
 example:
-  query_simprint: "AXvu3tp2kF8mN9qL4rT1sZ"
-  index_simprint: "AXvu3tp2kF8mN9qL4rT1sZ"
-  simprint_type: "CONTENT_TEXT_V0"
+  query: "AXvu3tp2kF8mN9qL4rT1sZ"
+  match: "AXvu3tp2kF8mN9qL4rT1sZ"
   score: 1.0
-  idf: 9.21
+  freq: 42
   offset: 12500
   size: 350
-  source: "https://example.com/9788899445566.epub"
-  modality: "text"
   content: "data:text/plain;base64,SWYgd2UgdGhpbmsgb2YgdGhlIGRpZ2l0YWwgd29ybGQgYXMgYSBuZXcgZm9ybSBvZiBwaGlsb3NvcGh5Li4u"

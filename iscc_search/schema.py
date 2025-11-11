@@ -2,7 +2,7 @@
 #   filename:  openapi.yaml
 
 from __future__ import annotations
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, RootModel
 from typing import Annotated, Any
 from enum import Enum
 
@@ -68,6 +68,71 @@ class IsccSimprint(BaseModel):
             le=4294967295,
         ),
     ]
+
+
+class Unit(RootModel[str]):
+    root: Annotated[str, Field(pattern="^ISCC:[A-Z2-7]{16,}$")]
+
+
+class Simprint(RootModel[str]):
+    root: Annotated[
+        str,
+        Field(
+            description="Base64-encoded simprint hash (url-safe or standard base64). Typical lengths:\n- 128-bit: 22 chars (base64url without padding)\n- 256-bit: 43 chars (base64 with padding) or 42 chars (without)\n",
+            examples=["AXvu3tp2kF8mN9qL4rT1sZ"],
+            pattern="^[A-Za-z0-9+/_=-]+$",
+        ),
+    ]
+
+
+class IsccQuery(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    iscc_id: Annotated[
+        str | None,
+        Field(
+            description='ISCC-ID of a known indexed asset to use as similarity reference. The backend\nretrieves the stored units for this ID and searches for similar assets.\n\n**Use case**: "Find assets similar to ISCC:MAI..." (more-like-this query)\n\n**Precedence**: When provided, `iscc_id` takes precedence over all other query\nfields. Any provided `iscc_code`, `units`, or `simprints` are ignored.\n\n**Behavior**:\n- Backend looks up iscc_id → units in storage\n- Performs similarity search with those units\n- Returns matches excluding the query asset itself (no self-match)\n\n**Error handling**: Returns HTTP 404 if iscc_id is not found in the index.\n',
+            examples=["ISCC:MAIGIIFJRDGEQQAA"],
+            pattern="^ISCC:[A-Z2-7]{16,}$",
+        ),
+    ] = None
+    iscc_code: Annotated[
+        str | None,
+        Field(
+            description="Composite ISCC-CODE combining multiple ISCC-UNITs. The system automatically\nextracts individual units for parallel search across unit-specific indexes.\n",
+            examples=["ISCC:KADUHBUDQUT3LPWRJH6BUAG7HMBIXX6JRQRX3JH7EBIOSMXEVL5URBBUPOIOTU4HLSSQ"],
+            pattern="^ISCC:[A-Z2-7]{16,}$",
+        ),
+    ] = None
+    units: Annotated[
+        list[Unit] | None,
+        Field(
+            description="Explicit list of ISCC-UNITs for asset-level matching. Can be used instead of\nor in addition to `iscc_code` for fine-grained control over which units are queried.\n",
+            examples=[
+                [
+                    "ISCC:AAAUHBUDQUT3LPWR",
+                    "ISCC:CAAUT7A2ADPTWAUL",
+                    "ISCC:EAA57SMMEN62J7ZA",
+                    "ISCC:GAAVB2JS4SVPWSEE",
+                    "ISCC:IAATI64Q5HJYOXFF",
+                ]
+            ],
+            min_length=1,
+        ),
+    ] = None
+    simprints: Annotated[
+        dict[str, list[Simprint]] | None,
+        Field(
+            description='Simprint groups for chunk-level matching. Keys are simprint type identifiers\n(e.g., "CONTENT_TEXT_V0", "SEMANTIC_TEXT_V0", "INSTANCE_NONE_V0"), values are\narrays of headerless base64-encoded simprints.\n\n**Simprint types** are versioned identifiers that determine:\n- Matching strategy (exact collision vs approximate similarity)\n- Abstraction level (semantic vs content vs data)\n- Segmentation approach (sentence chunks, embedding windows, etc.)\n\n**Extensibility**: New simprint types can be added without schema changes.\nUnknown types are ignored gracefully.\n\n**Common types**:\n- `CONTENT_TEXT_V0`: Lexical similarity (near-duplicates, minor edits)\n- `SEMANTIC_TEXT_V0`: Conceptual similarity (paraphrases, translations)\n- `INSTANCE_NONE_V0`: Exact bitstream matches (cryptographic identity)\n',
+            examples=[
+                {
+                    "CONTENT_TEXT_V0": ["AXvu3tp2kF8mN9qL4rT1sZ", "B4kl9mQ1pP7xY3jH8vW2aF"],
+                    "SEMANTIC_TEXT_V0": ["CYhq2nR8oL3pT5mK9sX4bG", "D9mn7vT4qK2rU6nL1tY5cH", "E1pj8wU5rM9sV7oN2uZ6dJ"],
+                }
+            ],
+        ),
+    ] = None
 
 
 class Status(str, Enum):

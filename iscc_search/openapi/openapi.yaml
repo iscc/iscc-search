@@ -335,11 +335,11 @@ paths:
             example: "default"
       requestBody:
         required: true
-        description: ISCC asset to use as search query
+        description: ISCC query for similarity search
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/IsccEntry'
+              $ref: '#/components/schemas/IsccQuery'
             example:
               iscc_code: "ISCC:KECYCMZIOY36XXGZ7S6QJQ2AEEXPOVEHZYPK6GMSFLU3WF54UPZMTPY"
               units:
@@ -455,6 +455,8 @@ components:
       $ref: './IsccIndex.yaml'
     IsccEntry:
       $ref: './IsccEntry.yaml'
+    IsccQuery:
+      $ref: './IsccQuery.yaml'
     IsccAddResult:
       $ref: './IsccAddResult.yaml'
     IsccMatch:

@@ -75,6 +75,22 @@ def custom_docs():
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <script src="https://unpkg.com/@stoplight/elements/web-components.min.js"></script>
         <link rel="stylesheet" href="https://unpkg.com/@stoplight/elements/styles.min.css">
+        <style>
+          /* Override inline max-width on right panel to allow full width for long ISCC strings */
+          .sl-elements .sl-relative.sl-w-2\/5.sl-ml-16 {{
+            max-width: none !important;
+          }}
+
+          /* Enable horizontal scrolling for code blocks */
+          .sl-elements pre {{
+            overflow-x: auto !important;
+            white-space: pre !important;
+          }}
+
+          .sl-elements code {{
+            white-space: pre !important;
+          }}
+        </style>
       </head>
       <body>
         <elements-api

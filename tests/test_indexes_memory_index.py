@@ -426,18 +426,24 @@ def test_metadata_field(sample_iscc_ids, sample_iscc_codes):
     asset = IsccEntry(
         iscc_id=sample_iscc_ids[0],
         iscc_code=code,
-        metadata={"source": "test", "tags": ["tag1", "tag2"]},
+        metadata={"source": "file:///tmp/test.txt", "tags": ["tag1", "tag2"]},
     )
     index.add_assets("testindex", [asset])
 
-    # Search and verify metadata is preserved
+    # Search and verify metadata is preserved in search results
     query = IsccEntry(iscc_code=code)
     result = index.search_assets("testindex", query)
     assert len(result.global_matches) == 1
+    # Note: source is AnyUrl type, needs to be compared as string
+    dumped = result.global_matches[0].metadata.model_dump(exclude_none=True, mode="json")
+    assert dumped == {
+        "source": "file:///tmp/test.txt",
+        "tags": ["tag1", "tag2"],
+    }
 
     # Retrieve the asset and verify metadata is preserved
     retrieved = index.get_asset("testindex", sample_iscc_ids[0])
-    assert retrieved.metadata == {"source": "test", "tags": ["tag1", "tag2"]}
+    assert retrieved.metadata == {"source": "file:///tmp/test.txt", "tags": ["tag1", "tag2"]}
 
 
 def test_search_assets_no_matching_iscc_id(sample_iscc_ids, sample_iscc_codes):

@@ -207,6 +207,7 @@ class MemoryIndex:
                             iscc_id=asset.iscc_id,  # type: ignore
                             score=1.0,
                             types={},
+                            metadata=asset.metadata,
                         )
                     )
 

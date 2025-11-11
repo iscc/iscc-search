@@ -1,0 +1,52 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "http://purl.org/iscc/schema/iscc-metadata.json"
+title: "IsccMetadata"
+type: object
+description: |
+  Extensible metadata container for application-specific data.
+
+  This schema allows clients to attach arbitrary structured data to indexed assets
+  without requiring API changes. The index stores this data opaquely without validation
+  or interpretation.
+
+  **Storage**: Metadata is stored per ISCC-ID and can be retrieved with search results.
+
+  **Standard fields**: While all fields are optional and additional properties are allowed,
+  the following standard fields are recommended for interoperability:
+  - `name`: Title or name of the work
+  - `source`: Absolute URI to raw content (enables chunk retrieval)
+
+  **Chunk retrieval workflow**: When search results include chunk matches with offset/size,
+  clients can use the `source` URI to retrieve the actual content of those chunks by reading
+  from the specified byte range.
+
+  **Use cases**:
+  - Content retrieval (chunk access via offset/size)
+  - Asset identification (name, external IDs)
+  - Content classification (tags, categories, content ratings)
+  - Integration data (external references, API endpoints)
+  - Business logic (access control, pricing, licensing)
+properties:
+  name:
+    type: string
+    description: Title or name of the work manifested by the asset
+    example: "Digital Philosophy: An Introduction"
+  source:
+    type: string
+    format: uri
+    description: |
+      Absolute URI to the raw content that was used for chunking and ISCC generation.
+
+      Supports fsspec-style URIs for various storage backends:
+      - HTTP(S): `https://example.com/content/document.pdf`
+      - S3: `s3://bucket/path/to/file.epub`
+      - Local: `file:///absolute/path/to/document.txt`
+      - Azure: `az://container/path/to/file.docx`
+      - GCS: `gs://bucket/path/to/file.pdf`
+
+      This URI enables clients to retrieve chunk content using offset/size from search results.
+    example: "https://example.com/content/9788899445566.txt"
+additionalProperties: true
+example:
+  name: "Digital Philosophy: An Introduction"
+  source: "s3://content-bucket/books/9788899445566.txt"

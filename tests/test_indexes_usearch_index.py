@@ -75,15 +75,17 @@ def test_usearch_index_bidirectional_instance_matching_256bit(usearch_index, sam
     asset = IsccEntry(
         iscc_id=sample_iscc_ids[0],
         units=[instance_str, content_unit],
+        metadata={"test": "256bit_instance"},
     )
     usearch_index.add_assets([asset])
 
-    # Search with 256-bit query - should match itself
+    # Search with 256-bit query - should match itself and return metadata
     query = IsccEntry(units=[instance_str, content_unit])
     result = usearch_index.search_assets(query, limit=10)
 
     assert len(result.global_matches) == 1
     assert result.global_matches[0].iscc_id == sample_iscc_ids[0]
+    assert result.global_matches[0].metadata.model_dump(exclude_none=True) == {"test": "256bit_instance"}
 
     # Search with 128-bit - tests the reverse matching code path (query_len == 32 branch)
     query_128 = IsccEntry(units=[instance_128, content_unit])

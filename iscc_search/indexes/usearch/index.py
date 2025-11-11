@@ -348,12 +348,31 @@ class UsearchIndex:
         # Take top limit results
         scored_results = scored_results[:limit]
 
-        # Build IsccGlobalMatch objects
+        # Build IsccGlobalMatch objects with metadata
         matches = []
-        for key, total_score, unit_scores in scored_results:
-            # Reconstruct ISCC-ID from key
-            iscc_id = str(IsccID.from_int(key, self._realm_id))
-            matches.append(IsccGlobalMatch(iscc_id=iscc_id, score=total_score, types=unit_scores))
+        try:
+            with self.env.begin() as txn:
+                assets_db = self.env.open_db(b"__assets__", txn=txn)
+                for key, total_score, unit_scores in scored_results:
+                    # Reconstruct ISCC-ID from key
+                    iscc_id = str(IsccID.from_int(key, self._realm_id))
+
+                    # Fetch asset metadata
+                    metadata = None
+                    key_bytes = struct.pack(">Q", key)
+                    asset_bytes = txn.get(key_bytes, db=assets_db)
+                    if asset_bytes is not None:
+                        asset = common.deserialize_asset(asset_bytes)
+                        metadata = asset.metadata
+
+                    matches.append(
+                        IsccGlobalMatch(iscc_id=iscc_id, score=total_score, types=unit_scores, metadata=metadata)
+                    )
+        except lmdb.ReadonlyError:  # pragma: no cover
+            # Database doesn't exist yet (empty index) - return matches without metadata
+            for key, total_score, unit_scores in scored_results:
+                iscc_id = str(IsccID.from_int(key, self._realm_id))
+                matches.append(IsccGlobalMatch(iscc_id=iscc_id, score=total_score, types=unit_scores))
 
         return IsccSearchResult(query=query, global_matches=matches)
 

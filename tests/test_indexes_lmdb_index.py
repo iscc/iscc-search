@@ -165,7 +165,7 @@ def test_get_asset_realm_mismatch(lmdb_index, sample_assets):
 
 
 def test_search_assets_basic(lmdb_index, sample_assets):
-    """Test basic search returns matches."""
+    """Test basic search returns matches with metadata."""
     asset = sample_assets[0]
 
     # Add asset
@@ -178,6 +178,7 @@ def test_search_assets_basic(lmdb_index, sample_assets):
     assert len(result.global_matches) == 1
     assert result.global_matches[0].iscc_id == asset.iscc_id
     assert result.global_matches[0].score > 0
+    assert result.global_matches[0].metadata.model_dump(exclude_none=True) == asset.metadata
 
 
 def test_search_assets_no_units(lmdb_index, sample_iscc_ids):

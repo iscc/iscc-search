@@ -35,6 +35,14 @@ properties:
       CONTENT_TEXT_V0: 256
       DATA_NONE_V0: 128
       INSTANCE_NONE_V0: 64
+  metadata:
+    $ref: "./IsccMetadata.yaml"
+    description: |
+      Optional asset metadata, denormalized from the index for convenience.
+      Useful for result rendering and client-side filtering without additional lookups.
+
+      This field allows clients to access asset metadata directly in search results
+      without requiring additional get_asset() calls.
 example:
   iscc_id: "ISCC:MAIGIIFJRDGEQQAA"
   score: 448
@@ -42,3 +50,6 @@ example:
     CONTENT_TEXT_V0: 256
     DATA_NONE_V0: 128
     INSTANCE_NONE_V0: 64
+  metadata:
+    name: "Example Document"
+    filename: "example.pdf"

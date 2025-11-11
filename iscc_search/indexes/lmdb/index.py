@@ -226,13 +226,25 @@ class LmdbIndex:
 
             # Build match list
             match_list = []
+            assets_db = self._get_db("__assets__", txn)
             for iscc_id, unit_type_scores in matches.items():
                 total_score = sum(unit_type_scores.values())
+
+                # Fetch asset metadata
+                metadata = None
+                if assets_db is not None:
+                    iscc_id_key = iscc_id.encode("utf-8")
+                    asset_bytes = txn.get(iscc_id_key, db=assets_db)
+                    if asset_bytes is not None:
+                        asset = common.deserialize_asset(asset_bytes)
+                        metadata = asset.metadata
+
                 match_list.append(
                     IsccGlobalMatch(
                         iscc_id=iscc_id,
                         score=total_score,
                         types=unit_type_scores,
+                        metadata=metadata,
                     )
                 )
 

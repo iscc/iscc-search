@@ -2,22 +2,16 @@
 #   filename:  openapi.yaml
 
 from __future__ import annotations
-from pydantic import BaseModel, ConfigDict, Field, RootModel
+from pydantic import AnyUrl, BaseModel, ConfigDict, Field, RootModel
 from typing import Annotated, Any
 from enum import Enum
 
 
 class HttpError(BaseModel):
-    model_config = ConfigDict(
-        extra="forbid",
-    )
     detail: str | list[str]
 
 
 class IsccIndex(BaseModel):
-    model_config = ConfigDict(
-        extra="forbid",
-    )
     name: Annotated[
         str,
         Field(
@@ -38,9 +32,6 @@ class IsccIndex(BaseModel):
 
 
 class IsccSimprint(BaseModel):
-    model_config = ConfigDict(
-        extra="forbid",
-    )
     simprint: Annotated[
         str,
         Field(
@@ -86,9 +77,6 @@ class Simprint(RootModel[str]):
 
 
 class IsccQuery(BaseModel):
-    model_config = ConfigDict(
-        extra="forbid",
-    )
     iscc_id: Annotated[
         str | None,
         Field(
@@ -141,9 +129,6 @@ class Status(str, Enum):
 
 
 class IsccAddResult(BaseModel):
-    model_config = ConfigDict(
-        extra="forbid",
-    )
     iscc_id: Annotated[
         str,
         Field(
@@ -161,39 +146,27 @@ class IsccAddResult(BaseModel):
     ]
 
 
-class IsccGlobalMatch(BaseModel):
+class IsccMetadata(BaseModel):
     model_config = ConfigDict(
-        extra="forbid",
+        extra="allow",
     )
-    iscc_id: Annotated[
-        str,
+    name: Annotated[
+        str | None,
         Field(
-            description="The matched ISCC-ID from the index",
-            examples=["ISCC:MAIGIIFJRDGEQQAA"],
-            pattern="^ISCC:[A-Z2-7]{16,}$",
+            description="Title or name of the work manifested by the asset",
+            examples=["Digital Philosophy: An Introduction"],
         ),
-    ]
-    score: Annotated[
-        float,
+    ] = None
+    source: Annotated[
+        AnyUrl | None,
         Field(
-            description="Aggregated score across all unit_types. Metric semantics (bit-length, NPHD distance, etc.)\nare defined at the result collection level, not per match.\n",
-            examples=[448],
-            ge=0.0,
+            description="Absolute URI to the raw content that was used for chunking and ISCC generation.\n\nSupports fsspec-style URIs for various storage backends:\n- HTTP(S): `https://example.com/content/document.pdf`\n- S3: `s3://bucket/path/to/file.epub`\n- Local: `file:///absolute/path/to/document.txt`\n- Azure: `az://container/path/to/file.docx`\n- GCS: `gs://bucket/path/to/file.pdf`\n\nThis URI enables clients to retrieve chunk content using offset/size from search results.\n",
+            examples=["https://example.com/content/9788899445566.txt"],
         ),
-    ]
-    types: Annotated[
-        dict[str, float],
-        Field(
-            description='Per-unit_type scores. Keys are unit type names (e.g., "CONTENT_TEXT_V0"),\nvalues are numeric scores whose semantics depend on the search backend\n(bit-length for lookup index, NPHD distance for usearch, etc.).\n',
-            examples=[{"CONTENT_TEXT_V0": 256, "DATA_NONE_V0": 128, "INSTANCE_NONE_V0": 64}],
-        ),
-    ]
+    ] = None
 
 
 class IsccEntry(BaseModel):
-    model_config = ConfigDict(
-        extra="forbid",
-    )
     iscc_id: Annotated[
         str | None,
         Field(
@@ -248,10 +221,39 @@ class IsccEntry(BaseModel):
     ] = None
 
 
+class IsccGlobalMatch(BaseModel):
+    iscc_id: Annotated[
+        str,
+        Field(
+            description="The matched ISCC-ID from the index",
+            examples=["ISCC:MAIGIIFJRDGEQQAA"],
+            pattern="^ISCC:[A-Z2-7]{16,}$",
+        ),
+    ]
+    score: Annotated[
+        float,
+        Field(
+            description="Aggregated score across all unit_types. Metric semantics (bit-length, NPHD distance, etc.)\nare defined at the result collection level, not per match.\n",
+            examples=[448],
+            ge=0.0,
+        ),
+    ]
+    types: Annotated[
+        dict[str, float],
+        Field(
+            description='Per-unit_type scores. Keys are unit type names (e.g., "CONTENT_TEXT_V0"),\nvalues are numeric scores whose semantics depend on the search backend\n(bit-length for lookup index, NPHD distance for usearch, etc.).\n',
+            examples=[{"CONTENT_TEXT_V0": 256, "DATA_NONE_V0": 128, "INSTANCE_NONE_V0": 64}],
+        ),
+    ]
+    metadata: Annotated[
+        IsccMetadata | None,
+        Field(
+            description="Optional asset metadata, denormalized from the index for convenience.\nUseful for result rendering and client-side filtering without additional lookups.\n\nThis field allows clients to access asset metadata directly in search results\nwithout requiring additional get_asset() calls.\n"
+        ),
+    ] = None
+
+
 class IsccSearchResult(BaseModel):
-    model_config = ConfigDict(
-        extra="forbid",
-    )
     query: Annotated[IsccEntry, Field(description="The original query asset (may include auto-generated iscc_id)")]
     global_matches: Annotated[
         list[IsccGlobalMatch],

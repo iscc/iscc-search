@@ -79,6 +79,7 @@ def custom_docs():
       <body>
         <elements-api
           apiDescriptionUrl="/openapi/openapi.yaml"
+          router="hash"
           layout="sidebar"
           hideExport="true"
           logo="https://avatars.githubusercontent.com/u/47259639?s=400&u=d26d161a5e7391dd7e0011ca3d5b317b93e6ad4d&v=4"

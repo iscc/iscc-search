@@ -18,23 +18,45 @@ properties:
   score:
     type: number
     description: |
-      Aggregated score across all unit_types. Metric semantics (bit-length, NPHD distance, etc.)
-      are defined at the result collection level, not per match.
-    minimum: 0
-    example: 448
+      Overall similarity score (0.0-1.0), computed as the average of matched
+      unit similarities across all queried units.
+
+      **Score semantics**:
+      - 1.0: Perfect match (all queried units matched exactly)
+      - 0.0-1.0: Partial match (some units matched with varying similarity)
+      - Higher score indicates better overall match
+
+      This normalized score enables direct comparison across matches regardless
+      of the number or types of units queried.
+    minimum: 0.0
+    maximum: 1.0
+    example: 0.850
   types:
     type: object
     description: |
-      Per-unit_type scores. Keys are unit type names (e.g., "CONTENT_TEXT_V0"),
-      values are numeric scores whose semantics depend on the search backend
-      (bit-length for lookup index, NPHD distance for usearch, etc.).
+      Per-unit-type similarity breakdown. Keys are unit type identifiers
+      (e.g., "META_NONE_V0", "CONTENT_TEXT_V0"), values are similarity scores (0.0-1.0).
+
+      **Missing keys**: Unit types that were queried but not found in this asset
+      are omitted (implicitly 0.0).
+
+      **Score semantics** (normalized against query unit length):
+      - 1.0: Perfect match (all query bits matched)
+      - 0.0-1.0: Partial match (NPHD distance for similarity-preserving units)
+      - INSTANCE units: Binary scoring (1.0 = identity match, 0.0 = no match)
+
+      A 64-bit query with perfect 64-bit match scores 1.0, same as 256-bit perfect match.
+      Score reflects "how well does this match MY query", not absolute bit count.
     additionalProperties:
       type: number
-      minimum: 0
+      minimum: 0.0
+      maximum: 1.0
+    minProperties: 1
     example:
-      CONTENT_TEXT_V0: 256
-      DATA_NONE_V0: 128
-      INSTANCE_NONE_V0: 64
+      META_NONE_V0: 1.0
+      CONTENT_TEXT_V0: 1.0
+      DATA_NONE_V0: 1.0
+      INSTANCE_NONE_V0: 0.25
   metadata:
     $ref: "./IsccMetadata.yaml"
     description: |
@@ -45,11 +67,12 @@ properties:
       without requiring additional get_asset() calls.
 example:
   iscc_id: "ISCC:MAIGIIFJRDGEQQAA"
-  score: 448
+  score: 0.850
   types:
-    CONTENT_TEXT_V0: 256
-    DATA_NONE_V0: 128
-    INSTANCE_NONE_V0: 64
+    META_NONE_V0: 1.0
+    CONTENT_TEXT_V0: 1.0
+    DATA_NONE_V0: 1.0
+    INSTANCE_NONE_V0: 0.25
   metadata:
     name: "Example Document"
     filename: "example.pdf"

@@ -127,8 +127,12 @@ def test_usearch_index_bidirectional_instance_matching_128bit(usearch_index, sam
     # Just testing the code path executes
 
 
-def test_usearch_index_instance_proportional_scoring(usearch_index, sample_iscc_ids):
-    """Test that INSTANCE matches are scored proportionally to match length."""
+def test_usearch_index_instance_binary_scoring(usearch_index, sample_iscc_ids):
+    """Test that INSTANCE matches use binary scoring (1.0 for any match).
+
+    INSTANCE codes are identity codes (checksums/hashes), not similarity codes.
+    Any prefix match indicates the same underlying data, so all matches score 1.0.
+    """
     # Create INSTANCE codes of different lengths with shared prefixes
     # We'll use predictable prefixes to ensure matches
     base_bytes = bytes([1, 2, 3, 4, 5, 6, 7, 8])  # 64 bits
@@ -149,55 +153,55 @@ def test_usearch_index_instance_proportional_scoring(usearch_index, sample_iscc_
 
     usearch_index.add_assets([asset_64, asset_128, asset_256])
 
-    # Test 1: 64-bit exact match should score 0.25
+    # Test 1: 64-bit exact match should score 1.0 (binary scoring)
     query_64 = IsccQuery(units=[ic_64, content_unit])
     result_64 = usearch_index.search_assets(query_64, limit=10)
 
     # Find the exact match
     match_64 = next(m for m in result_64.global_matches if m.iscc_id == sample_iscc_ids[0])
-    assert match_64.types["INSTANCE_NONE_V0"] == 0.25, "64-bit exact match should score 0.25"
+    assert match_64.types["INSTANCE_NONE_V0"] == 1.0, "64-bit exact match should score 1.0"
 
-    # Test 2: 128-bit exact match should score 0.5
+    # Test 2: 128-bit exact match should score 1.0 (binary scoring)
     query_128 = IsccQuery(units=[ic_128, content_unit])
     result_128 = usearch_index.search_assets(query_128, limit=10)
 
     match_128 = next(m for m in result_128.global_matches if m.iscc_id == sample_iscc_ids[1])
-    assert match_128.types["INSTANCE_NONE_V0"] == 0.5, "128-bit exact match should score 0.5"
+    assert match_128.types["INSTANCE_NONE_V0"] == 1.0, "128-bit exact match should score 1.0"
 
-    # Test 3: 256-bit exact match should score 1.0
+    # Test 3: 256-bit exact match should score 1.0 (binary scoring)
     query_256 = IsccQuery(units=[ic_256, content_unit])
     result_256 = usearch_index.search_assets(query_256, limit=10)
 
     match_256 = next(m for m in result_256.global_matches if m.iscc_id == sample_iscc_ids[2])
     assert match_256.types["INSTANCE_NONE_V0"] == 1.0, "256-bit exact match should score 1.0"
 
-    # Test 4: Forward prefix match - 64-bit query matches 256-bit stored (64-bit overlap)
+    # Test 4: Forward prefix match - 64-bit query matches 256-bit stored
     # Query with 64-bit should match all three (they all share the 64-bit prefix)
     all_matches_64 = {m.iscc_id for m in result_64.global_matches}
     assert sample_iscc_ids[0] in all_matches_64  # Exact 64-bit match
     assert sample_iscc_ids[1] in all_matches_64  # 128-bit starts with 64-bit prefix
     assert sample_iscc_ids[2] in all_matches_64  # 256-bit starts with 64-bit prefix
 
-    # All should score 0.25 (64-bit overlap)
+    # All should score 1.0 (binary scoring: any match = identity match)
     for match in result_64.global_matches:
         if match.iscc_id in [sample_iscc_ids[0], sample_iscc_ids[1], sample_iscc_ids[2]]:
-            assert match.types["INSTANCE_NONE_V0"] == 0.25
+            assert match.types["INSTANCE_NONE_V0"] == 1.0
 
-    # Test 5: Reverse prefix match - 256-bit query matches 64-bit stored
+    # Test 5: Reverse prefix match - 256-bit query matches shorter stored codes
     # The 256-bit query contains the 64-bit and 128-bit as prefixes, so should match via reverse search
     all_matches_256 = {m.iscc_id for m in result_256.global_matches}
-    assert sample_iscc_ids[2] in all_matches_256  # Exact 256-bit match (score 1.0)
-    assert sample_iscc_ids[1] in all_matches_256  # 128-bit is prefix (score 0.5)
-    assert sample_iscc_ids[0] in all_matches_256  # 64-bit is prefix (score 0.25)
+    assert sample_iscc_ids[2] in all_matches_256  # Exact 256-bit match
+    assert sample_iscc_ids[1] in all_matches_256  # 128-bit is prefix
+    assert sample_iscc_ids[0] in all_matches_256  # 64-bit is prefix
 
-    # Verify individual scores
+    # Verify all scores are 1.0 (binary scoring)
     match_256_exact = next(m for m in result_256.global_matches if m.iscc_id == sample_iscc_ids[2])
     match_256_to_128 = next(m for m in result_256.global_matches if m.iscc_id == sample_iscc_ids[1])
     match_256_to_64 = next(m for m in result_256.global_matches if m.iscc_id == sample_iscc_ids[0])
 
     assert match_256_exact.types["INSTANCE_NONE_V0"] == 1.0
-    assert match_256_to_128.types["INSTANCE_NONE_V0"] == 0.5
-    assert match_256_to_64.types["INSTANCE_NONE_V0"] == 0.25
+    assert match_256_to_128.types["INSTANCE_NONE_V0"] == 1.0
+    assert match_256_to_64.types["INSTANCE_NONE_V0"] == 1.0
 
 
 def test_usearch_index_map_size_property(usearch_index):

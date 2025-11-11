@@ -299,11 +299,19 @@ class UsearchIndex:
         Search for similar assets using NPHD metric.
 
         Combines exact INSTANCE matching (LMDB) with similarity matching (NphdIndex).
-        Scores: INSTANCE = proportional to match length (0.25/0.5/1.0), similarity = 1.0 - nphd_distance.
+
+        **Per-unit scoring** (normalized 0.0-1.0):
+        - INSTANCE units: Binary (1.0 = match, 0.0 = no match). Any prefix match scores 1.0
+          since INSTANCE codes are identity codes (checksums/hashes).
+        - Similarity units (CONTENT/META/DATA): score = 1.0 - nphd_distance. Perfect match
+          of query bits scores 1.0 regardless of unit length (64/128/192/256 bits).
+
+        **Score aggregation**: Overall score is the average across all queried units.
+        Unmatched units contribute 0.0 to the average.
 
         :param query: Query with units
         :param limit: Maximum number of results
-        :return: IsccSearchResult with query and list of matches
+        :return: IsccSearchResult with query and list of matches (scores normalized 0.0-1.0)
         """
         # Normalize query
         query = common.normalize_query(query)
@@ -336,10 +344,12 @@ class UsearchIndex:
                         # Store max score if multiple matches for same unit_type
                         aggregated[key][unit_type] = max(aggregated[key].get(unit_type, 0.0), score)
 
-        # Calculate total scores and sort
+        # Calculate average scores and sort
         scored_results = []  # type: list[tuple[int, float, dict[str, float]]]
+        num_queried_units = len(query.units)
         for key, unit_scores in aggregated.items():
-            total_score = sum(unit_scores.values())
+            # Average score across all queried units (unmatched = 0.0, normalized 0.0-1.0)
+            total_score = sum(unit_scores.values()) / num_queried_units
             scored_results.append((key, total_score, unit_scores))
 
         # Sort by total score descending
@@ -688,13 +698,15 @@ class UsearchIndex:
         """
         Search INSTANCE unit in LMDB dupsort for exact matches.
 
-        Scores are proportional to match length:
-        - 64-bit match: 0.25 (64/256)
-        - 128-bit match: 0.5 (128/256)
-        - 256-bit match: 1.0 (256/256)
+        INSTANCE codes are identity codes (checksums/hashes), not similarity codes.
+        Any prefix match indicates the same underlying data (with varying confidence
+        based on bit length). Therefore, all matches score 1.0.
+
+        **Binary scoring**: Any INSTANCE match (64/128/256-bit) scores 1.0, indicating
+        the matched asset contains the same data. No match = not in results (implicitly 0.0).
 
         :param instance_code: Instance-Code digest bytes
-        :return: Dict mapping integer keys to score (proportional to match length)
+        :return: Dict mapping integer keys to score (1.0 for all matches)
         """
         results = {}  # type: dict[int, float]
 
@@ -716,9 +728,8 @@ class UsearchIndex:
                 for key_bytes, value_bytes in cursor:
                     if not key_bytes.startswith(instance_code):
                         break
-                    # Score proportional to match length (shorter of query and stored)
-                    match_bytes = min(len(instance_code), len(key_bytes))
-                    score = match_bytes / 32  # 32 bytes = 256 bits max
+                    # Binary scoring: any match = 1.0 (identity match)
+                    score = 1.0
                     key = struct.unpack(">Q", value_bytes)[0]
                     results[key] = max(results.get(key, 0.0), score)
 
@@ -731,7 +742,7 @@ class UsearchIndex:
                 if cursor.set_key(prefix_128):
                     for value_bytes in cursor.iternext_dup(keys=False, values=True):
                         key = struct.unpack(">Q", value_bytes)[0]
-                        score = 0.5  # 128-bit match (16 bytes / 32 bytes)
+                        score = 1.0  # Binary: match = 1.0
                         results[key] = max(results.get(key, 0.0), score)
 
             if query_len >= 16:  # 128-bit or 256-bit query
@@ -740,7 +751,7 @@ class UsearchIndex:
                 if cursor.set_key(prefix_64):
                     for value_bytes in cursor.iternext_dup(keys=False, values=True):
                         key = struct.unpack(">Q", value_bytes)[0]
-                        score = 0.25  # 64-bit match (8 bytes / 32 bytes)
+                        score = 1.0  # Binary: match = 1.0
                         results[key] = max(results.get(key, 0.0), score)
 
         return results

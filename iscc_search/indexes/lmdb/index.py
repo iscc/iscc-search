@@ -185,21 +185,32 @@ class LmdbIndex:
         """
         Search for similar assets using bidirectional prefix matching.
 
-        Searches across all unit types and aggregates scores.
-        Each ISCC-ID appears once with max bits per unit_type, summed across types.
+        Searches across all unit types and aggregates normalized scores (0.0-1.0).
+        Each ISCC-ID appears once with max normalized score per unit_type, averaged
+        across all queried units.
+
+        **Score normalization**: Per-unit scores are normalized against the query unit
+        length (not a fixed maximum). A perfect match (all query bits matched) scores 1.0,
+        regardless of whether the query unit is 64, 128, 192, or 256 bits.
+
+        **Score aggregation**: Overall score is the average across all queried units.
+        Unmatched unit types contribute 0.0 to the average.
 
         Accepts query with either iscc_code or units (or both). If only iscc_code
         is provided, units are automatically derived for search.
 
         :param query: IsccQuery with iscc_code or units (or both)
         :param limit: Maximum number of results
-        :return: IsccSearchResult with matches sorted by score (descending)
+        :return: IsccSearchResult with matches sorted by score (descending, normalized 0.0-1.0)
         :raises ValueError: If query has neither iscc_code nor units
         """
         # Normalize query to ensure it has units (derive from iscc_code if needed)
         query = common.normalize_query(query)
 
         with self.env.begin() as txn:
+            # Track query unit lengths per type for normalization
+            query_unit_lengths = {}  # type: dict[str, int]
+
             # Aggregate matches: iscc_id → {unit_type → max_bits}
             matches = {}  # type: dict[str, dict[str, int]]
 
@@ -207,6 +218,10 @@ class LmdbIndex:
                 # Units are plain ISCC strings
                 unit = IsccUnit(unit_str)
                 unit_type = unit.unit_type
+                query_bits = len(unit)
+
+                # Track max query unit length per type for normalization
+                query_unit_lengths[unit_type] = max(query_unit_lengths.get(unit_type, 0), query_bits)
 
                 # Get unit-type database (skip if not indexed)
                 unit_db = self._get_db(unit_type, txn)
@@ -224,11 +239,16 @@ class LmdbIndex:
                     # Max per unit_type (prevents double-counting same unit at different lengths)
                     matches[iscc_id][unit_type] = max(matches[iscc_id].get(unit_type, 0), matched_bits)
 
-            # Build match list
+            # Build match list with normalized scores
             match_list = []
             assets_db = self._get_db("__assets__", txn)
-            for iscc_id, unit_type_scores in matches.items():
-                total_score = sum(unit_type_scores.values())
+            num_queried_units = len(query.units)
+            for iscc_id, unit_type_bits in matches.items():
+                # Normalize per-unit scores against query unit length (0.0-1.0)
+                # Perfect match (all query bits matched) = 1.0
+                unit_type_scores = {ut: bits / float(query_unit_lengths[ut]) for ut, bits in unit_type_bits.items()}
+                # Average score across all queried units (unmatched = 0.0, normalized 0.0-1.0)
+                total_score = sum(unit_type_scores.values()) / num_queried_units
 
                 # Fetch asset metadata
                 metadata = None

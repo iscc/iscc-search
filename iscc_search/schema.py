@@ -229,16 +229,17 @@ class IsccGlobalMatch(BaseModel):
     score: Annotated[
         float,
         Field(
-            description="Aggregated score across all unit_types. Metric semantics (bit-length, NPHD distance, etc.)\nare defined at the result collection level, not per match.\n",
-            examples=[448],
+            description="Overall similarity score (0.0-1.0), computed as the average of matched\nunit similarities across all queried units.\n\n**Score semantics**:\n- 1.0: Perfect match (all queried units matched exactly)\n- 0.0-1.0: Partial match (some units matched with varying similarity)\n- Higher score indicates better overall match\n\nThis normalized score enables direct comparison across matches regardless\nof the number or types of units queried.\n",
+            examples=[0.85],
             ge=0.0,
+            le=1.0,
         ),
     ]
     types: Annotated[
         dict[str, float],
         Field(
-            description='Per-unit_type scores. Keys are unit type names (e.g., "CONTENT_TEXT_V0"),\nvalues are numeric scores whose semantics depend on the search backend\n(bit-length for lookup index, NPHD distance for usearch, etc.).\n',
-            examples=[{"CONTENT_TEXT_V0": 256, "DATA_NONE_V0": 128, "INSTANCE_NONE_V0": 64}],
+            description='Per-unit-type similarity breakdown. Keys are unit type identifiers\n(e.g., "META_NONE_V0", "CONTENT_TEXT_V0"), values are similarity scores (0.0-1.0).\n\n**Missing keys**: Unit types that were queried but not found in this asset\nare omitted (implicitly 0.0).\n\n**Score semantics** (normalized against query unit length):\n- 1.0: Perfect match (all query bits matched)\n- 0.0-1.0: Partial match (NPHD distance for similarity-preserving units)\n- INSTANCE units: Binary scoring (1.0 = identity match, 0.0 = no match)\n\nA 64-bit query with perfect 64-bit match scores 1.0, same as 256-bit perfect match.\nScore reflects "how well does this match MY query", not absolute bit count.\n',
+            examples=[{"META_NONE_V0": 1.0, "CONTENT_TEXT_V0": 1.0, "DATA_NONE_V0": 1.0, "INSTANCE_NONE_V0": 0.25}],
         ),
     ]
     metadata: Annotated[

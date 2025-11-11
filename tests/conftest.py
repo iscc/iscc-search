@@ -359,3 +359,48 @@ def populated_index(memory_index_instance, sample_assets):
     memory_index_instance.add_assets("testindex", sample_assets)
 
     return memory_index_instance
+
+
+@pytest.fixture
+def sample_simprints():
+    # type: () -> dict[str, list[dict]]
+    """Generate sample simprints for testing."""
+    return {
+        "CONTENT_TEXT_V0": [
+            {"simprint": "AXvu3tp2kF8mN9qL4rT1sZ", "offset": 0, "size": 500},
+            {"simprint": "B4kl9mQ1pP7xY3jH8vW2aF", "offset": 500, "size": 400},
+        ],
+        "SEMANTIC_TEXT_V0": [
+            {"simprint": "CYhq2nR8oL3pT5mK9sX4bG", "offset": 1000, "size": 300},
+        ],
+    }
+
+
+@pytest.fixture
+def sample_assets_with_simprints(sample_iscc_ids, sample_iscc_codes, sample_content_units, sample_simprints):
+    # type: (list[str], list[str], list[str], dict) -> list[typing.Any]
+    """Generate assets with both units and simprints."""
+    from iscc_search.schema import IsccEntry, IsccSimprint
+
+    assets = []
+    for i in range(5):
+        # Convert simprint dicts to IsccSimprint objects
+        simprints_obj = {}
+        for simprint_type, simprint_list in sample_simprints.items():
+            simprints_obj[simprint_type] = [IsccSimprint(**sp) for sp in simprint_list]
+
+        asset = IsccEntry(
+            iscc_id=sample_iscc_ids[i],
+            iscc_code=sample_iscc_codes[i],
+            units=[
+                sample_content_units[i % len(sample_content_units)],
+                sample_content_units[(i + 1) % len(sample_content_units)],
+            ],
+            simprints=simprints_obj,
+            metadata={
+                "title": f"Test Asset {i}",
+                "source": f"https://example.com/{i}",
+            },
+        )
+        assets.append(asset)
+    return assets

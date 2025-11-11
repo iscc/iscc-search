@@ -306,3 +306,21 @@ class LmdbSimprintIndexMulti:
         )
 
         return index
+
+    @property
+    def realm_id_int(self):
+        # type: () -> int | None
+        """
+        Extract realm ID as integer from stored 2-byte header.
+
+        Properly decodes the ISCC-ID header to extract realm field.
+
+        :return: Realm ID (0 or 1) or None if not set
+        """
+        if self.realm_id is None:
+            return None
+        import iscc_core as ic
+
+        # Pad to 10 bytes for decode_header (2-byte header + 8-byte body)
+        _mt, realm, _vs, _len, _body = ic.decode_header(self.realm_id + b"\x00" * 8)
+        return realm

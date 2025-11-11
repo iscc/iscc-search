@@ -353,7 +353,7 @@ class UsearchIndex:
         for key, total_score, unit_scores in scored_results:
             # Reconstruct ISCC-ID from key
             iscc_id = str(IsccID.from_int(key, self._realm_id))
-            matches.append(IsccGlobalMatch(iscc_id=iscc_id, score=total_score, matches=unit_scores))
+            matches.append(IsccGlobalMatch(iscc_id=iscc_id, score=total_score, types=unit_scores))
 
         return IsccSearchResult(query=query, global_matches=matches)
 

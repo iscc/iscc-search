@@ -153,21 +153,21 @@ def test_usearch_index_instance_proportional_scoring(usearch_index, sample_iscc_
 
     # Find the exact match
     match_64 = next(m for m in result_64.global_matches if m.iscc_id == sample_iscc_ids[0])
-    assert match_64.matches["INSTANCE_NONE_V0"] == 0.25, "64-bit exact match should score 0.25"
+    assert match_64.types["INSTANCE_NONE_V0"] == 0.25, "64-bit exact match should score 0.25"
 
     # Test 2: 128-bit exact match should score 0.5
     query_128 = IsccEntry(units=[ic_128, content_unit])
     result_128 = usearch_index.search_assets(query_128, limit=10)
 
     match_128 = next(m for m in result_128.global_matches if m.iscc_id == sample_iscc_ids[1])
-    assert match_128.matches["INSTANCE_NONE_V0"] == 0.5, "128-bit exact match should score 0.5"
+    assert match_128.types["INSTANCE_NONE_V0"] == 0.5, "128-bit exact match should score 0.5"
 
     # Test 3: 256-bit exact match should score 1.0
     query_256 = IsccEntry(units=[ic_256, content_unit])
     result_256 = usearch_index.search_assets(query_256, limit=10)
 
     match_256 = next(m for m in result_256.global_matches if m.iscc_id == sample_iscc_ids[2])
-    assert match_256.matches["INSTANCE_NONE_V0"] == 1.0, "256-bit exact match should score 1.0"
+    assert match_256.types["INSTANCE_NONE_V0"] == 1.0, "256-bit exact match should score 1.0"
 
     # Test 4: Forward prefix match - 64-bit query matches 256-bit stored (64-bit overlap)
     # Query with 64-bit should match all three (they all share the 64-bit prefix)
@@ -179,7 +179,7 @@ def test_usearch_index_instance_proportional_scoring(usearch_index, sample_iscc_
     # All should score 0.25 (64-bit overlap)
     for match in result_64.global_matches:
         if match.iscc_id in [sample_iscc_ids[0], sample_iscc_ids[1], sample_iscc_ids[2]]:
-            assert match.matches["INSTANCE_NONE_V0"] == 0.25
+            assert match.types["INSTANCE_NONE_V0"] == 0.25
 
     # Test 5: Reverse prefix match - 256-bit query matches 64-bit stored
     # The 256-bit query contains the 64-bit and 128-bit as prefixes, so should match via reverse search
@@ -193,9 +193,9 @@ def test_usearch_index_instance_proportional_scoring(usearch_index, sample_iscc_
     match_256_to_128 = next(m for m in result_256.global_matches if m.iscc_id == sample_iscc_ids[1])
     match_256_to_64 = next(m for m in result_256.global_matches if m.iscc_id == sample_iscc_ids[0])
 
-    assert match_256_exact.matches["INSTANCE_NONE_V0"] == 1.0
-    assert match_256_to_128.matches["INSTANCE_NONE_V0"] == 0.5
-    assert match_256_to_64.matches["INSTANCE_NONE_V0"] == 0.25
+    assert match_256_exact.types["INSTANCE_NONE_V0"] == 1.0
+    assert match_256_to_128.types["INSTANCE_NONE_V0"] == 0.5
+    assert match_256_to_64.types["INSTANCE_NONE_V0"] == 0.25
 
 
 def test_usearch_index_map_size_property(usearch_index):

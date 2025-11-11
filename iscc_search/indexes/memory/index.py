@@ -206,7 +206,7 @@ class MemoryIndex:
                         IsccGlobalMatch(
                             iscc_id=asset.iscc_id,  # type: ignore
                             score=1.0,
-                            matches={},
+                            types={},
                         )
                     )
 

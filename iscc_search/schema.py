@@ -181,7 +181,7 @@ class IsccGlobalMatch(BaseModel):
             ge=0.0,
         ),
     ]
-    matches: Annotated[
+    types: Annotated[
         dict[str, float],
         Field(
             description='Per-unit_type scores. Keys are unit type names (e.g., "CONTENT_TEXT_V0"),\nvalues are numeric scores whose semantics depend on the search backend\n(bit-length for lookup index, NPHD distance for usearch, etc.).\n',

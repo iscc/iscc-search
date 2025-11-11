@@ -266,8 +266,8 @@ def test_usearch_index_crash_recovery_rebuild_missing_files(tmp_path, sample_isc
     assert result.global_matches[0].iscc_id == sample_iscc_ids[0]
 
     # Verify both unit types are searchable
-    assert "CONTENT_TEXT_V0" in result.global_matches[0].matches
-    assert "DATA_NONE_V0" in result.global_matches[0].matches
+    assert "CONTENT_TEXT_V0" in result.global_matches[0].types
+    assert "DATA_NONE_V0" in result.global_matches[0].types
 
     idx2.close()
 

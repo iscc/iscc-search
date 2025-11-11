@@ -27,7 +27,7 @@ def test_search_post_success(test_client, sample_assets):
         match = data["global_matches"][0]
         assert "iscc_id" in match
         assert "score" in match
-        assert "matches" in match
+        assert "types" in match
 
 
 def test_search_post_no_matches(test_client, sample_assets, sample_iscc_codes):
@@ -162,9 +162,9 @@ def test_search_result_structure(test_client, sample_assets):
         for match in data["global_matches"]:
             assert "iscc_id" in match
             assert "score" in match
-            assert "matches" in match
+            assert "types" in match
             assert isinstance(match["score"], (int, float))
-            assert isinstance(match["matches"], dict)
+            assert isinstance(match["types"], dict)
 
 
 def test_search_empty_index(test_client, sample_assets):

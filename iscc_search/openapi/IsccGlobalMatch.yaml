@@ -8,7 +8,7 @@ description: |
 required:
   - iscc_id
   - score
-  - matches
+  - types
 properties:
   iscc_id:
     type: string
@@ -22,7 +22,7 @@ properties:
       are defined at the result collection level, not per match.
     minimum: 0
     example: 448
-  matches:
+  types:
     type: object
     description: |
       Per-unit_type scores. Keys are unit type names (e.g., "CONTENT_TEXT_V0"),
@@ -38,7 +38,7 @@ properties:
 example:
   iscc_id: "ISCC:MAIGIIFJRDGEQQAA"
   score: 448
-  matches:
+  types:
     CONTENT_TEXT_V0: 256
     DATA_NONE_V0: 128
     INSTANCE_NONE_V0: 64

@@ -232,7 +232,7 @@ class LmdbIndex:
                     IsccGlobalMatch(
                         iscc_id=iscc_id,
                         score=total_score,
-                        matches=unit_type_scores,
+                        types=unit_type_scores,
                     )
                 )
 

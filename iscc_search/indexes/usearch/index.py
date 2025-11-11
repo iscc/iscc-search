@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 import lmdb
 from loguru import logger
-from iscc_search.schema import IsccAddResult, IsccGlobalMatch, IsccSearchResult, Status, Metric
+from iscc_search.schema import IsccAddResult, IsccGlobalMatch, IsccSearchResult, Status
 from iscc_search.models import IsccUnit, IsccID
 from iscc_search.indexes import common
 from iscc_search.nphd import NphdIndex
@@ -303,13 +303,13 @@ class UsearchIndex:
 
         :param query: Query asset with units
         :param limit: Maximum number of results
-        :return: IsccSearchResult with NPHD metric
+        :return: IsccSearchResult with query and list of matches
         """
         # Normalize query
         query = common.normalize_query_asset(query)
         if not query.units:  # pragma: no cover
             # No units to search
-            return IsccSearchResult(query=query, metric=Metric.nphd, global_matches=[])
+            return IsccSearchResult(query=query, global_matches=[])
 
         # Aggregation: {key (int): {unit_type: score}}
         aggregated = {}  # type: dict[int, dict[str, float]]
@@ -355,7 +355,7 @@ class UsearchIndex:
             iscc_id = str(IsccID.from_int(key, self._realm_id))
             matches.append(IsccGlobalMatch(iscc_id=iscc_id, score=total_score, matches=unit_scores))
 
-        return IsccSearchResult(query=query, metric=Metric.nphd, global_matches=matches)
+        return IsccSearchResult(query=query, global_matches=matches)
 
     def flush(self):
         # type: () -> None

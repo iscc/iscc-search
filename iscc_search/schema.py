@@ -190,12 +190,6 @@ class IsccGlobalMatch(BaseModel):
     ]
 
 
-class Metric(str, Enum):
-    nphd = "nphd"
-    hamming = "hamming"
-    bitlength = "bitlength"
-
-
 class IsccEntry(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -259,13 +253,6 @@ class IsccSearchResult(BaseModel):
         extra="forbid",
     )
     query: Annotated[IsccEntry, Field(description="The original query asset (may include auto-generated iscc_id)")]
-    metric: Annotated[
-        Metric,
-        Field(
-            description="Defines the semantics of score values in matches. Different search backends\nuse different metrics (bitlength for lookup, NPHD distance for usearch, etc.).\n",
-            examples=["nphd"],
-        ),
-    ]
     global_matches: Annotated[
         list[IsccGlobalMatch],
         Field(

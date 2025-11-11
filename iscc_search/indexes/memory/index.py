@@ -7,7 +7,7 @@ scenarios where persistence isn't needed.
 """
 
 import re
-from iscc_search.schema import IsccAddResult, IsccGlobalMatch, IsccIndex, IsccSearchResult, Metric, Status
+from iscc_search.schema import IsccAddResult, IsccGlobalMatch, IsccIndex, IsccSearchResult, Status
 from iscc_search.indexes import common
 
 
@@ -212,7 +212,6 @@ class MemoryIndex:
 
         return IsccSearchResult(
             query=query,
-            metric=Metric.bitlength,
             global_matches=match_list[:limit],
         )
 

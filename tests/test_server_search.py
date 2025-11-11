@@ -17,7 +17,6 @@ def test_search_post_success(test_client, sample_assets):
 
     # Verify response structure
     assert "query" in data
-    assert "metric" in data
     assert "global_matches" in data
 
     # Should match at least the exact same asset
@@ -97,7 +96,6 @@ def test_search_get_success(test_client, sample_assets):
 
     # Verify response structure
     assert "query" in data
-    assert "metric" in data
     assert "global_matches" in data
 
     # Query should contain the iscc_code
@@ -156,12 +154,8 @@ def test_search_result_structure(test_client, sample_assets):
 
     # Verify top-level structure
     assert "query" in data
-    assert "metric" in data
     assert "global_matches" in data
     assert isinstance(data["global_matches"], list)
-
-    # Verify metric is valid
-    assert data["metric"] in ["nphd", "hamming", "bitlength"]
 
     # Verify match structure if matches exist
     if len(data["global_matches"]) > 0:

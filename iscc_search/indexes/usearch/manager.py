@@ -202,7 +202,7 @@ class UsearchIndexManager:
         :param index_name: Target index name
         :param query: IsccEntry to search for
         :param limit: Maximum number of results
-        :return: IsccSearchResult with query, metric, and list of matches
+        :return: IsccSearchResult with query and list of matches
         :raises FileNotFoundError: If index doesn't exist
         :raises ValueError: If query validation fails
         """

@@ -304,7 +304,6 @@ def test_search_assets_similarity_matching(manager, gen_iscc_id_realm_0, gen_con
 
     # Should find matches, ordered by similarity
     assert len(result.global_matches) > 0
-    assert result.metric.value == "nphd"
 
     # First match should have high score (CONTENT similarity + INSTANCE proportional match)
     # With 128-bit INSTANCE: score = CONTENT(~1.0) + INSTANCE(0.5) = ~1.5

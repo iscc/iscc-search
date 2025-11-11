@@ -13,7 +13,7 @@ import os
 import time
 import lmdb
 from loguru import logger
-from iscc_search.schema import IsccAddResult, IsccGlobalMatch, IsccSearchResult, Status, Metric
+from iscc_search.schema import IsccAddResult, IsccGlobalMatch, IsccSearchResult, Status
 from iscc_search.models import IsccUnit
 from iscc_search.indexes import common
 
@@ -239,7 +239,7 @@ class LmdbIndex:
             # Sort by score descending
             match_list.sort(key=lambda x: x.score, reverse=True)
 
-            return IsccSearchResult(query=query, metric=Metric.bitlength, global_matches=match_list[:limit])
+            return IsccSearchResult(query=query, global_matches=match_list[:limit])
 
     def get_asset_count(self):
         # type: () -> int

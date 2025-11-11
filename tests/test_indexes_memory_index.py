@@ -3,7 +3,7 @@
 import pytest
 from iscc_search.indexes.memory import MemoryIndex
 from iscc_search.protocols.index import IsccIndexProtocol
-from iscc_search.schema import IsccAddResult, IsccEntry, IsccIndex, IsccSearchResult, Metric, Status
+from iscc_search.schema import IsccAddResult, IsccEntry, IsccIndex, IsccSearchResult, Status
 
 
 def test_memory_index_implements_protocol():
@@ -294,7 +294,6 @@ def test_search_assets_by_iscc_code(sample_iscc_ids, sample_iscc_codes):
     # Query is normalized (units derived from iscc_code)
     assert result.query.iscc_code == code1
     assert result.query.units is not None  # Units were derived
-    assert result.metric == Metric.bitlength
     assert len(result.global_matches) == 1
     assert result.global_matches[0].iscc_id == sample_iscc_ids[0]
     assert result.global_matches[0].score == 1.0
@@ -504,7 +503,6 @@ def test_search_assets_by_units_only(sample_iscc_ids, sample_iscc_codes):
     # Query is normalized (iscc_code derived from units)
     assert result.query.units == units
     assert result.query.iscc_code is not None  # iscc_code was derived
-    assert result.metric == Metric.bitlength
     # Should find the matching asset
     assert len(result.global_matches) == 1
     assert result.global_matches[0].iscc_id == sample_iscc_ids[0]

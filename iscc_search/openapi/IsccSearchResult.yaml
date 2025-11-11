@@ -3,26 +3,14 @@ $id: "http://purl.org/iscc/schema/iscc-search-result.json"
 title: "IsccSearchResult"
 type: object
 description: |
-  Search result for a single query asset. Contains the original query, matched ISCCs,
-  and metric metadata that describes how to interpret the numeric scores.
+  Search result for a single query asset. Contains the original query and matched ISCCs.
 required:
   - query
-  - metric
   - global_matches
 properties:
   query:
     $ref: "./IsccEntry.yaml"
     description: The original query asset (may include auto-generated iscc_id)
-  metric:
-    type: string
-    description: |
-      Defines the semantics of score values in matches. Different search backends
-      use different metrics (bitlength for lookup, NPHD distance for usearch, etc.).
-    enum:
-      - nphd
-      - hamming
-      - bitlength
-    example: "nphd"
   global_matches:
     type: array
     description: Asset-level ISCC-UNIT matches, ordered by relevance (best first)
@@ -47,7 +35,6 @@ example:
     units:
       - "ISCC:AADYCMZIOY36XXGZ5B5BME7EIPPXRFKYQZ7VXKI7V55AEQQE67A33BY"
       - "ISCC:EED7ZPIEYNACCLXXZSS2LIM6JVXDYGCG2QSMC7DCPER4MYJPJATIM4Y"
-  metric: "bitlength"
   global_matches:
     - iscc_id: "ISCC:MAIGIIFJRDGEQQAA"
       score: 448

@@ -22,6 +22,44 @@ properties:
     items:
       $ref: "./CommonProperties.yaml#/properties/iscc_unit"
     minItems: 2
+  simprints:
+    type: object
+    description: |
+      Simprint groups for chunk-level indexing. Keys are simprint type identifiers
+      (e.g., "CONTENT_TEXT_V0", "SEMANTIC_TEXT_V0"), values are arrays of simprint
+      entries with location metadata.
+
+      **Simprint types** are versioned identifiers determining matching strategy and
+      abstraction level:
+      - `CONTENT_TEXT_V0`: Lexical similarity (near-duplicates, minor edits)
+      - `SEMANTIC_TEXT_V0`: Conceptual similarity (paraphrases, translations)
+      - `INSTANCE_NONE_V0`: Exact bitstream matches (cryptographic identity)
+
+      **Extensibility**: New simprint types can be added without schema changes.
+
+      **Storage**: Each simprint is indexed with its parent iscc_id, enabling reverse
+      lookup from simprint → chunks → assets.
+    additionalProperties:
+      type: array
+      description: Array of simprint entries with location metadata
+      items:
+        $ref: "./IsccSimprint.yaml"
+      minItems: 1
+    example:
+      CONTENT_TEXT_V0:
+        - simprint: "AXvu3tp2kF8mN9qL4rT1sZ"
+          offset: 12500
+          size: 350
+        - simprint: "B4kl9mQ1pP7xY3jH8vW2aF"
+          offset: 45230
+          size: 412
+      SEMANTIC_TEXT_V0:
+        - simprint: "CYhq2nR8oL3pT5mK9sX4bG"
+          offset: 78900
+          size: 389
+        - simprint: "D9mn7vT4qK2rU6nL1tY5cH"
+          offset: 123450
+          size: 301
   metadata:
     type: object
     additionalProperties: true

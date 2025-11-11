@@ -37,6 +37,39 @@ class IsccIndex(BaseModel):
     ] = None
 
 
+class IsccSimprint(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    simprint: Annotated[
+        str,
+        Field(
+            description="Base64-encoded simprint hash (headerless, variable length).\n\nTypical lengths:\n- 128-bit: 22 chars (base64url without padding)\n- 256-bit: 42 chars (without padding)\n",
+            examples=["AXvu3tp2kF8mN9qL4rT1sZ"],
+            min_length=16,
+            pattern="^[A-Za-z0-9+/_=-]+$",
+        ),
+    ]
+    offset: Annotated[
+        int,
+        Field(
+            description="Starting position/time/coordinates in the source content.\n\n**Interpretation by modality**:\n- Text: UTF-8 byte offset (0-indexed)\n- Audio/Video: Milliseconds from start (0-indexed)\n- Image: Packed coordinates (x << 16 | y)\n\nSee IsccChunk documentation for detailed semantics.\n",
+            examples=[12500],
+            ge=0,
+            le=4294967295,
+        ),
+    ]
+    size: Annotated[
+        int,
+        Field(
+            description="Extent/duration/dimensions of the content segment.\n\n**Interpretation by modality**:\n- Text: UTF-8 byte length\n- Audio/Video: Duration in milliseconds\n- Image: Packed dimensions (width << 16 | height)\n\nSee IsccChunk documentation for detailed semantics.\n",
+            examples=[350],
+            ge=0,
+            le=4294967295,
+        ),
+    ]
+
+
 class Status(str, Enum):
     created = "created"
     updated = "updated"
@@ -121,6 +154,24 @@ class IsccEntry(BaseModel):
     units: Annotated[
         list[str] | None,
         Field(description="List of ISCC-UNITs as canonical strings (variable-length, 64-256 bits)", min_length=2),
+    ] = None
+    simprints: Annotated[
+        dict[str, list[IsccSimprint]] | None,
+        Field(
+            description='Simprint groups for chunk-level indexing. Keys are simprint type identifiers\n(e.g., "CONTENT_TEXT_V0", "SEMANTIC_TEXT_V0"), values are arrays of simprint\nentries with location metadata.\n\n**Simprint types** are versioned identifiers determining matching strategy and\nabstraction level:\n- `CONTENT_TEXT_V0`: Lexical similarity (near-duplicates, minor edits)\n- `SEMANTIC_TEXT_V0`: Conceptual similarity (paraphrases, translations)\n- `INSTANCE_NONE_V0`: Exact bitstream matches (cryptographic identity)\n\n**Extensibility**: New simprint types can be added without schema changes.\n\n**Storage**: Each simprint is indexed with its parent iscc_id, enabling reverse\nlookup from simprint → chunks → assets.\n',
+            examples=[
+                {
+                    "CONTENT_TEXT_V0": [
+                        {"simprint": "AXvu3tp2kF8mN9qL4rT1sZ", "offset": 12500, "size": 350},
+                        {"simprint": "B4kl9mQ1pP7xY3jH8vW2aF", "offset": 45230, "size": 412},
+                    ],
+                    "SEMANTIC_TEXT_V0": [
+                        {"simprint": "CYhq2nR8oL3pT5mK9sX4bG", "offset": 78900, "size": 389},
+                        {"simprint": "D9mn7vT4qK2rU6nL1tY5cH", "offset": 123450, "size": 301},
+                    ],
+                }
+            ],
+        ),
     ] = None
     metadata: Annotated[
         dict[str, Any] | None,

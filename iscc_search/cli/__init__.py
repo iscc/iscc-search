@@ -370,7 +370,6 @@ def search(
     # Output as JSON
     output = {
         "query": {"iscc_code": results.query.iscc_code, "units": results.query.units},
-        "metric": results.metric,
         "matches": matches_output,
     }
 

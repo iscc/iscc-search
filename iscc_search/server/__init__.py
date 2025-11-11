@@ -66,7 +66,7 @@ def custom_docs():
 
     :return: HTML response with Stoplight Elements UI
     """
-    html = f"""
+    html = rf"""
     <!doctype html>
     <html>
       <head>

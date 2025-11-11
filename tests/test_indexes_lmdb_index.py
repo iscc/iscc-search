@@ -397,3 +397,88 @@ def test_add_multiple_assets_batch(lmdb_index, sample_assets):
     assert len(results) == 5
     assert all(r.status == Status.created for r in results)
     assert lmdb_index.get_asset_count() == 5
+
+
+def test_search_returns_none_metadata_when_asset_not_stored(lmdb_index, sample_iscc_ids, sample_content_units):
+    """Test search returns matches with None metadata when asset not in __assets__ db."""
+    # Manually add units to index without storing asset in __assets__ db
+    # This simulates the edge case where asset_bytes is None in search_assets
+    import struct
+    from iscc_search.indexes import common
+    from iscc_search.models import IsccUnit
+
+    unit_str = sample_content_units[0]
+    unit = IsccUnit(unit_str)
+    unit_type = unit.unit_type
+    unit_body = unit.body
+
+    iscc_id = sample_iscc_ids[0]
+    iscc_id_body = common.extract_iscc_id_body(iscc_id)
+
+    with lmdb_index.env.begin(write=True) as txn:
+        # Set realm_id first (required for search_assets)
+        metadata_db = lmdb_index.env.open_db(b"__metadata__", txn=txn)
+        txn.put(b"realm_id", struct.pack(">I", 0), db=metadata_db)
+
+        # Create __assets__ database (so assets_db is not None)
+        # but don't store the specific asset in it (so asset_bytes will be None)
+        lmdb_index.env.open_db(b"__assets__", txn=txn)
+
+        # Create unit type database manually
+        unit_db = lmdb_index.env.open_db(unit_type.encode("utf-8"), txn=txn, dupsort=True)
+
+        # Add unit pointing to an ISCC-ID without storing the asset
+        cursor = txn.cursor(unit_db)
+        cursor.put(unit_body, iscc_id_body, dupdata=False)
+
+    # Set realm_id in memory (it gets loaded from DB)
+    lmdb_index._realm_id = 0
+
+    # Search should find match but with None metadata (need 2 units for schema validation)
+    query = IsccEntry(units=[sample_content_units[0], sample_content_units[1]])
+    result = lmdb_index.search_assets(query, limit=10)
+
+    assert len(result.global_matches) == 1
+    assert result.global_matches[0].iscc_id == iscc_id
+    assert result.global_matches[0].metadata is None  # No metadata stored
+
+
+def test_search_with_no_assets_db(temp_lmdb_path, sample_content_units):
+    """Test search when __assets__ db doesn't exist (assets_db is None)."""
+    # Create index and manually populate unit databases without creating __assets__ db
+    import struct
+    from iscc_search.indexes import common
+    from iscc_search.models import IsccUnit
+
+    idx = LmdbIndex(temp_lmdb_path)
+
+    unit_str = sample_content_units[0]
+    unit = IsccUnit(unit_str)
+    unit_type = unit.unit_type
+    unit_body = unit.body
+
+    iscc_id = ic.gen_iscc_id(timestamp=5000000, hub_id=1, realm_id=0)["iscc"]
+    iscc_id_body = common.extract_iscc_id_body(iscc_id)
+
+    # Manually create unit database with data but don't create __assets__ db
+    with idx.env.begin(write=True) as txn:
+        # Create unit database
+        unit_db = idx.env.open_db(unit_type.encode("utf-8"), txn=txn, dupsort=True)
+        cursor = txn.cursor(unit_db)
+        cursor.put(unit_body, iscc_id_body, dupdata=False)
+
+        # Store realm_id in metadata so search works
+        metadata_db = idx.env.open_db(b"__metadata__", txn=txn)
+        txn.put(b"realm_id", struct.pack(">I", 0), db=metadata_db)
+
+    # Set realm_id in memory (it gets loaded from DB)
+    idx._realm_id = 0
+
+    # Search should work and return matches with None metadata (need 2 units for schema validation)
+    query = IsccEntry(units=[sample_content_units[0], sample_content_units[1]])
+    result = idx.search_assets(query, limit=10)
+
+    assert len(result.global_matches) == 1
+    assert result.global_matches[0].metadata is None  # No __assets__ db exists
+
+    idx.close()

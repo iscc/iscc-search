@@ -748,3 +748,38 @@ def test_usearch_index_migration_with_existing_created_at(tmp_path, sample_iscc_
         assert created_at_bytes is not None
 
     idx.close()
+
+
+def test_usearch_index_search_returns_none_metadata_when_asset_not_stored(usearch_index, sample_iscc_ids):
+    """Test search returns matches with None metadata when asset not in __assets__ db."""
+    # Add asset with units but manually delete from __assets__ to simulate the edge case
+    # where asset is indexed in NPHD but not stored in assets database
+    import struct
+    from iscc_search.models import IsccID
+
+    content_unit = ic.gen_text_code_v0("Test content for metadata test")["iscc"]
+    instance_unit = f"ISCC:{ic.Code.rnd(ic.MT.INSTANCE, bits=128)}"
+
+    asset = IsccEntry(
+        iscc_id=sample_iscc_ids[0],
+        units=[instance_unit, content_unit],
+        metadata={"test": "will_be_deleted"},
+    )
+
+    # Add asset normally (this indexes the units and stores the asset)
+    usearch_index.add_assets([asset])
+
+    # Now manually remove the asset from __assets__ db to simulate the edge case
+    with usearch_index.env.begin(write=True) as txn:
+        assets_db = usearch_index.env.open_db(b"__assets__", txn=txn)
+        iscc_id_obj = IsccID(sample_iscc_ids[0])
+        asset_key = struct.pack(">Q", int(iscc_id_obj))
+        txn.delete(asset_key, db=assets_db)
+
+    # Search should still find the match (via NPHD indexes) but with None metadata
+    query = IsccEntry(units=[instance_unit, content_unit])
+    result = usearch_index.search_assets(query, limit=10)
+
+    assert len(result.global_matches) == 1
+    assert result.global_matches[0].iscc_id == sample_iscc_ids[0]
+    assert result.global_matches[0].metadata is None  # Asset not in __assets__ db

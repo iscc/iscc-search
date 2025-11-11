@@ -33,7 +33,7 @@ def test_full_workflow_create_add_search_get_delete(manager, sample_assets):
     # 3. Search
     query = IsccEntry(units=sample_assets[0].units)
     search_result = manager.search_assets("workflow", query, limit=10)
-    assert len(search_result.matches) >= 1
+    assert len(search_result.global_matches) >= 1
 
     # 4. Get specific asset
     retrieved = manager.get_asset("workflow", sample_assets[0].iscc_id)
@@ -120,7 +120,7 @@ def test_large_dataset(manager, large_dataset):
     # Search should return results
     query = IsccEntry(units=[units[0], units[1]])
     result = manager.search_assets("large", query, limit=50)
-    assert len(result.matches) > 0
+    assert len(result.global_matches) > 0
 
 
 def test_update_asset_metadata(manager, sample_iscc_ids, sample_content_units):
@@ -219,7 +219,7 @@ def test_search_with_no_matches(manager, sample_iscc_ids, sample_content_units, 
     query = IsccEntry(units=[sample_data_units[0], sample_data_units[1]])
     result = manager.search_assets("search", query)
 
-    assert len(result.matches) == 0
+    assert len(result.global_matches) == 0
 
 
 def test_empty_index_operations(manager, sample_iscc_ids, sample_content_units):
@@ -233,7 +233,7 @@ def test_empty_index_operations(manager, sample_iscc_ids, sample_content_units):
     # Search returns no results
     query = IsccEntry(units=[sample_content_units[0], sample_content_units[1]])
     result = manager.search_assets("empty", query)
-    assert len(result.matches) == 0
+    assert len(result.global_matches) == 0
 
     # Get asset raises FileNotFoundError
     with pytest.raises(FileNotFoundError):
@@ -335,8 +335,8 @@ def test_update_removes_old_unit_postings(manager, sample_iscc_ids, sample_conte
     # Verify original units can be searched
     query_unit1 = IsccEntry(units=[sample_content_units[1]])
     result_before = manager.search_assets("cleanup", query_unit1, limit=10)
-    assert len(result_before.matches) == 1
-    assert result_before.matches[0].iscc_id == sample_iscc_ids[0]
+    assert len(result_before.global_matches) == 1
+    assert result_before.global_matches[0].iscc_id == sample_iscc_ids[0]
 
     # Update asset with different units[0, 2] - removes unit[1], adds unit[2]
     updated = IsccEntry(
@@ -351,13 +351,13 @@ def test_update_removes_old_unit_postings(manager, sample_iscc_ids, sample_conte
     # because the asset no longer contains it
     query_old_unit = IsccEntry(units=[sample_content_units[1]])
     result_after = manager.search_assets("cleanup", query_old_unit, limit=10)
-    assert len(result_after.matches) == 0, (
-        f"Expected no matches for old unit, but found {len(result_after.matches)}. "
+    assert len(result_after.global_matches) == 0, (
+        f"Expected no matches for old unit, but found {len(result_after.global_matches)}. "
         "Old unit postings should be removed when asset is updated."
     )
 
     # Searching for new unit[2] should return the asset
     query_new_unit = IsccEntry(units=[sample_content_units[2]])
     result_new = manager.search_assets("cleanup", query_new_unit, limit=10)
-    assert len(result_new.matches) == 1
-    assert result_new.matches[0].iscc_id == sample_iscc_ids[0]
+    assert len(result_new.global_matches) == 1
+    assert result_new.global_matches[0].iscc_id == sample_iscc_ids[0]

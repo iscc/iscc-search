@@ -213,7 +213,7 @@ class MemoryIndex:
         return IsccSearchResult(
             query=query,
             metric=Metric.bitlength,
-            matches=match_list[:limit],
+            global_matches=match_list[:limit],
         )
 
     def close(self):

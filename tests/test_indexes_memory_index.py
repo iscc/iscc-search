@@ -295,9 +295,9 @@ def test_search_assets_by_iscc_code(sample_iscc_ids, sample_iscc_codes):
     assert result.query.iscc_code == code1
     assert result.query.units is not None  # Units were derived
     assert result.metric == Metric.bitlength
-    assert len(result.matches) == 1
-    assert result.matches[0].iscc_id == sample_iscc_ids[0]
-    assert result.matches[0].score == 1.0
+    assert len(result.global_matches) == 1
+    assert result.global_matches[0].iscc_id == sample_iscc_ids[0]
+    assert result.global_matches[0].score == 1.0
 
 
 def test_search_assets_by_iscc_id(sample_iscc_ids, sample_iscc_codes):
@@ -313,8 +313,8 @@ def test_search_assets_by_iscc_id(sample_iscc_ids, sample_iscc_codes):
     query = IsccEntry(iscc_id=sample_iscc_ids[0], iscc_code=sample_iscc_codes[0])
     result = index.search_assets("testindex", query)
 
-    assert len(result.matches) == 1
-    assert result.matches[0].iscc_id == sample_iscc_ids[0]
+    assert len(result.global_matches) == 1
+    assert result.global_matches[0].iscc_id == sample_iscc_ids[0]
 
 
 def test_search_assets_no_matches(sample_iscc_ids, sample_iscc_codes):
@@ -337,7 +337,7 @@ def test_search_assets_no_matches(sample_iscc_ids, sample_iscc_codes):
     query = IsccEntry(iscc_code=code2)
     result = index.search_assets("testindex", query)
 
-    assert len(result.matches) == 0
+    assert len(result.global_matches) == 0
 
 
 def test_search_assets_limit(sample_iscc_ids, sample_iscc_codes):
@@ -356,7 +356,7 @@ def test_search_assets_limit(sample_iscc_ids, sample_iscc_codes):
     query = IsccEntry(iscc_code=code)
     result = index.search_assets("testindex", query, limit=5)
 
-    assert len(result.matches) == 5
+    assert len(result.global_matches) == 5
 
 
 def test_search_assets_index_not_found(sample_iscc_codes):
@@ -406,16 +406,16 @@ def test_multiple_indexes_isolation(sample_iscc_ids, sample_iscc_codes):
 
     # Verify isolation
     result1 = index.search_assets("index1", IsccEntry(iscc_code=code1))
-    assert len(result1.matches) == 1
-    assert result1.matches[0].iscc_id == sample_iscc_ids[0]
+    assert len(result1.global_matches) == 1
+    assert result1.global_matches[0].iscc_id == sample_iscc_ids[0]
 
     result2 = index.search_assets("index2", IsccEntry(iscc_code=code2))
-    assert len(result2.matches) == 1
-    assert result2.matches[0].iscc_id == sample_iscc_ids[1]
+    assert len(result2.global_matches) == 1
+    assert result2.global_matches[0].iscc_id == sample_iscc_ids[1]
 
     # Cross-search should return no results
     result_cross = index.search_assets("index1", IsccEntry(iscc_code=code2))
-    assert len(result_cross.matches) == 0
+    assert len(result_cross.global_matches) == 0
 
 
 def test_metadata_field(sample_iscc_ids, sample_iscc_codes):
@@ -434,7 +434,7 @@ def test_metadata_field(sample_iscc_ids, sample_iscc_codes):
     # Search and verify metadata is preserved
     query = IsccEntry(iscc_code=code)
     result = index.search_assets("testindex", query)
-    assert len(result.matches) == 1
+    assert len(result.global_matches) == 1
 
     # Retrieve the asset and verify metadata is preserved
     retrieved = index.get_asset("testindex", sample_iscc_ids[0])
@@ -455,7 +455,7 @@ def test_search_assets_no_matching_iscc_id(sample_iscc_ids, sample_iscc_codes):
     result = index.search_assets("testindex", query)
 
     # Should not match (different iscc_code)
-    assert len(result.matches) == 0
+    assert len(result.global_matches) == 0
 
 
 def test_search_assets_no_iscc_code_in_asset(sample_iscc_ids, sample_iscc_codes):
@@ -472,7 +472,7 @@ def test_search_assets_no_iscc_code_in_asset(sample_iscc_ids, sample_iscc_codes)
     result = index.search_assets("testindex", query)
 
     # Should not match (asset has no iscc_code)
-    assert len(result.matches) == 0
+    assert len(result.global_matches) == 0
 
 
 def test_search_assets_by_units_only(sample_iscc_ids, sample_iscc_codes):
@@ -506,5 +506,5 @@ def test_search_assets_by_units_only(sample_iscc_ids, sample_iscc_codes):
     assert result.query.iscc_code is not None  # iscc_code was derived
     assert result.metric == Metric.bitlength
     # Should find the matching asset
-    assert len(result.matches) == 1
-    assert result.matches[0].iscc_id == sample_iscc_ids[0]
+    assert len(result.global_matches) == 1
+    assert result.global_matches[0].iscc_id == sample_iscc_ids[0]

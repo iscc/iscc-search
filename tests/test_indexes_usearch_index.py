@@ -82,8 +82,8 @@ def test_usearch_index_bidirectional_instance_matching_256bit(usearch_index, sam
     query = IsccEntry(units=[instance_str, content_unit])
     result = usearch_index.search_assets(query, limit=10)
 
-    assert len(result.matches) == 1
-    assert result.matches[0].iscc_id == sample_iscc_ids[0]
+    assert len(result.global_matches) == 1
+    assert result.global_matches[0].iscc_id == sample_iscc_ids[0]
 
     # Search with 128-bit - tests the reverse matching code path (query_len == 32 branch)
     query_128 = IsccEntry(units=[instance_128, content_unit])
@@ -114,8 +114,8 @@ def test_usearch_index_bidirectional_instance_matching_128bit(usearch_index, sam
     query = IsccEntry(units=[instance_str, content_unit])
     result = usearch_index.search_assets(query, limit=10)
 
-    assert len(result.matches) == 1
-    assert result.matches[0].iscc_id == sample_iscc_ids[1]
+    assert len(result.global_matches) == 1
+    assert result.global_matches[0].iscc_id == sample_iscc_ids[1]
 
     # Create a different 64-bit code to test the reverse matching path (query_len >= 16 branch)
     instance_64_obj = ic.Code.rnd(ic.MT.INSTANCE, bits=64)
@@ -152,46 +152,46 @@ def test_usearch_index_instance_proportional_scoring(usearch_index, sample_iscc_
     result_64 = usearch_index.search_assets(query_64, limit=10)
 
     # Find the exact match
-    match_64 = next(m for m in result_64.matches if m.iscc_id == sample_iscc_ids[0])
+    match_64 = next(m for m in result_64.global_matches if m.iscc_id == sample_iscc_ids[0])
     assert match_64.matches["INSTANCE_NONE_V0"] == 0.25, "64-bit exact match should score 0.25"
 
     # Test 2: 128-bit exact match should score 0.5
     query_128 = IsccEntry(units=[ic_128, content_unit])
     result_128 = usearch_index.search_assets(query_128, limit=10)
 
-    match_128 = next(m for m in result_128.matches if m.iscc_id == sample_iscc_ids[1])
+    match_128 = next(m for m in result_128.global_matches if m.iscc_id == sample_iscc_ids[1])
     assert match_128.matches["INSTANCE_NONE_V0"] == 0.5, "128-bit exact match should score 0.5"
 
     # Test 3: 256-bit exact match should score 1.0
     query_256 = IsccEntry(units=[ic_256, content_unit])
     result_256 = usearch_index.search_assets(query_256, limit=10)
 
-    match_256 = next(m for m in result_256.matches if m.iscc_id == sample_iscc_ids[2])
+    match_256 = next(m for m in result_256.global_matches if m.iscc_id == sample_iscc_ids[2])
     assert match_256.matches["INSTANCE_NONE_V0"] == 1.0, "256-bit exact match should score 1.0"
 
     # Test 4: Forward prefix match - 64-bit query matches 256-bit stored (64-bit overlap)
     # Query with 64-bit should match all three (they all share the 64-bit prefix)
-    all_matches_64 = {m.iscc_id for m in result_64.matches}
+    all_matches_64 = {m.iscc_id for m in result_64.global_matches}
     assert sample_iscc_ids[0] in all_matches_64  # Exact 64-bit match
     assert sample_iscc_ids[1] in all_matches_64  # 128-bit starts with 64-bit prefix
     assert sample_iscc_ids[2] in all_matches_64  # 256-bit starts with 64-bit prefix
 
     # All should score 0.25 (64-bit overlap)
-    for match in result_64.matches:
+    for match in result_64.global_matches:
         if match.iscc_id in [sample_iscc_ids[0], sample_iscc_ids[1], sample_iscc_ids[2]]:
             assert match.matches["INSTANCE_NONE_V0"] == 0.25
 
     # Test 5: Reverse prefix match - 256-bit query matches 64-bit stored
     # The 256-bit query contains the 64-bit and 128-bit as prefixes, so should match via reverse search
-    all_matches_256 = {m.iscc_id for m in result_256.matches}
+    all_matches_256 = {m.iscc_id for m in result_256.global_matches}
     assert sample_iscc_ids[2] in all_matches_256  # Exact 256-bit match (score 1.0)
     assert sample_iscc_ids[1] in all_matches_256  # 128-bit is prefix (score 0.5)
     assert sample_iscc_ids[0] in all_matches_256  # 64-bit is prefix (score 0.25)
 
     # Verify individual scores
-    match_256_exact = next(m for m in result_256.matches if m.iscc_id == sample_iscc_ids[2])
-    match_256_to_128 = next(m for m in result_256.matches if m.iscc_id == sample_iscc_ids[1])
-    match_256_to_64 = next(m for m in result_256.matches if m.iscc_id == sample_iscc_ids[0])
+    match_256_exact = next(m for m in result_256.global_matches if m.iscc_id == sample_iscc_ids[2])
+    match_256_to_128 = next(m for m in result_256.global_matches if m.iscc_id == sample_iscc_ids[1])
+    match_256_to_64 = next(m for m in result_256.global_matches if m.iscc_id == sample_iscc_ids[0])
 
     assert match_256_exact.matches["INSTANCE_NONE_V0"] == 1.0
     assert match_256_to_128.matches["INSTANCE_NONE_V0"] == 0.5
@@ -268,7 +268,7 @@ def test_usearch_index_search_with_no_similarity_units(tmp_path):
     result = idx.search_assets(query, limit=10)
 
     # Should still find via INSTANCE match even though CONTENT not in index
-    assert len(result.matches) >= 1
+    assert len(result.global_matches) >= 1
     idx.close()
 
 
@@ -377,8 +377,8 @@ def test_usearch_index_duplicate_iscc_ids_in_batch(usearch_index, sample_iscc_id
     # Verify search works (last content unit should be indexed)
     query = IsccEntry(units=[instance_unit, content_unit_3])
     result = usearch_index.search_assets(query, limit=10)
-    assert len(result.matches) >= 1
-    assert sample_iscc_ids[0] in [m.iscc_id for m in result.matches]
+    assert len(result.global_matches) >= 1
+    assert sample_iscc_ids[0] in [m.iscc_id for m in result.global_matches]
 
 
 def test_usearch_index_infer_realm_from_first_asset(tmp_path, sample_iscc_ids):

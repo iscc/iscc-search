@@ -33,8 +33,8 @@ def test_usearch_index_save_on_close(tmp_path, sample_iscc_ids):
     query = IsccEntry(units=[instance_unit, content_unit])
     result = idx2.search_assets(query, limit=10)
 
-    assert len(result.matches) == 1
-    assert result.matches[0].iscc_id == sample_iscc_ids[0]
+    assert len(result.global_matches) == 1
+    assert result.global_matches[0].iscc_id == sample_iscc_ids[0]
 
     idx2.close()
 
@@ -62,7 +62,7 @@ def test_usearch_index_flush_method(tmp_path, sample_iscc_ids):
     # Index should still be usable
     query = IsccEntry(units=[instance_unit, content_unit])
     result = idx.search_assets(query, limit=10)
-    assert len(result.matches) == 1
+    assert len(result.global_matches) == 1
 
     idx.close()
 
@@ -95,8 +95,8 @@ def test_usearch_index_auto_rebuild_on_corrupted_file(tmp_path, sample_iscc_ids)
     # Verify data is recovered via rebuild
     query = IsccEntry(units=[instance_unit, content_unit])
     result = idx2.search_assets(query, limit=10)
-    assert len(result.matches) == 1
-    assert result.matches[0].iscc_id == sample_iscc_ids[0]
+    assert len(result.global_matches) == 1
+    assert result.global_matches[0].iscc_id == sample_iscc_ids[0]
 
     idx2.close()
 
@@ -134,7 +134,7 @@ def test_usearch_index_auto_rebuild_on_count_mismatch(tmp_path, sample_iscc_ids)
 
     # Verify both assets are found (rebuild worked)
     result = idx2.search_assets(IsccEntry(units=[instance_unit, content_unit_1, content_unit_2]), limit=10)
-    assert len(result.matches) == 2
+    assert len(result.global_matches) == 2
 
     idx2.close()
 
@@ -262,12 +262,12 @@ def test_usearch_index_crash_recovery_rebuild_missing_files(tmp_path, sample_isc
     # Verify data is accessible via search (proving rebuild worked)
     query = IsccEntry(units=[instance_unit, content_unit, data_unit])
     result = idx2.search_assets(query, limit=10)
-    assert len(result.matches) == 1
-    assert result.matches[0].iscc_id == sample_iscc_ids[0]
+    assert len(result.global_matches) == 1
+    assert result.global_matches[0].iscc_id == sample_iscc_ids[0]
 
     # Verify both unit types are searchable
-    assert "CONTENT_TEXT_V0" in result.matches[0].matches
-    assert "DATA_NONE_V0" in result.matches[0].matches
+    assert "CONTENT_TEXT_V0" in result.global_matches[0].matches
+    assert "DATA_NONE_V0" in result.global_matches[0].matches
 
     idx2.close()
 
@@ -402,6 +402,6 @@ def test_usearch_index_crash_recovery_multiple_missing_files(tmp_path, sample_is
     for i in range(3):
         asset_query = assets[i]
         result = idx2.search_assets(asset_query, limit=10)
-        assert any(m.iscc_id == sample_iscc_ids[i] for m in result.matches)
+        assert any(m.iscc_id == sample_iscc_ids[i] for m in result.global_matches)
 
     idx2.close()

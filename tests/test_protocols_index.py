@@ -35,7 +35,7 @@ def test_protocol_is_runtime_checkable():
 
         def search_assets(self, index_name, query, limit=100):
             # type: (str, IsccEntry, int) -> IsccSearchResult
-            return IsccSearchResult(query=query, metric=Metric.bitlength, matches=[])
+            return IsccSearchResult(query=query, metric=Metric.bitlength, global_matches=[])
 
         def close(self):
             # type: () -> None
@@ -106,7 +106,7 @@ def test_protocol_accepts_complete_implementation():
             return IsccSearchResult(
                 query=IsccEntry(iscc_id="ISCC:MAIGIIFJRDGEQQAA", units=["ISCC:AADYCMZIOY36XXGZ"]),
                 metric=Metric.nphd,
-                matches=[],
+                global_matches=[],
             )
 
         def close(self):
@@ -139,7 +139,7 @@ def test_protocol_method_signatures():
             return IsccEntry(iscc_id=iscc_id)
 
         def search_assets(self, index_name, query, limit=100):
-            return IsccSearchResult(query=query, metric=Metric.bitlength, matches=[])
+            return IsccSearchResult(query=query, metric=Metric.bitlength, global_matches=[])
 
         def close(self):
             pass
@@ -213,7 +213,7 @@ def test_protocol_partial_implementation():
             return []
 
         def search_assets(self, index_name, query, limit=100):
-            return IsccSearchResult(query=query, metric=Metric.bitlength, matches=[])
+            return IsccSearchResult(query=query, metric=Metric.bitlength, global_matches=[])
 
         # Missing close() method
 
@@ -243,7 +243,7 @@ def test_protocol_with_extra_methods():
             return IsccEntry(iscc_id=iscc_id)
 
         def search_assets(self, index_name, query, limit=100):
-            return IsccSearchResult(query=query, metric=Metric.bitlength, matches=[])
+            return IsccSearchResult(query=query, metric=Metric.bitlength, global_matches=[])
 
         def close(self):
             pass

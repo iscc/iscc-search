@@ -237,8 +237,8 @@ def test_search_assets_success(manager, sample_assets):
     query = IsccEntry(units=asset.units)
     result = manager.search_assets("test", query, limit=10)
 
-    assert len(result.matches) == 1
-    assert result.matches[0].iscc_id == asset.iscc_id
+    assert len(result.global_matches) == 1
+    assert result.global_matches[0].iscc_id == asset.iscc_id
 
 
 def test_search_assets_index_not_found(manager, sample_content_units):

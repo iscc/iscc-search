@@ -175,9 +175,9 @@ def test_search_assets_basic(lmdb_index, sample_assets):
     query = IsccEntry(units=asset.units)
     result = lmdb_index.search_assets(query, limit=10)
 
-    assert len(result.matches) == 1
-    assert result.matches[0].iscc_id == asset.iscc_id
-    assert result.matches[0].score > 0
+    assert len(result.global_matches) == 1
+    assert result.global_matches[0].iscc_id == asset.iscc_id
+    assert result.global_matches[0].score > 0
 
 
 def test_search_assets_no_units(lmdb_index, sample_iscc_ids):
@@ -193,7 +193,7 @@ def test_search_assets_empty_index(lmdb_index, sample_content_units):
     query = IsccEntry(units=[sample_content_units[0], sample_content_units[1]])
     result = lmdb_index.search_assets(query, limit=10)
 
-    assert len(result.matches) == 0
+    assert len(result.global_matches) == 0
 
 
 def test_search_assets_limit(lmdb_index, sample_iscc_ids, sample_content_units):
@@ -213,7 +213,7 @@ def test_search_assets_limit(lmdb_index, sample_iscc_ids, sample_content_units):
     query = IsccEntry(units=[sample_content_units[0], sample_content_units[1]])
     result = lmdb_index.search_assets(query, limit=5)
 
-    assert len(result.matches) == 5
+    assert len(result.global_matches) == 5
 
 
 def test_search_assets_scoring(lmdb_index, sample_iscc_ids, sample_content_units):
@@ -236,10 +236,10 @@ def test_search_assets_scoring(lmdb_index, sample_iscc_ids, sample_content_units
     query = IsccEntry(units=[sample_content_units[0], sample_content_units[1]])
     result = lmdb_index.search_assets(query, limit=10)
 
-    assert len(result.matches) == 2
+    assert len(result.global_matches) == 2
     # Asset1 should score higher (matches more units)
-    assert result.matches[0].iscc_id == asset1.iscc_id
-    assert result.matches[0].score > result.matches[1].score
+    assert result.global_matches[0].iscc_id == asset1.iscc_id
+    assert result.global_matches[0].score > result.global_matches[1].score
 
 
 def test_get_asset_count(lmdb_index, sample_assets):
@@ -357,7 +357,7 @@ def test_search_with_string_units(lmdb_index, sample_assets, sample_content_unit
 
     # Search should work
     result = lmdb_index.search_assets(query, limit=10)
-    assert len(result.matches) >= 1
+    assert len(result.global_matches) >= 1
 
 
 def test_get_db_cache_miss(lmdb_index, sample_assets):
@@ -386,7 +386,7 @@ def test_search_unit_no_matches(lmdb_index, sample_assets, sample_data_units):
     result = lmdb_index.search_assets(query, limit=10)
 
     # Should return empty results
-    assert len(result.matches) == 0
+    assert len(result.global_matches) == 0
 
 
 def test_add_multiple_assets_batch(lmdb_index, sample_assets):

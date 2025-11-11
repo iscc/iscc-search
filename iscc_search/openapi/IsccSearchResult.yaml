@@ -8,7 +8,7 @@ description: |
 required:
   - query
   - metric
-  - matches
+  - global_matches
 properties:
   query:
     $ref: "./IsccEntry.yaml"
@@ -23,9 +23,9 @@ properties:
       - hamming
       - bitlength
     example: "nphd"
-  matches:
+  global_matches:
     type: array
-    description: List of matched ISCC-IDs with scores, ordered by relevance (best first)
+    description: Asset-level ISCC-UNIT matches, ordered by relevance (best first)
     items:
       $ref: "./IsccMatch.yaml"
     example:
@@ -48,7 +48,7 @@ example:
       - "ISCC:AADYCMZIOY36XXGZ5B5BME7EIPPXRFKYQZ7VXKI7V55AEQQE67A33BY"
       - "ISCC:EED7ZPIEYNACCLXXZSS2LIM6JVXDYGCG2QSMC7DCPER4MYJPJATIM4Y"
   metric: "bitlength"
-  matches:
+  global_matches:
     - iscc_id: "ISCC:MAIGIIFJRDGEQQAA"
       score: 448
       matches:

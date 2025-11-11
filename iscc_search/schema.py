@@ -266,10 +266,10 @@ class IsccSearchResult(BaseModel):
             examples=["nphd"],
         ),
     ]
-    matches: Annotated[
+    global_matches: Annotated[
         list[IsccMatch],
         Field(
-            description="List of matched ISCC-IDs with scores, ordered by relevance (best first)",
+            description="Asset-level ISCC-UNIT matches, ordered by relevance (best first)",
             examples=[
                 [
                     {

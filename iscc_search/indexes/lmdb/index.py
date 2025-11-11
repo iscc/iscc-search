@@ -239,7 +239,7 @@ class LmdbIndex:
             # Sort by score descending
             match_list.sort(key=lambda x: x.score, reverse=True)
 
-            return IsccSearchResult(query=query, metric=Metric.bitlength, matches=match_list[:limit])
+            return IsccSearchResult(query=query, metric=Metric.bitlength, global_matches=match_list[:limit])
 
     def get_asset_count(self):
         # type: () -> int

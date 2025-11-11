@@ -309,7 +309,7 @@ class UsearchIndex:
         query = common.normalize_query_asset(query)
         if not query.units:  # pragma: no cover
             # No units to search
-            return IsccSearchResult(query=query, metric=Metric.nphd, matches=[])
+            return IsccSearchResult(query=query, metric=Metric.nphd, global_matches=[])
 
         # Aggregation: {key (int): {unit_type: score}}
         aggregated = {}  # type: dict[int, dict[str, float]]
@@ -355,7 +355,7 @@ class UsearchIndex:
             iscc_id = str(IsccID.from_int(key, self._realm_id))
             matches.append(IsccMatch(iscc_id=iscc_id, score=total_score, matches=unit_scores))
 
-        return IsccSearchResult(query=query, metric=Metric.nphd, matches=matches)
+        return IsccSearchResult(query=query, metric=Metric.nphd, global_matches=matches)
 
     def flush(self):
         # type: () -> None

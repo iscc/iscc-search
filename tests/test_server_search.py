@@ -18,14 +18,14 @@ def test_search_post_success(test_client, sample_assets):
     # Verify response structure
     assert "query" in data
     assert "metric" in data
-    assert "matches" in data
+    assert "global_matches" in data
 
     # Should match at least the exact same asset
-    assert len(data["matches"]) >= 1
+    assert len(data["global_matches"]) >= 1
 
     # Verify match structure
-    if len(data["matches"]) > 0:
-        match = data["matches"][0]
+    if len(data["global_matches"]) > 0:
+        match = data["global_matches"][0]
         assert "iscc_id" in match
         assert "score" in match
         assert "matches" in match
@@ -44,7 +44,7 @@ def test_search_post_no_matches(test_client, sample_assets, sample_iscc_codes):
 
     assert response.status_code == 200
     data = response.json()
-    assert len(data["matches"]) == 0
+    assert len(data["global_matches"]) == 0
 
 
 def test_search_post_with_limit(test_client, sample_iscc_ids, sample_iscc_codes):
@@ -67,7 +67,7 @@ def test_search_post_with_limit(test_client, sample_iscc_ids, sample_iscc_codes)
 
     assert response.status_code == 200
     data = response.json()
-    assert len(data["matches"]) <= 5
+    assert len(data["global_matches"]) <= 5
 
 
 def test_search_post_index_not_found(test_client, sample_assets):
@@ -98,7 +98,7 @@ def test_search_get_success(test_client, sample_assets):
     # Verify response structure
     assert "query" in data
     assert "metric" in data
-    assert "matches" in data
+    assert "global_matches" in data
 
     # Query should contain the iscc_code
     assert data["query"]["iscc_code"] == iscc_code
@@ -117,7 +117,7 @@ def test_search_get_with_limit(test_client, sample_assets):
 
     assert response.status_code == 200
     data = response.json()
-    assert len(data["matches"]) <= 3
+    assert len(data["global_matches"]) <= 3
 
 
 def test_search_get_index_not_found(test_client, sample_iscc_codes):
@@ -157,15 +157,15 @@ def test_search_result_structure(test_client, sample_assets):
     # Verify top-level structure
     assert "query" in data
     assert "metric" in data
-    assert "matches" in data
-    assert isinstance(data["matches"], list)
+    assert "global_matches" in data
+    assert isinstance(data["global_matches"], list)
 
     # Verify metric is valid
     assert data["metric"] in ["nphd", "hamming", "bitlength"]
 
     # Verify match structure if matches exist
-    if len(data["matches"]) > 0:
-        for match in data["matches"]:
+    if len(data["global_matches"]) > 0:
+        for match in data["global_matches"]:
             assert "iscc_id" in match
             assert "score" in match
             assert "matches" in match
@@ -184,4 +184,4 @@ def test_search_empty_index(test_client, sample_assets):
 
     assert response.status_code == 200
     data = response.json()
-    assert len(data["matches"]) == 0
+    assert len(data["global_matches"]) == 0

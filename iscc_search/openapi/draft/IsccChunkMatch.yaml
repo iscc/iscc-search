@@ -6,13 +6,13 @@ description: |
   Segment-level similarity match result.
 
   Represents a matched asset based on simprint collisions/similarity. The overall
-  similarity score is computed using IDF-weighted averaging across all query simprints.
+  score is computed using IDF-weighted averaging across all query simprints.
 
   **Score calculation**:
   - Each query simprint has an IDF weight (rarity measure)
   - Matched simprints contribute: idf * similarity
   - Unmatched simprints contribute: idf * 0.0
-  - Overall similarity = sum(contributions) / sum(all_idfs)
+  - Overall score = sum(contributions) / sum(all_idfs)
 
   **Example**: Query with 2 CONTENT + 3 SEMANTIC simprints
   - CONTENT: (idf=9.21*sim=1.0 + idf=8.76*sim=1.0) / (9.21+8.76) = 0.954
@@ -25,7 +25,7 @@ description: |
   - Accounts for partial matches (some simprints matched, others not)
 required:
   - iscc_id
-  - similarity
+  - score
   - types
 properties:
   iscc_id:
@@ -33,10 +33,10 @@ properties:
     description: The matched ISCC-ID from the index
     pattern: "^ISCC:[A-Z2-7]{16,}$"
     example: "ISCC:MAIGIHZPQR7XKLAB"
-  similarity:
+  score:
     type: number
     description: |
-      Overall IDF-weighted similarity score (0.0-1.0).
+      Overall IDF-weighted score (0.0-1.0).
 
       Computed as the weighted average of matched simprint similarities across
       all query simprints, with weights determined by IDF values.
@@ -61,15 +61,15 @@ properties:
       type: object
       description: Match statistics and optional chunk details for a single simprint type
       required:
-        - similarity
+        - score
         - matches
         - queried
       properties:
-        similarity:
+        score:
           type: number
           description: |
-            IDF-weighted similarity for this simprint type (0.0-1.0).
-            Computed using the same formula as overall similarity but only
+            IDF-weighted score for this simprint type (0.0-1.0).
+            Computed using the same formula as overall score but only
             for simprints of this type.
           minimum: 0.0
           maximum: 1.0
@@ -104,14 +104,14 @@ properties:
     minProperties: 1
     example:
       CONTENT_TEXT_V0:
-        similarity: 0.954
+        score: 0.954
         matches: 2
         queried: 2
         chunks:
           - query_simprint: "AXvu3tp2kF8mN9qL4rT1sZ"
             index_simprint: "AXvu3tp2kF8mN9qL4rT1sZ"
             simprint_type: "CONTENT_TEXT_V0"
-            similarity: 1.0
+            score: 1.0
             idf: 9.21
             offset: 12500
             size: 350
@@ -120,21 +120,21 @@ properties:
           - query_simprint: "B4kl9mQ1pP7xY3jH8vW2aF"
             index_simprint: "B4kl9mQ1pP7xY3jH8vW2aF"
             simprint_type: "CONTENT_TEXT_V0"
-            similarity: 1.0
+            score: 1.0
             idf: 8.76
             offset: 45230
             size: 412
             source: "https://example.com/9788899445566.epub"
             modality: "text"
       SEMANTIC_TEXT_V0:
-        similarity: 0.891
+        score: 0.891
         matches: 2
         queried: 3
         chunks:
           - query_simprint: "CYhq2nR8oL3pT5mK9sX4bG"
             index_simprint: "CYhq3nR7oL2pT5mK9sX4bG"
             simprint_type: "SEMANTIC_TEXT_V0"
-            similarity: 0.94
+            score: 0.94
             idf: 7.83
             offset: 78900
             size: 389
@@ -143,7 +143,7 @@ properties:
           - query_simprint: "D9mn7vT4qK2rU6nL1tY5cH"
             index_simprint: "D9mn7vT4qK2rU6nL1tY5cH"
             simprint_type: "SEMANTIC_TEXT_V0"
-            similarity: 1.0
+            score: 1.0
             idf: 6.54
             offset: 123450
             size: 301
@@ -155,17 +155,17 @@ properties:
       Optional asset metadata, denormalized from the index for convenience.
 example:
   iscc_id: "ISCC:MAIGIHZPQR7XKLAB"
-  similarity: 0.923
+  score: 0.923
   types:
     CONTENT_TEXT_V0:
-      similarity: 0.954
+      score: 0.954
       matches: 2
       queried: 2
       chunks:
         - query_simprint: "AXvu3tp2kF8mN9qL4rT1sZ"
           index_simprint: "AXvu3tp2kF8mN9qL4rT1sZ"
           simprint_type: "CONTENT_TEXT_V0"
-          similarity: 1.0
+          score: 1.0
           idf: 9.21
           offset: 12500
           size: 350
@@ -174,21 +174,21 @@ example:
         - query_simprint: "B4kl9mQ1pP7xY3jH8vW2aF"
           index_simprint: "B4kl9mQ1pP7xY3jH8vW2aF"
           simprint_type: "CONTENT_TEXT_V0"
-          similarity: 1.0
+          score: 1.0
           idf: 8.76
           offset: 45230
           size: 412
           source: "https://example.com/9788899445566.epub"
           modality: "text"
     SEMANTIC_TEXT_V0:
-      similarity: 0.891
+      score: 0.891
       matches: 2
       queried: 3
       chunks:
         - query_simprint: "CYhq2nR8oL3pT5mK9sX4bG"
           index_simprint: "CYhq3nR7oL2pT5mK9sX4bG"
           simprint_type: "SEMANTIC_TEXT_V0"
-          similarity: 0.94
+          score: 0.94
           idf: 7.83
           offset: 78900
           size: 389
@@ -197,7 +197,7 @@ example:
         - query_simprint: "D9mn7vT4qK2rU6nL1tY5cH"
           index_simprint: "D9mn7vT4qK2rU6nL1tY5cH"
           simprint_type: "SEMANTIC_TEXT_V0"
-          similarity: 1.0
+          score: 1.0
           idf: 6.54
           offset: 123450
           size: 301

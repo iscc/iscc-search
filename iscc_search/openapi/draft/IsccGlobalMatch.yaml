@@ -5,22 +5,22 @@ type: object
 description: |
   Asset-level similarity match result.
 
-  Represents a matched asset based on ISCC-UNIT similarity. The similarity score
+  Represents a matched asset based on ISCC-UNIT similarity. The score
   is computed as the average of matched unit similarities across all queried units.
 
   **Score calculation**:
   - Each unit type contributes its similarity (0.0-1.0)
-  - Overall similarity = average across all queried units
-  - Example: 5 units with scores [1.0, 1.0, 1.0, 1.0, 0.25] → similarity = 0.85
+  - Overall score = average across all queried units
+  - Example: 5 units with scores [1.0, 1.0, 1.0, 1.0, 0.25] → score = 0.85
 
   **Properties**:
   - Normalized 0.0-1.0 range (directly comparable across matches)
   - 1.0 = all unit types matched perfectly
   - 0.0 = no matches (should not appear in results)
-  - Higher similarity = better match
+  - Higher score = better match
 required:
   - iscc_id
-  - similarity
+  - score
   - types
 properties:
   iscc_id:
@@ -28,10 +28,10 @@ properties:
     description: The matched ISCC-ID from the index
     pattern: "^ISCC:[A-Z2-7]{16,}$"
     example: "ISCC:MAIGIHJYI3TRSMAB"
-  similarity:
+  score:
     type: number
     description: |
-      Overall similarity score (0.0-1.0), computed as the average of matched
+      Overall score (0.0-1.0), computed as the average of matched
       unit similarities across all queried units.
 
       This normalized score enables direct comparison across matches regardless
@@ -70,7 +70,7 @@ properties:
       Useful for result rendering and client-side filtering.
 example:
   iscc_id: "ISCC:MAIGIHJYI3TRSMAB"
-  similarity: 0.850
+  score: 0.850
   types:
     META_NONE_V0: 1.0
     SEMANTIC_TEXT_V0: 1.0

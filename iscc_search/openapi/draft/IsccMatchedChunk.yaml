@@ -8,7 +8,7 @@ description: |
 
   Extends the basic chunk location data (offset, size) with match-specific information:
   - Query and index simprint comparison
-  - Similarity score (0.0-1.0 for soft boundaries, 1.0 for exact matches)
+  - Score (0.0-1.0 for soft boundaries, 1.0 for exact matches)
   - IDF weighting (inverse document frequency) for ranking
   - Optional denormalized asset metadata (source, modality)
   - Optional content preview (data URL)
@@ -16,7 +16,7 @@ required:
   - query_simprint
   - index_simprint
   - simprint_type
-  - similarity
+  - score
   - idf
   - offset
   - size
@@ -44,10 +44,10 @@ properties:
       Determines matching semantics and abstraction level.
     pattern: "^[A-Z_]+_[A-Z_]+_V[0-9]+$"
     example: "CONTENT_TEXT_V0"
-  similarity:
+  score:
     type: number
     description: |
-      Similarity score between query_simprint and index_simprint (0.0-1.0).
+      Score between query_simprint and index_simprint (0.0-1.0).
 
       **Hard-boundary indexes**: Always 1.0 (exact collision)
       **Soft-boundary indexes**: NPHD-based similarity (1.0 = identical, 0.0 = maximum distance)
@@ -107,7 +107,7 @@ example:
   query_simprint: "AXvu3tp2kF8mN9qL4rT1sZ"
   index_simprint: "AXvu3tp2kF8mN9qL4rT1sZ"
   simprint_type: "CONTENT_TEXT_V0"
-  similarity: 1.0
+  score: 1.0
   idf: 9.21
   offset: 12500
   size: 350

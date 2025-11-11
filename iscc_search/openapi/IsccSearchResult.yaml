@@ -28,6 +28,12 @@ properties:
         matches:
           CONTENT_TEXT_V0: 256
           DATA_NONE_V0: 128
+  chunk_matches:
+    type: array
+    description: Segment-level simprint matches, ordered by relevance (best first)
+    items:
+      $ref: "./draft/IsccChunkMatch.yaml"
+    default: []
 example:
   query:
     iscc_id: "ISCC:MAIGXXFZRDGEQQCC"

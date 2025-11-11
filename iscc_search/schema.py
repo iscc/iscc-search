@@ -162,6 +162,77 @@ class IsccMetadata(BaseModel):
     ] = None
 
 
+class IsccMatchedChunk(BaseModel):
+    query: Annotated[
+        str,
+        Field(
+            description="Base64-encoded simprint from the query that matched this chunk.\nIn hard-boundary indexes, equals match. In soft-boundary indexes,\nmay differ (similar but not identical).\n",
+            examples=["AXvu3tp2kF8mN9qL4rT1sZ"],
+            pattern="^[A-Za-z0-9+/_=-]+$",
+        ),
+    ]
+    match: Annotated[
+        str,
+        Field(
+            description="Base64-encoded simprint stored in the index that was matched.\nIn hard-boundary indexes, equals query. In soft-boundary indexes,\nmay differ (within similarity threshold).\n",
+            examples=["AXvu3tp2kF8mN9qL4rT1sZ"],
+            pattern="^[A-Za-z0-9+/_=-]+$",
+        ),
+    ]
+    score: Annotated[
+        float,
+        Field(
+            description="Similarity score between query and match simprints (0.0-1.0).\n\n**Hard-boundary indexes**: Always 1.0 (exact collision)\n**Soft-boundary indexes**: NPHD-based similarity (1.0 = identical, 0.0 = maximum distance)\n\nThis field enables forward compatibility with soft-boundary matching.\n",
+            examples=[1.0],
+            ge=0.0,
+            le=1.0,
+        ),
+    ]
+    freq: Annotated[
+        int,
+        Field(
+            description="Document frequency - number of assets containing this simprint.\n\nMeasures simprint rarity: lower values indicate rarer simprints that are\nmore discriminative for ranking. Used for IDF-weighted similarity calculations.\n",
+            examples=[42],
+            ge=1,
+        ),
+    ]
+    offset: Annotated[
+        int,
+        Field(
+            description="Starting position/time/coordinates in the source content.\nSee IsccChunk documentation for modality-specific interpretation.\n",
+            examples=[12500],
+            ge=0,
+            le=4294967295,
+        ),
+    ]
+    size: Annotated[
+        int,
+        Field(
+            description="Extent/duration/dimensions of the content segment.\nSee IsccChunk documentation for modality-specific interpretation.\n",
+            examples=[350],
+            ge=0,
+            le=4294967295,
+        ),
+    ]
+    content: Annotated[
+        str | None,
+        Field(
+            description="Optional chunk content as data URL (RFC 2397).\nPopulated on-demand by fetching from source and extracting the chunk region.\nUseful for match verification and content preview.\n",
+            examples=[
+                "data:text/plain;base64,SWYgd2UgdGhpbmsgb2YgdGhlIGRpZ2l0YWwgd29ybGQgYXMgYSBuZXcgZm9ybSBvZiBwaGlsb3NvcGh5Li4u"
+            ],
+            pattern="^data:[^;]+;base64,.+$",
+        ),
+    ] = None
+
+
+class IsccMetadataModel(BaseModel):
+    pass
+    model_config = ConfigDict(
+        extra="allow",
+    )
+
+
 class IsccEntry(BaseModel):
     iscc_id: Annotated[
         str | None,
@@ -250,6 +321,120 @@ class IsccGlobalMatch(BaseModel):
     ] = None
 
 
+class Types(BaseModel):
+    score: Annotated[
+        float,
+        Field(
+            description="IDF-weighted score for this simprint type (0.0-1.0).\nComputed using the same formula as overall score but only\nfor simprints of this type. IDF weights are derived from\ndocument frequencies (freq field in chunks).\n",
+            examples=[0.954],
+            ge=0.0,
+            le=1.0,
+        ),
+    ]
+    matches: Annotated[
+        int,
+        Field(
+            description="Number of query simprints of this type that found matches in this asset.\n", examples=[2], ge=0
+        ),
+    ]
+    queried: Annotated[
+        int, Field(description="Total number of query simprints of this type that were searched.\n", examples=[2], ge=1)
+    ]
+    chunks: Annotated[
+        list[IsccMatchedChunk] | None,
+        Field(
+            description="Optional detailed list of matched chunks for this simprint type.\n\nProvides granular match information: which simprints matched, where they\nare located, similarity scores, and optional content preview.\n\n**Performance note**: This array can be large (100+ entries per type).\nConsider omitting or paginating for production use.\n\n**Note**: The simprint type is implicit from the parent dictionary key,\nso it's not included in individual chunk objects.\n"
+        ),
+    ] = None
+
+
+class IsccChunkMatch(BaseModel):
+    iscc_id: Annotated[
+        str,
+        Field(
+            description="The matched ISCC-ID from the index",
+            examples=["ISCC:MAIGIHZPQR7XKLAB"],
+            pattern="^ISCC:[A-Z2-7]{16,}$",
+        ),
+    ]
+    score: Annotated[
+        float,
+        Field(
+            description='Overall IDF-weighted score (0.0-1.0).\n\nComputed as the weighted average of matched simprint similarities across\nall query simprints, with weights determined by IDF values (derived from\ndocument frequencies).\n\nInterpretation: "88% of query matched (by IDF weight)"\n',
+            examples=[0.88],
+            ge=0.0,
+            le=1.0,
+        ),
+    ]
+    types: Annotated[
+        dict[str, Types],
+        Field(
+            description='Per-simprint-type match statistics. Keys are simprint type identifiers\n(e.g., "CONTENT_TEXT_V0", "SEMANTIC_TEXT_V0"), values are stat objects\ncontaining similarity, matches, queried counts, and optional chunk details.\n\n**Data locality**: Stats and chunks are co-located per type, enabling\ntype-specific workflows (e.g., "show only semantic matches").\n\n**Missing keys**: Simprint types that were queried but had no matches\nare omitted.\n',
+            examples=[
+                {
+                    "CONTENT_TEXT_V0": {
+                        "score": 0.954,
+                        "matches": 2,
+                        "queried": 2,
+                        "chunks": [
+                            {
+                                "query": "AXvu3tp2kF8mN9qL4rT1sZ",
+                                "match": "AXvu3tp2kF8mN9qL4rT1sZ",
+                                "score": 1.0,
+                                "freq": 42,
+                                "offset": 12500,
+                                "size": 350,
+                            },
+                            {
+                                "query": "B4kl9mQ1pP7xY3jH8vW2aF",
+                                "match": "B4kl9mQ1pP7xY3jH8vW2aF",
+                                "score": 1.0,
+                                "freq": 50,
+                                "offset": 45230,
+                                "size": 412,
+                            },
+                        ],
+                    },
+                    "SEMANTIC_TEXT_V0": {
+                        "score": 0.891,
+                        "matches": 2,
+                        "queried": 3,
+                        "chunks": [
+                            {
+                                "query": "CYhq2nR8oL3pT5mK9sX4bG",
+                                "match": "CYhq3nR7oL2pT5mK9sX4bG",
+                                "score": 0.94,
+                                "freq": 86,
+                                "offset": 78900,
+                                "size": 389,
+                            },
+                            {
+                                "query": "D9mn7vT4qK2rU6nL1tY5cH",
+                                "match": "D9mn7vT4qK2rU6nL1tY5cH",
+                                "score": 1.0,
+                                "freq": 122,
+                                "offset": 123450,
+                                "size": 301,
+                            },
+                        ],
+                    },
+                }
+            ],
+        ),
+    ]
+    source: Annotated[
+        AnyUrl | None,
+        Field(
+            description="Optional resolvable URL to the full content containing these chunks.\nUsed for chunk retrieval workflow (source URI + offset/size).\n\nSupports various URI schemes via fsspec:\n- https:// - Standard HTTP(S) URLs\n- s3:// - AWS S3 buckets\n- file:// - Local filesystem\n- az:// - Azure Blob Storage\n- gs:// - Google Cloud Storage\n",
+            examples=["https://example.com/9788899445566.epub"],
+        ),
+    ] = None
+    metadata: Annotated[
+        IsccMetadataModel | None,
+        Field(description="Optional asset metadata, denormalized from the index for convenience.\n"),
+    ] = None
+
+
 class IsccSearchResult(BaseModel):
     query: Annotated[IsccQuery, Field(description="The original query asset (may include auto-generated iscc_id)")]
     global_matches: Annotated[
@@ -272,3 +457,6 @@ class IsccSearchResult(BaseModel):
             ],
         ),
     ]
+    chunk_matches: Annotated[
+        list[IsccChunkMatch], Field(description="Segment-level simprint matches, ordered by relevance (best first)")
+    ] = []

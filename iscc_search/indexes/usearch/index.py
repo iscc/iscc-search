@@ -317,7 +317,7 @@ class UsearchIndex:
         query = common.normalize_query(query)
         if not query.units:  # pragma: no cover
             # No units to search
-            return IsccSearchResult(query=query, global_matches=[])
+            return IsccSearchResult(query=query, global_matches=[], chunk_matches=[])
 
         # Aggregation: {key (int): {unit_type: score}}
         aggregated = {}  # type: dict[int, dict[str, float]]
@@ -384,7 +384,8 @@ class UsearchIndex:
                 iscc_id = str(IsccID.from_int(key, self._realm_id))
                 matches.append(IsccGlobalMatch(iscc_id=iscc_id, score=total_score, types=unit_scores))
 
-        return IsccSearchResult(query=query, global_matches=matches)
+        # TODO: Integrate LmdbSimprintIndexMulti for chunk_matches population
+        return IsccSearchResult(query=query, global_matches=matches, chunk_matches=[])
 
     def flush(self):
         # type: () -> None

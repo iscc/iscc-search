@@ -214,6 +214,7 @@ class MemoryIndex:
         return IsccSearchResult(
             query=query,
             global_matches=match_list[:limit],
+            chunk_matches=[],
         )
 
     def close(self):

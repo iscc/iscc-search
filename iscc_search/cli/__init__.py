@@ -345,11 +345,11 @@ def search(
 
     # Build matches output
     matches_output = []
-    for match in results.matches:
+    for match in results.global_matches:
         match_dict = {
             "iscc_id": match.iscc_id,
             "score": match.score,
-            "matches": match.matches,
+            "types": match.types,
         }
 
         # If --meta flag is set, retrieve and add metadata

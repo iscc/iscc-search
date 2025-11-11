@@ -181,16 +181,43 @@ paths:
               type: array
               items:
                 $ref: '#/components/schemas/IsccEntry'
-            example:
-              - iscc_id: "ISCC:MAIGIJ2FJ5R6BMAA"
-                iscc_code: "ISCC:KECYCMZIOY36XXGZ7S6QJQ2AEEXPOVEHZYPK6GMSFLU3WF54UPZMTPY"
-                units:
-                  - "ISCC:AADYCMZIOY36XXGZ5B5BME7EIPPXRFKYQZ7VXKI7V55AEQQE67A33BY"
-                  - "ISCC:EED7ZPIEYNACCLXXZSS2LIM6JVXDYGCG2QSMC7DCPER4MYJPJATIM4Y"
-              - iscc_id: "ISCC:MAIGIJ2FJ5R6BMAA"
-                units:
-                  - "ISCC:GADVJB6OD2XRTERK3G4KOFHGDJCBYEXAZCZLVVSA7MMURDPMJ5S5JWI"
-                  - "ISCC:IAD6TOYXXSR7FSN7TRRRNOKQ6JCFK3ZF4KRFVEQRQ4M4PDPUR5H7GHQ"
+            examples:
+              with_iscc_code:
+                summary: "With ISCC-CODE"
+                description: "Minimal indexing using composite ISCC-CODE for similarity search"
+                value:
+                  - iscc_id: "ISCC:MAIGIIFJRDGEQQAA"
+                    iscc_code: "ISCC:KECYCMZIOY36XXGZ7S6QJQ2AEEXPOVEHZYPK6GMSFLU3WF54UPZMTPY"
+              with_units:
+                summary: "With ISCC-UNITs"
+                description: "Granular indexing using individual ISCC-UNITs for component-level search"
+                value:
+                  - iscc_id: "ISCC:MAIGIIFJRDGEQQAA"
+                    units:
+                      - "ISCC:AADYCMZIOY36XXGZ5B5BME7EIPPXRFKYQZ7VXKI7V55AEQQE67A33BY"
+                      - "ISCC:EED7ZPIEYNACCLXXZSS2LIM6JVXDYGCG2QSMC7DCPER4MYJPJATIM4Y"
+                      - "ISCC:GADVJB6OD2XRTERK3G4KOFHGDJCBYEXAZCZLVVSA7MMURDPMJ5S5JWI"
+                      - "ISCC:IAD6TOYXXSR7FSN7TRRRNOKQ6JCFK3ZF4KRFVEQRQ4M4PDPUR5H7GHQ"
+              with_simprints:
+                summary: "With simprints"
+                description: "Chunk-level indexing using simprints for granular content segment matching"
+                value:
+                  - iscc_id: "ISCC:MAIGIIFJRDGEQQAA"
+                    simprints:
+                      CONTENT_TEXT_V0:
+                        - simprint: "AXvu3tp2kF8mN9qL4rT1sZ"
+                          offset: 12500
+                          size: 350
+                        - simprint: "B4kl9mQ1pP7xY3jH8vW2aF"
+                          offset: 45230
+                          size: 412
+                      SEMANTIC_TEXT_V0:
+                        - simprint: "CYhq2nR8oL3pT5mK9sX4bG"
+                          offset: 78900
+                          size: 389
+                        - simprint: "D9mn7vT4qK2rU6nL1tY5cH"
+                          offset: 123450
+                          size: 301
       responses:
         '201':
           description: Assets successfully added to index

@@ -8,7 +8,7 @@ import io
 import pytest
 import iscc_core as ic
 from iscc_search.indexes.usearch.index import UsearchIndex
-from iscc_search.schema import IsccEntry
+from iscc_search.schema import IsccEntry, IsccQuery
 
 
 @pytest.fixture
@@ -80,7 +80,7 @@ def test_usearch_index_bidirectional_instance_matching_256bit(usearch_index, sam
     usearch_index.add_assets([asset])
 
     # Search with 256-bit query - should match itself and return metadata
-    query = IsccEntry(units=[instance_str, content_unit])
+    query = IsccQuery(units=[instance_str, content_unit])
     result = usearch_index.search_assets(query, limit=10)
 
     assert len(result.global_matches) == 1
@@ -88,12 +88,12 @@ def test_usearch_index_bidirectional_instance_matching_256bit(usearch_index, sam
     assert result.global_matches[0].metadata.model_dump(exclude_none=True) == {"test": "256bit_instance"}
 
     # Search with 128-bit - tests the reverse matching code path (query_len == 32 branch)
-    query_128 = IsccEntry(units=[instance_128, content_unit])
+    query_128 = IsccQuery(units=[instance_128, content_unit])
     _ = usearch_index.search_assets(query_128, limit=10)
     # May or may not match depending on prefix - just testing code path executes
 
     # Search with 64-bit - tests the reverse matching code path (query_len >= 16 branch)
-    query_64 = IsccEntry(units=[instance_64, content_unit])
+    query_64 = IsccQuery(units=[instance_64, content_unit])
     _ = usearch_index.search_assets(query_64, limit=10)
     # May or may not match depending on prefix - just testing code path executes
 
@@ -113,7 +113,7 @@ def test_usearch_index_bidirectional_instance_matching_128bit(usearch_index, sam
     usearch_index.add_assets([asset])
 
     # Search with 128-bit query - should match itself
-    query = IsccEntry(units=[instance_str, content_unit])
+    query = IsccQuery(units=[instance_str, content_unit])
     result = usearch_index.search_assets(query, limit=10)
 
     assert len(result.global_matches) == 1
@@ -122,7 +122,7 @@ def test_usearch_index_bidirectional_instance_matching_128bit(usearch_index, sam
     # Create a different 64-bit code to test the reverse matching path (query_len >= 16 branch)
     instance_64_obj = ic.Code.rnd(ic.MT.INSTANCE, bits=64)
     instance_64 = f"ISCC:{instance_64_obj}"
-    query_64 = IsccEntry(units=[instance_64, content_unit])
+    query_64 = IsccQuery(units=[instance_64, content_unit])
     _ = usearch_index.search_assets(query_64, limit=10)
     # Just testing the code path executes
 
@@ -150,7 +150,7 @@ def test_usearch_index_instance_proportional_scoring(usearch_index, sample_iscc_
     usearch_index.add_assets([asset_64, asset_128, asset_256])
 
     # Test 1: 64-bit exact match should score 0.25
-    query_64 = IsccEntry(units=[ic_64, content_unit])
+    query_64 = IsccQuery(units=[ic_64, content_unit])
     result_64 = usearch_index.search_assets(query_64, limit=10)
 
     # Find the exact match
@@ -158,14 +158,14 @@ def test_usearch_index_instance_proportional_scoring(usearch_index, sample_iscc_
     assert match_64.types["INSTANCE_NONE_V0"] == 0.25, "64-bit exact match should score 0.25"
 
     # Test 2: 128-bit exact match should score 0.5
-    query_128 = IsccEntry(units=[ic_128, content_unit])
+    query_128 = IsccQuery(units=[ic_128, content_unit])
     result_128 = usearch_index.search_assets(query_128, limit=10)
 
     match_128 = next(m for m in result_128.global_matches if m.iscc_id == sample_iscc_ids[1])
     assert match_128.types["INSTANCE_NONE_V0"] == 0.5, "128-bit exact match should score 0.5"
 
     # Test 3: 256-bit exact match should score 1.0
-    query_256 = IsccEntry(units=[ic_256, content_unit])
+    query_256 = IsccQuery(units=[ic_256, content_unit])
     result_256 = usearch_index.search_assets(query_256, limit=10)
 
     match_256 = next(m for m in result_256.global_matches if m.iscc_id == sample_iscc_ids[2])
@@ -266,7 +266,7 @@ def test_usearch_index_search_with_no_similarity_units(tmp_path):
     # Search with CONTENT unit that doesn't exist in index (unit type not in _nphd_indexes)
     # This tests the branch: if unit_type in self._nphd_indexes
     different_content = ic.gen_text_code_v0("Different content completely unique")["iscc"]
-    query = IsccEntry(units=[different_content, instance_unit])
+    query = IsccQuery(units=[different_content, instance_unit])
     result = idx.search_assets(query, limit=10)
 
     # Should still find via INSTANCE match even though CONTENT not in index
@@ -377,7 +377,7 @@ def test_usearch_index_duplicate_iscc_ids_in_batch(usearch_index, sample_iscc_id
     assert retrieved.metadata["version"] == 3
 
     # Verify search works (last content unit should be indexed)
-    query = IsccEntry(units=[instance_unit, content_unit_3])
+    query = IsccQuery(units=[instance_unit, content_unit_3])
     result = usearch_index.search_assets(query, limit=10)
     assert len(result.global_matches) >= 1
     assert sample_iscc_ids[0] in [m.iscc_id for m in result.global_matches]
@@ -777,7 +777,7 @@ def test_usearch_index_search_returns_none_metadata_when_asset_not_stored(usearc
         txn.delete(asset_key, db=assets_db)
 
     # Search should still find the match (via NPHD indexes) but with None metadata
-    query = IsccEntry(units=[instance_unit, content_unit])
+    query = IsccQuery(units=[instance_unit, content_unit])
     result = usearch_index.search_assets(query, limit=10)
 
     assert len(result.global_matches) == 1

@@ -61,10 +61,6 @@ class IsccSimprint(BaseModel):
     ]
 
 
-class Unit(RootModel[str]):
-    root: Annotated[str, Field(pattern="^ISCC:[A-Z2-7]{16,}$")]
-
-
 class Simprint(RootModel[str]):
     root: Annotated[
         str,
@@ -94,7 +90,7 @@ class IsccQuery(BaseModel):
         ),
     ] = None
     units: Annotated[
-        list[Unit] | None,
+        list[str] | None,
         Field(
             description="Explicit list of ISCC-UNITs for asset-level matching. Can be used instead of\nor in addition to `iscc_code` for fine-grained control over which units are queried.\n",
             examples=[
@@ -254,7 +250,7 @@ class IsccGlobalMatch(BaseModel):
 
 
 class IsccSearchResult(BaseModel):
-    query: Annotated[IsccEntry, Field(description="The original query asset (may include auto-generated iscc_id)")]
+    query: Annotated[IsccQuery, Field(description="The original query asset (may include auto-generated iscc_id)")]
     global_matches: Annotated[
         list[IsccGlobalMatch],
         Field(

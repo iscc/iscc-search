@@ -3,7 +3,7 @@
 import pytest
 from iscc_search.indexes.memory import MemoryIndex
 from iscc_search.protocols.index import IsccIndexProtocol
-from iscc_search.schema import IsccAddResult, IsccEntry, IsccIndex, IsccSearchResult, Status
+from iscc_search.schema import IsccAddResult, IsccEntry, IsccIndex, IsccQuery, IsccSearchResult, Status
 
 
 def test_memory_index_implements_protocol():
@@ -287,7 +287,7 @@ def test_search_assets_by_iscc_code(sample_iscc_ids, sample_iscc_codes):
     index.add_assets("testindex", assets)
 
     # Search for matching iscc_code
-    query = IsccEntry(iscc_code=code1)
+    query = IsccQuery(iscc_code=code1)
     result = index.search_assets("testindex", query)
 
     assert isinstance(result, IsccSearchResult)
@@ -309,7 +309,7 @@ def test_search_assets_by_iscc_id(sample_iscc_ids, sample_iscc_codes):
     index.add_assets("testindex", [asset])
 
     # Search by iscc_id and iscc_code
-    query = IsccEntry(iscc_id=sample_iscc_ids[0], iscc_code=sample_iscc_codes[0])
+    query = IsccQuery(iscc_id=sample_iscc_ids[0], iscc_code=sample_iscc_codes[0])
     result = index.search_assets("testindex", query)
 
     assert len(result.global_matches) == 1
@@ -333,7 +333,7 @@ def test_search_assets_no_matches(sample_iscc_ids, sample_iscc_codes):
     index.add_assets("testindex", [asset])
 
     # Search for non-matching code2
-    query = IsccEntry(iscc_code=code2)
+    query = IsccQuery(iscc_code=code2)
     result = index.search_assets("testindex", query)
 
     assert len(result.global_matches) == 0
@@ -352,7 +352,7 @@ def test_search_assets_limit(sample_iscc_ids, sample_iscc_codes):
     index.add_assets("testindex", assets)
 
     # Search with limit
-    query = IsccEntry(iscc_code=code)
+    query = IsccQuery(iscc_code=code)
     result = index.search_assets("testindex", query, limit=5)
 
     assert len(result.global_matches) == 5
@@ -362,7 +362,7 @@ def test_search_assets_index_not_found(sample_iscc_codes):
     """Test that searching non-existent index raises FileNotFoundError."""
     index = MemoryIndex()
 
-    query = IsccEntry(iscc_code=sample_iscc_codes[0])
+    query = IsccQuery(iscc_code=sample_iscc_codes[0])
 
     with pytest.raises(FileNotFoundError, match="Index 'nonexistent' not found"):
         index.search_assets("nonexistent", query)
@@ -404,16 +404,16 @@ def test_multiple_indexes_isolation(sample_iscc_ids, sample_iscc_codes):
     index.add_assets("index2", [asset2])
 
     # Verify isolation
-    result1 = index.search_assets("index1", IsccEntry(iscc_code=code1))
+    result1 = index.search_assets("index1", IsccQuery(iscc_code=code1))
     assert len(result1.global_matches) == 1
     assert result1.global_matches[0].iscc_id == sample_iscc_ids[0]
 
-    result2 = index.search_assets("index2", IsccEntry(iscc_code=code2))
+    result2 = index.search_assets("index2", IsccQuery(iscc_code=code2))
     assert len(result2.global_matches) == 1
     assert result2.global_matches[0].iscc_id == sample_iscc_ids[1]
 
     # Cross-search should return no results
-    result_cross = index.search_assets("index1", IsccEntry(iscc_code=code2))
+    result_cross = index.search_assets("index1", IsccQuery(iscc_code=code2))
     assert len(result_cross.global_matches) == 0
 
 
@@ -431,7 +431,7 @@ def test_metadata_field(sample_iscc_ids, sample_iscc_codes):
     index.add_assets("testindex", [asset])
 
     # Search and verify metadata is preserved in search results
-    query = IsccEntry(iscc_code=code)
+    query = IsccQuery(iscc_code=code)
     result = index.search_assets("testindex", query)
     assert len(result.global_matches) == 1
     # Note: source is AnyUrl type, needs to be compared as string
@@ -456,7 +456,7 @@ def test_search_assets_no_matching_iscc_id(sample_iscc_ids, sample_iscc_codes):
     index.add_assets("testindex", [asset])
 
     # Search with different iscc_id and iscc_code
-    query = IsccEntry(iscc_id=sample_iscc_ids[1], iscc_code=sample_iscc_codes[1])
+    query = IsccQuery(iscc_id=sample_iscc_ids[1], iscc_code=sample_iscc_codes[1])
     result = index.search_assets("testindex", query)
 
     # Should not match (different iscc_code)
@@ -473,7 +473,7 @@ def test_search_assets_no_iscc_code_in_asset(sample_iscc_ids, sample_iscc_codes)
     index.add_assets("testindex", [asset])
 
     # Search with iscc_code (won't match asset without code)
-    query = IsccEntry(iscc_code=sample_iscc_codes[0])
+    query = IsccQuery(iscc_code=sample_iscc_codes[0])
     result = index.search_assets("testindex", query)
 
     # Should not match (asset has no iscc_code)
@@ -502,7 +502,7 @@ def test_search_assets_by_units_only(sample_iscc_ids, sample_iscc_codes):
     units = [str(u) for u in code_obj.units]
 
     # Search with units only (no iscc_code)
-    query = IsccEntry(units=units)
+    query = IsccQuery(units=units)
     result = index.search_assets("testindex", query)
 
     assert isinstance(result, IsccSearchResult)

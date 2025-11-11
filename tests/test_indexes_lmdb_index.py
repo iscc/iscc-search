@@ -7,7 +7,7 @@ realm validation, and auto-resize behavior.
 
 import pytest
 import iscc_core as ic
-from iscc_search.schema import IsccEntry, Status
+from iscc_search.schema import IsccEntry, IsccQuery, Status
 from iscc_search.indexes.lmdb.index import LmdbIndex
 
 
@@ -172,7 +172,7 @@ def test_search_assets_basic(lmdb_index, sample_assets):
     lmdb_index.add_assets([asset])
 
     # Search with same units
-    query = IsccEntry(units=asset.units)
+    query = IsccQuery(units=asset.units)
     result = lmdb_index.search_assets(query, limit=10)
 
     assert len(result.global_matches) == 1
@@ -183,7 +183,7 @@ def test_search_assets_basic(lmdb_index, sample_assets):
 
 def test_search_assets_no_units(lmdb_index, sample_iscc_ids):
     """Test search without units or iscc_code raises error."""
-    query = IsccEntry(iscc_id=sample_iscc_ids[0])
+    query = IsccQuery(iscc_id=sample_iscc_ids[0])
 
     with pytest.raises(ValueError, match="must have either 'iscc_code' or 'units'"):
         lmdb_index.search_assets(query)
@@ -191,7 +191,7 @@ def test_search_assets_no_units(lmdb_index, sample_iscc_ids):
 
 def test_search_assets_empty_index(lmdb_index, sample_content_units):
     """Test search on empty index returns no matches."""
-    query = IsccEntry(units=[sample_content_units[0], sample_content_units[1]])
+    query = IsccQuery(units=[sample_content_units[0], sample_content_units[1]])
     result = lmdb_index.search_assets(query, limit=10)
 
     assert len(result.global_matches) == 0
@@ -211,7 +211,7 @@ def test_search_assets_limit(lmdb_index, sample_iscc_ids, sample_content_units):
     lmdb_index.add_assets(assets)
 
     # Search with limit=5
-    query = IsccEntry(units=[sample_content_units[0], sample_content_units[1]])
+    query = IsccQuery(units=[sample_content_units[0], sample_content_units[1]])
     result = lmdb_index.search_assets(query, limit=5)
 
     assert len(result.global_matches) == 5
@@ -234,7 +234,7 @@ def test_search_assets_scoring(lmdb_index, sample_iscc_ids, sample_content_units
     lmdb_index.add_assets([asset1, asset2])
 
     # Search with both units from asset1
-    query = IsccEntry(units=[sample_content_units[0], sample_content_units[1]])
+    query = IsccQuery(units=[sample_content_units[0], sample_content_units[1]])
     result = lmdb_index.search_assets(query, limit=10)
 
     assert len(result.global_matches) == 2
@@ -354,7 +354,7 @@ def test_search_with_string_units(lmdb_index, sample_assets, sample_content_unit
     query_dict = {
         "units": [str(sample_content_units[0]), str(sample_content_units[1])],
     }
-    query = IsccEntry(**query_dict)
+    query = IsccQuery(**query_dict)
 
     # Search should work
     result = lmdb_index.search_assets(query, limit=10)
@@ -383,7 +383,7 @@ def test_search_unit_no_matches(lmdb_index, sample_assets, sample_data_units):
     lmdb_index.add_assets([sample_assets[0]])
 
     # Search for completely different data units (different unit type, no matches)
-    query = IsccEntry(units=[sample_data_units[0], sample_data_units[1]])
+    query = IsccQuery(units=[sample_data_units[0], sample_data_units[1]])
     result = lmdb_index.search_assets(query, limit=10)
 
     # Should return empty results
@@ -435,7 +435,7 @@ def test_search_returns_none_metadata_when_asset_not_stored(lmdb_index, sample_i
     lmdb_index._realm_id = 0
 
     # Search should find match but with None metadata (need 2 units for schema validation)
-    query = IsccEntry(units=[sample_content_units[0], sample_content_units[1]])
+    query = IsccQuery(units=[sample_content_units[0], sample_content_units[1]])
     result = lmdb_index.search_assets(query, limit=10)
 
     assert len(result.global_matches) == 1
@@ -475,7 +475,7 @@ def test_search_with_no_assets_db(temp_lmdb_path, sample_content_units):
     idx._realm_id = 0
 
     # Search should work and return matches with None metadata (need 2 units for schema validation)
-    query = IsccEntry(units=[sample_content_units[0], sample_content_units[1]])
+    query = IsccQuery(units=[sample_content_units[0], sample_content_units[1]])
     result = idx.search_assets(query, limit=10)
 
     assert len(result.global_matches) == 1

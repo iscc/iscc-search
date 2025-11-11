@@ -12,6 +12,7 @@ if TYPE_CHECKING:
     from iscc_search.schema import IsccAddResult  # noqa: F401
     from iscc_search.schema import IsccEntry  # noqa: F401
     from iscc_search.schema import IsccIndex  # noqa: F401
+    from iscc_search.schema import IsccQuery  # noqa: F401
     from iscc_search.schema import IsccSearchResult  # noqa: F401
 
 
@@ -133,7 +134,7 @@ class IsccIndexProtocol(Protocol):
         ...
 
     def search_assets(self, index_name, query, limit=100):
-        # type: (str, IsccEntry, int) -> IsccSearchResult
+        # type: (str, IsccQuery, int) -> IsccSearchResult
         """
         Search for similar assets in index.
 
@@ -146,7 +147,7 @@ class IsccIndexProtocol(Protocol):
         - global_matches: List of IsccGlobalMatch objects with scores and per-unit breakdowns
 
         :param index_name: Target index name
-        :param query: IsccEntry to search for (either iscc_code or units required)
+        :param query: IsccQuery to search for (either iscc_code or units required)
         :param limit: Maximum number of results to return (default: 100)
         :return: IsccSearchResult with query and list of matches
         :raises FileNotFoundError: If index doesn't exist

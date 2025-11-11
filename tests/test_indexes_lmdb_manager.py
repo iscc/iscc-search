@@ -5,7 +5,7 @@ Tests full protocol compliance, index lifecycle management, and multi-index scen
 """
 
 import pytest
-from iscc_search.schema import IsccIndex, IsccEntry
+from iscc_search.schema import IsccIndex, IsccEntry, IsccQuery
 from iscc_search.indexes.lmdb import LmdbIndexManager
 from iscc_search.protocols.index import IsccIndexProtocol
 
@@ -234,7 +234,7 @@ def test_search_assets_success(manager, sample_assets):
     manager.add_assets("test", [asset])
 
     # Search
-    query = IsccEntry(units=asset.units)
+    query = IsccQuery(units=asset.units)
     result = manager.search_assets("test", query, limit=10)
 
     assert len(result.global_matches) == 1
@@ -243,7 +243,7 @@ def test_search_assets_success(manager, sample_assets):
 
 def test_search_assets_index_not_found(manager, sample_content_units):
     """Test search_assets with non-existent index raises FileNotFoundError."""
-    query = IsccEntry(units=[sample_content_units[0], sample_content_units[1]])
+    query = IsccQuery(units=[sample_content_units[0], sample_content_units[1]])
 
     with pytest.raises(FileNotFoundError, match="not found"):
         manager.search_assets("nonexistent", query)

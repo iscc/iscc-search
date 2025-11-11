@@ -170,12 +170,12 @@ class LmdbIndexManager:
         return idx.get_asset(iscc_id)
 
     def search_assets(self, index_name, query, limit=100):
-        # type: (str, IsccEntry, int) -> IsccSearchResult
+        # type: (str, IsccQuery, int) -> IsccSearchResult
         """
         Search for similar assets in index.
 
         :param index_name: Target index name
-        :param query: IsccEntry to search for
+        :param query: IsccQuery to search for
         :param limit: Maximum number of results
         :return: IsccSearchResult with query and list of matches
         :raises FileNotFoundError: If index doesn't exist

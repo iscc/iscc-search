@@ -294,19 +294,19 @@ class UsearchIndex:
         return common.deserialize_asset(asset_bytes)
 
     def search_assets(self, query, limit=100):
-        # type: (IsccEntry, int) -> IsccSearchResult
+        # type: (IsccQuery, int) -> IsccSearchResult
         """
         Search for similar assets using NPHD metric.
 
         Combines exact INSTANCE matching (LMDB) with similarity matching (NphdIndex).
         Scores: INSTANCE = proportional to match length (0.25/0.5/1.0), similarity = 1.0 - nphd_distance.
 
-        :param query: Query asset with units
+        :param query: Query with units
         :param limit: Maximum number of results
         :return: IsccSearchResult with query and list of matches
         """
         # Normalize query
-        query = common.normalize_query_asset(query)
+        query = common.normalize_query(query)
         if not query.units:  # pragma: no cover
             # No units to search
             return IsccSearchResult(query=query, global_matches=[])

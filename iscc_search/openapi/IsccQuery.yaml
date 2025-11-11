@@ -56,8 +56,7 @@ properties:
       Explicit list of ISCC-UNITs for asset-level matching. Can be used instead of
       or in addition to `iscc_code` for fine-grained control over which units are queried.
     items:
-      type: string
-      pattern: "^ISCC:[A-Z2-7]{16,}$"
+      $ref: "./CommonProperties.yaml#/properties/iscc_unit"
     minItems: 1
     example:
       - "ISCC:AAAUHBUDQUT3LPWR"

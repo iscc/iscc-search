@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from iscc_search.protocols.index import IsccIndexProtocol
-from iscc_search.schema import IsccEntry, IsccSearchResult
+from iscc_search.schema import IsccQuery, IsccSearchResult
 from iscc_search.server import get_index_from_state
 
 
@@ -12,20 +12,20 @@ router = APIRouter(tags=["search"])
 @router.post("/indexes/{name}/search", response_model=IsccSearchResult)
 def search_post(
     name: str,
-    query: IsccEntry,
+    query: IsccQuery,
     limit: int = 100,
     index: IsccIndexProtocol = Depends(get_index_from_state),
 ):
     # type: (...) -> IsccSearchResult
     """
-    Search for similar assets using POST with full query asset.
+    Search for similar assets using POST with full query.
 
-    Performs similarity search using the query asset's ISCC-CODE or units.
+    Performs similarity search using the query's ISCC-CODE or units.
     Results are aggregated across all unit types and returned sorted by
     relevance (highest scores first).
 
     :param name: Index name
-    :param query: IsccEntry to search for (iscc_code or units required)
+    :param query: IsccQuery to search for (iscc_code or units required)
     :param limit: Maximum number of results to return (default: 100)
     :param index: Index instance injected from app state
     :return: IsccSearchResult with matches
@@ -51,7 +51,7 @@ def search_get(
     Search for similar assets using GET with ISCC-CODE query parameter.
 
     Convenience endpoint for searching by ISCC-CODE. The ISCC-CODE is wrapped
-    in an IsccEntry and passed to the backend, which handles decomposition
+    in an IsccQuery and passed to the backend, which handles decomposition
     into units internally.
 
     :param name: Index name
@@ -62,8 +62,8 @@ def search_get(
     :raises HTTPException: 404 if index not found, 400 for invalid ISCC-CODE
     """
     try:
-        # Create query asset with iscc_code - backend handles decomposition
-        query = IsccEntry(iscc_code=iscc_code)
+        # Create query with iscc_code - backend handles decomposition
+        query = IsccQuery(iscc_code=iscc_code)
         return index.search_assets(name, query, limit)
     except FileNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))

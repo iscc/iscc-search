@@ -209,10 +209,10 @@ def validate_iscc_id(iscc_id, expected_realm=None):
         )
 
 
-def normalize_query_asset(query):
-    # type: (IsccEntry) -> IsccEntry
+def normalize_query(query):
+    # type: (IsccQuery) -> IsccQuery
     """
-    Normalize query asset to ensure consistent search behavior across backends.
+    Normalize query to ensure consistent search behavior across backends.
 
     Indexes need both representations when possible:
     - LMDB searches by units (more bits, better precision)
@@ -229,8 +229,8 @@ def normalize_query_asset(query):
     that don't form valid codes (e.g., missing DATA/INSTANCE) will work with
     LMDB backend but return no matches with memory backend.
 
-    :param query: Query asset (may have iscc_code or units or both)
-    :return: Query asset with units and/or iscc_code populated
+    :param query: Query object (may have iscc_code or units or both)
+    :return: Query with units and/or iscc_code populated
     :raises ValueError: If query has neither iscc_code nor units
     """
     import iscc_core as ic

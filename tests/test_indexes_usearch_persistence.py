@@ -4,7 +4,7 @@ Tests for UsearchIndex persistence features: save-on-close and auto-rebuild.
 
 import iscc_core as ic
 from iscc_search.indexes.usearch.index import UsearchIndex
-from iscc_search.schema import IsccEntry
+from iscc_search.schema import IsccEntry, IsccQuery
 
 
 def test_usearch_index_save_on_close(tmp_path, sample_iscc_ids):
@@ -30,7 +30,7 @@ def test_usearch_index_save_on_close(tmp_path, sample_iscc_ids):
 
     # Reopen index and verify data persists
     idx2 = UsearchIndex(index_path, realm_id=0, max_dim=256)
-    query = IsccEntry(units=[instance_unit, content_unit])
+    query = IsccQuery(units=[instance_unit, content_unit])
     result = idx2.search_assets(query, limit=10)
 
     assert len(result.global_matches) == 1
@@ -60,7 +60,7 @@ def test_usearch_index_flush_method(tmp_path, sample_iscc_ids):
     assert usearch_file.exists(), "NphdIndex file should exist after flush()"
 
     # Index should still be usable
-    query = IsccEntry(units=[instance_unit, content_unit])
+    query = IsccQuery(units=[instance_unit, content_unit])
     result = idx.search_assets(query, limit=10)
     assert len(result.global_matches) == 1
 
@@ -93,7 +93,7 @@ def test_usearch_index_auto_rebuild_on_corrupted_file(tmp_path, sample_iscc_ids)
     idx2 = UsearchIndex(index_path, realm_id=0, max_dim=256)
 
     # Verify data is recovered via rebuild
-    query = IsccEntry(units=[instance_unit, content_unit])
+    query = IsccQuery(units=[instance_unit, content_unit])
     result = idx2.search_assets(query, limit=10)
     assert len(result.global_matches) == 1
     assert result.global_matches[0].iscc_id == sample_iscc_ids[0]
@@ -133,7 +133,7 @@ def test_usearch_index_auto_rebuild_on_count_mismatch(tmp_path, sample_iscc_ids)
     idx2 = UsearchIndex(index_path, realm_id=0, max_dim=256)
 
     # Verify both assets are found (rebuild worked)
-    result = idx2.search_assets(IsccEntry(units=[instance_unit, content_unit_1, content_unit_2]), limit=10)
+    result = idx2.search_assets(IsccQuery(units=[instance_unit, content_unit_1, content_unit_2]), limit=10)
     assert len(result.global_matches) == 2
 
     idx2.close()
@@ -260,7 +260,7 @@ def test_usearch_index_crash_recovery_rebuild_missing_files(tmp_path, sample_isc
     assert data_file.exists(), "Missing file should be rebuilt on startup"
 
     # Verify data is accessible via search (proving rebuild worked)
-    query = IsccEntry(units=[instance_unit, content_unit, data_unit])
+    query = IsccQuery(units=[instance_unit, content_unit, data_unit])
     result = idx2.search_assets(query, limit=10)
     assert len(result.global_matches) == 1
     assert result.global_matches[0].iscc_id == sample_iscc_ids[0]
@@ -400,8 +400,8 @@ def test_usearch_index_crash_recovery_multiple_missing_files(tmp_path, sample_is
 
     # Verify all three assets are searchable
     for i in range(3):
-        asset_query = assets[i]
-        result = idx2.search_assets(asset_query, limit=10)
+        query = IsccQuery(units=assets[i].units)
+        result = idx2.search_assets(query, limit=10)
         assert any(m.iscc_id == sample_iscc_ids[i] for m in result.global_matches)
 
     idx2.close()

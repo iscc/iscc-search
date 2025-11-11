@@ -7,7 +7,7 @@ and INSTANCE special handling.
 
 import iscc_core as ic
 import pytest
-from iscc_search.schema import IsccIndex, IsccEntry, Status
+from iscc_search.schema import IsccIndex, IsccEntry, IsccQuery, Status
 from iscc_search.indexes.usearch import UsearchIndexManager
 from iscc_search.protocols.index import IsccIndexProtocol
 
@@ -267,7 +267,7 @@ def test_search_assets_empty_index(manager, sample_content_units):
     """Test search on empty index returns empty results."""
     manager.create_index(IsccIndex(name="test"))
 
-    query = IsccEntry(units=[sample_content_units[0], sample_content_units[1]])
+    query = IsccQuery(units=[sample_content_units[0], sample_content_units[1]])
     result = manager.search_assets("test", query)
 
     assert result.global_matches == []
@@ -299,7 +299,7 @@ def test_search_assets_similarity_matching(manager, gen_iscc_id_realm_0, gen_con
     manager.add_assets("test", assets)
 
     # Search with similar query
-    query = IsccEntry(units=[gen_content_text("Hello World"), instance])
+    query = IsccQuery(units=[gen_content_text("Hello World"), instance])
     result = manager.search_assets("test", query, limit=10)
 
     # Should find matches, ordered by similarity
@@ -325,7 +325,7 @@ def test_search_assets_instance_exact_matching(manager, gen_iscc_id_realm_0, gen
     manager.add_assets("test", [asset])
 
     # Search with same units
-    query = IsccEntry(units=[instance_unit, content_unit])
+    query = IsccQuery(units=[instance_unit, content_unit])
     result = manager.search_assets("test", query)
 
     # Should find exact match with high score
@@ -350,7 +350,7 @@ def test_search_assets_hybrid(manager, gen_iscc_id_realm_0, gen_content_text, ge
     manager.add_assets("test", [asset])
 
     # Search with same units
-    query = IsccEntry(units=[content_unit, instance_unit])
+    query = IsccQuery(units=[content_unit, instance_unit])
     result = manager.search_assets("test", query)
 
     # Should find match with aggregated score
@@ -362,7 +362,7 @@ def test_search_assets_hybrid(manager, gen_iscc_id_realm_0, gen_content_text, ge
 
 def test_search_assets_index_not_found(manager, sample_content_units):
     """Test search_assets with non-existent index raises FileNotFoundError."""
-    query = IsccEntry(units=[sample_content_units[0], sample_content_units[1]])
+    query = IsccQuery(units=[sample_content_units[0], sample_content_units[1]])
 
     with pytest.raises(FileNotFoundError, match="not found"):
         manager.search_assets("nonexistent", query)
@@ -402,7 +402,7 @@ def test_persistence_after_close(manager, tmp_path, sample_iscc_ids, sample_cont
         assert retrieved.iscc_id == iscc_id
 
         # Search should also work
-        query = IsccEntry(units=[sample_content_units[0], sample_content_units[1]])
+        query = IsccQuery(units=[sample_content_units[0], sample_content_units[1]])
         result = manager2.search_assets("test", query)
         assert len(result.global_matches) > 0
     finally:
@@ -421,7 +421,7 @@ def test_multiple_indexes_isolation(manager, sample_iscc_ids, sample_content_uni
     manager.add_assets("index1", [asset1])
 
     # index2 should be empty
-    query = IsccEntry(units=[sample_content_units[0], sample_content_units[1]])
+    query = IsccQuery(units=[sample_content_units[0], sample_content_units[1]])
     result = manager.search_assets("index2", query)
     assert result.global_matches == []
 

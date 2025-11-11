@@ -1,7 +1,7 @@
 """Test ISCC Index Protocol definition and runtime checking."""
 
 from iscc_search.protocols.index import IsccIndexProtocol
-from iscc_search.schema import IsccAddResult, IsccEntry, IsccIndex, IsccSearchResult
+from iscc_search.schema import IsccAddResult, IsccEntry, IsccIndex, IsccQuery, IsccSearchResult
 
 
 def test_protocol_is_runtime_checkable():
@@ -34,7 +34,7 @@ def test_protocol_is_runtime_checkable():
             return IsccEntry(iscc_id=iscc_id)
 
         def search_assets(self, index_name, query, limit=100):
-            # type: (str, IsccEntry, int) -> IsccSearchResult
+            # type: (str, IsccQuery, int) -> IsccSearchResult
             return IsccSearchResult(query=query, global_matches=[])
 
         def close(self):
@@ -104,7 +104,7 @@ def test_protocol_accepts_complete_implementation():
 
         def search_assets(self, index_name, query, limit=100):
             return IsccSearchResult(
-                query=IsccEntry(iscc_id="ISCC:MAIGIIFJRDGEQQAA", units=["ISCC:AADYCMZIOY36XXGZ"]),
+                query=IsccQuery(iscc_id="ISCC:MAIGIIFJRDGEQQAA", units=["ISCC:AADYCMZIOY36XXGZ"]),
                 global_matches=[],
             )
 

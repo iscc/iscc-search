@@ -6,7 +6,7 @@ Tests end-to-end workflows, settings integration, and real-world scenarios.
 
 import pytest
 import iscc_core as ic
-from iscc_search.schema import IsccEntry, IsccIndex
+from iscc_search.schema import IsccEntry, IsccIndex, IsccQuery
 from iscc_search.indexes.lmdb import LmdbIndexManager
 from iscc_search.settings import SearchSettings, get_index
 
@@ -31,7 +31,7 @@ def test_full_workflow_create_add_search_get_delete(manager, sample_assets):
     assert len(results) == 5
 
     # 3. Search
-    query = IsccEntry(units=sample_assets[0].units)
+    query = IsccQuery(units=sample_assets[0].units)
     search_result = manager.search_assets("workflow", query, limit=10)
     assert len(search_result.global_matches) >= 1
 
@@ -118,7 +118,7 @@ def test_large_dataset(manager, large_dataset):
     assert index_meta.assets == len(assets)
 
     # Search should return results
-    query = IsccEntry(units=[units[0], units[1]])
+    query = IsccQuery(units=[units[0], units[1]])
     result = manager.search_assets("large", query, limit=50)
     assert len(result.global_matches) > 0
 
@@ -216,7 +216,7 @@ def test_search_with_no_matches(manager, sample_iscc_ids, sample_content_units, 
     manager.add_assets("search", [asset])
 
     # Search for different data units (no match)
-    query = IsccEntry(units=[sample_data_units[0], sample_data_units[1]])
+    query = IsccQuery(units=[sample_data_units[0], sample_data_units[1]])
     result = manager.search_assets("search", query)
 
     assert len(result.global_matches) == 0
@@ -231,7 +231,7 @@ def test_empty_index_operations(manager, sample_iscc_ids, sample_content_units):
     assert index_meta.assets == 0
 
     # Search returns no results
-    query = IsccEntry(units=[sample_content_units[0], sample_content_units[1]])
+    query = IsccQuery(units=[sample_content_units[0], sample_content_units[1]])
     result = manager.search_assets("empty", query)
     assert len(result.global_matches) == 0
 

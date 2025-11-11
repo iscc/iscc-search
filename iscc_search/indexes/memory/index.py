@@ -167,7 +167,7 @@ class MemoryIndex:
         return index_data["assets"][iscc_id]
 
     def search_assets(self, index_name, query, limit=100):
-        # type: (str, IsccEntry, int) -> IsccSearchResult
+        # type: (str, IsccQuery, int) -> IsccSearchResult
         """
         Search for similar assets (simple exact match for testing).
 
@@ -181,7 +181,7 @@ class MemoryIndex:
         ISCC-CODEs will return no matches.
 
         :param index_name: Target index name
-        :param query: IsccEntry with iscc_code or units (or both)
+        :param query: IsccQuery with iscc_code or units (or both)
         :param limit: Maximum number of results
         :return: IsccSearchResult with matches
         :raises FileNotFoundError: If index doesn't exist
@@ -192,7 +192,7 @@ class MemoryIndex:
 
         # Normalize query to ensure it has units (derive from iscc_code if needed)
         # This ensures consistent behavior across backends
-        query = common.normalize_query_asset(query)
+        query = common.normalize_query(query)
 
         # Simple implementation: exact match on iscc_code if available
         match_list = []

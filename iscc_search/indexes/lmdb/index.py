@@ -181,7 +181,7 @@ class LmdbIndex:
             return common.deserialize_asset(asset_bytes)
 
     def search_assets(self, query, limit=100):
-        # type: (IsccEntry, int) -> IsccSearchResult
+        # type: (IsccQuery, int) -> IsccSearchResult
         """
         Search for similar assets using bidirectional prefix matching.
 
@@ -191,13 +191,13 @@ class LmdbIndex:
         Accepts query with either iscc_code or units (or both). If only iscc_code
         is provided, units are automatically derived for search.
 
-        :param query: IsccEntry with iscc_code or units (or both)
+        :param query: IsccQuery with iscc_code or units (or both)
         :param limit: Maximum number of results
         :return: IsccSearchResult with matches sorted by score (descending)
         :raises ValueError: If query has neither iscc_code nor units
         """
         # Normalize query to ensure it has units (derive from iscc_code if needed)
-        query = common.normalize_query_asset(query)
+        query = common.normalize_query(query)
 
         with self.env.begin() as txn:
             # Aggregate matches: iscc_id → {unit_type → max_bits}

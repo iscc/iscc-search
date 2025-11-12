@@ -1,0 +1,15 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "http://purl.org/iscc/schema/text-query.json"
+title: "TextQuery"
+type: object
+description: Query for text-based similarity search using simprints
+required:
+  - text
+properties:
+  text:
+    type: string
+    description: Plain text content to generate simprints and search for
+    minLength: 1
+    example: "This is the content I want to find similar matches for..."
+example:
+  text: "This is the content I want to find similar matches for..."

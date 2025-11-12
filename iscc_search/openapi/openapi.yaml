@@ -446,6 +446,67 @@ paths:
                 $ref: '#/components/schemas/HttpError'
               example:
                 detail: "Index 'myindex' not found"
+  /indexes/{name}/search/text:
+    post:
+      summary: Search by plain text
+      description: |
+        Generates simprints from the provided text and searches for similar content
+        segments in the index. Returns chunk-level matches based on text similarity.
+      operationId: searchText
+      tags:
+        - search
+      parameters:
+        - name: name
+          in: path
+          required: true
+          description: Name of the index to search
+          schema:
+            type: string
+            pattern: "^[a-z][a-z0-9]*$"
+            minLength: 1
+            maxLength: 32
+            example: "default"
+      requestBody:
+        required: true
+        description: Plain text content to search for
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TextQuery'
+            example:
+              text: "This is the content I want to find similar matches for..."
+      responses:
+        '200':
+          description: Search results with matched assets and chunks
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IsccSearchResult'
+              example:
+                query:
+                  text: "This is the content I want to find similar matches for..."
+                chunk_matches:
+                  - iscc_id: "ISCC:MAIGIIFJRDGEQQAA"
+                    simprint: "AXvu3tp2kF8mN9qL4rT1sZ"
+                    score: 0.95
+                    offset: 12500
+                    size: 350
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpError'
+              example:
+                detail: "Text content cannot be empty"
+        '404':
+          description: Index not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpError'
+              example:
+                detail: "Index 'myindex' not found"
 
 components:
   schemas:
@@ -463,3 +524,5 @@ components:
       $ref: './IsccGlobalMatch.yaml'
     IsccSearchResult:
       $ref: './IsccSearchResult.yaml'
+    TextQuery:
+      $ref: './TextQuery.yaml'

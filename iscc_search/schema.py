@@ -233,6 +233,17 @@ class IsccMetadataModel(BaseModel):
     )
 
 
+class TextQuery(BaseModel):
+    text: Annotated[
+        str,
+        Field(
+            description="Plain text content to generate simprints and search for",
+            examples=["This is the content I want to find similar matches for..."],
+            min_length=1,
+        ),
+    ]
+
+
 class IsccEntry(BaseModel):
     iscc_id: Annotated[
         str | None,

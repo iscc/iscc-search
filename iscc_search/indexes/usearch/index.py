@@ -46,6 +46,10 @@ class UsearchIndex:
     All keys use ISCC-ID body as uint64 for consistency between LMDB and usearch.
     """
 
+    # Scoring configuration
+    MATCH_THRESHOLD = 0.75  # Minimum score to consider (filters noise, ~25% hamming distance)
+    CONFIDENCE_EXPONENT = 4  # Emphasizes high-confidence matches (biquadratic weighting)
+
     DEFAULT_LMDB_OPTIONS = {
         "readonly": False,
         "metasync": False,
@@ -328,8 +332,12 @@ class UsearchIndex:
         - Similarity units (CONTENT/META/DATA): score = 1.0 - nphd_distance. Perfect match
           of query bits scores 1.0 regardless of unit length (64/128/192/256 bits).
 
-        **Score aggregation**: Overall score is the average across all queried units.
-        Unmatched units contribute 0.0 to the average.
+        **Score aggregation**: Confidence-weighted averaging with noise filtering:
+        1. Filter out low-confidence matches below MATCH_THRESHOLD (default 0.75)
+        2. Apply confidence weighting: score^CONFIDENCE_EXPONENT (default 2)
+        3. Calculate weighted average: sum(score^2) / sum(score)
+        This emphasizes high-confidence matches and filters noise. A perfect match (1.0)
+        on one type ranks higher than multiple mediocre matches.
 
         :param query: Query with units
         :param limit: Maximum number of results
@@ -371,12 +379,24 @@ class UsearchIndex:
                             # Store max score if multiple matches for same unit_type
                             aggregated[key][unit_type] = max(aggregated[key].get(unit_type, 0.0), score)
 
-            # Calculate average scores and sort
+            # Calculate confidence-weighted scores and sort
             scored_results = []  # type: list[tuple[int, float, dict[str, float]]]
-            num_queried_units = len(query.units)
             for key, unit_scores in aggregated.items():
-                # Average score across all queried units (unmatched = 0.0, normalized 0.0-1.0)
-                total_score = sum(unit_scores.values()) / num_queried_units
+                # Filter out low-confidence matches (below threshold)
+                confident_matches = {
+                    unit_type: score for unit_type, score in unit_scores.items() if score >= self.MATCH_THRESHOLD
+                }
+
+                # Skip if no confident matches
+                if not confident_matches:
+                    continue
+
+                # Confidence-weighted average (high scores count more)
+                # score^2 / score = score, so this amplifies differences
+                weighted_sum = sum(score**self.CONFIDENCE_EXPONENT for score in confident_matches.values())
+                weight_sum = sum(score for score in confident_matches.values())
+                total_score = weighted_sum / weight_sum
+
                 scored_results.append((key, total_score, unit_scores))
 
             # Sort by total score descending

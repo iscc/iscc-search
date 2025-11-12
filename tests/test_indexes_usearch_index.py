@@ -787,3 +787,28 @@ def test_usearch_index_search_returns_none_metadata_when_asset_not_stored(usearc
     assert len(result.global_matches) == 1
     assert result.global_matches[0].iscc_id == sample_iscc_ids[0]
     assert result.global_matches[0].metadata is None  # Asset not in __assets__ db
+
+
+def test_usearch_index_filters_low_confidence_matches(usearch_index, sample_iscc_ids, monkeypatch):
+    """Test that matches below MATCH_THRESHOLD are filtered out."""
+    # Temporarily set a high threshold that will filter out non-perfect matches
+    monkeypatch.setattr("iscc_search.indexes.usearch.index.UsearchIndex.MATCH_THRESHOLD", 0.99)
+
+    # Add an asset
+    content_unit = ic.gen_text_code_v0("Original content for testing")["iscc"]
+    instance_unit = f"ISCC:{ic.Code.rnd(ic.MT.INSTANCE, bits=128)}"
+
+    asset = IsccEntry(
+        iscc_id=sample_iscc_ids[0],
+        units=[instance_unit, content_unit],
+        metadata={"name": "Test Asset"},
+    )
+    usearch_index.add_assets([asset])
+
+    # Search with slightly different content (will match but score < 0.99)
+    different_content_unit = ic.gen_text_code_v0("Different content for testing")["iscc"]
+    query = IsccQuery(units=[different_content_unit])
+    result = usearch_index.search_assets(query, limit=10)
+
+    # Should have no matches because score is below 0.99 threshold
+    assert len(result.global_matches) == 0

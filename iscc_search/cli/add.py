@@ -12,7 +12,7 @@ import typer
 from loguru import logger
 from rich.progress import BarColumn, MofNCompleteColumn, Progress, SpinnerColumn, TextColumn
 
-from iscc_search.cli.common import console, get_default_index
+from iscc_search.cli.common import console, get_default_index, parse_simprints_from_features
 from iscc_search.schema import IsccEntry
 from iscc_search.utils import timer
 
@@ -73,9 +73,9 @@ def parse_asset_files(files, verbose=False):
 
         for file_path in files:
             try:
-                # Use simdjson for efficient parsing of only required fields
+                # Use recursive=True to get plain Python dict/list and avoid proxy object reuse issues
                 with open(file_path, "rb") as f:
-                    doc = parser.parse(f.read())
+                    doc = parser.parse(f.read(), recursive=True)
 
                 # Map JSON fields to IsccEntry - extract to plain Python types immediately
                 asset_data = {}
@@ -105,22 +105,41 @@ def parse_asset_files(files, verbose=False):
                     # Convert to Python list of strings immediately
                     asset_data["units"] = [str(u) for u in doc["units"]]
 
-                # Handle metadata - collect name and filename if present
+                # Handle metadata - collect name and source URI
                 metadata = {}
                 if "name" in doc:
                     name = str(doc["name"]).strip()
                     if name:
                         metadata["name"] = name
-                if "filename" in doc:
-                    filename = str(doc["filename"]).strip()
-                    if filename:
-                        metadata["filename"] = filename
+
+                # Add source URI pointing to .iscc.utf8 file
+                # Input: 9788893459754.pdf.iscc.json → Output: 9788893459754.pdf.iscc.utf8
+                source_path = file_path.with_suffix(".utf8")
+                # Convert to fsspec-compatible file URI
+                source_uri = source_path.as_uri()
+                metadata["source"] = source_uri
 
                 if metadata:
                     asset_data["metadata"] = metadata
 
-                # Release proxy object before next parser reuse
-                del doc
+                # Handle features - transform to simprints format
+                if "features" in doc:
+                    # Fully extract features to plain Python types to avoid parser reuse issues
+                    features = []
+                    for feature in doc["features"]:
+                        feature_dict = {
+                            "maintype": str(feature.get("maintype", "")),
+                            "subtype": str(feature.get("subtype", "")),
+                            "version": int(feature.get("version", 0)),
+                            "simprints": [str(s) for s in feature.get("simprints", [])],
+                            "offsets": [int(o) for o in feature.get("offsets", [])],
+                            "sizes": [int(sz) for sz in feature.get("sizes", [])],
+                        }
+                        features.append(feature_dict)
+
+                    simprints = parse_simprints_from_features(features)
+                    if simprints:
+                        asset_data["simprints"] = simprints
 
                 asset = IsccEntry(**asset_data)
                 assets.append(asset)

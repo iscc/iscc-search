@@ -18,7 +18,6 @@ __all__ = ["search_command"]
 def search_command(
     iscc_code,  # type: str
     limit=typer.Option(3, "--limit", "-l", help="Maximum number of results"),  # type: int
-    meta: bool = typer.Option(False, "--meta", "-m", help="Include metadata for matched results"),
 ):
     # type: (...) -> None
     """
@@ -28,7 +27,7 @@ def search_command(
 
     Example:
         iscc-search search ISCC:KECYCMZIOY36XXGZ7S6QJQ2AEEXPOVEHZYPK6GMSFLU3WF54UPZMTPY
-        iscc-search search ISCC:KEC... --limit 10 --meta
+        iscc-search search ISCC:KEC... --limit 10
     """
     # Get default index
     with Progress(
@@ -53,34 +52,10 @@ def search_command(
         results = index.search_assets("default", query, limit=int(limit))
         progress.remove_task(task)
 
-    # Build matches output
-    matches_output = []
-    for match in results.global_matches:
-        match_dict = {
-            "iscc_id": match.iscc_id,
-            "score": match.score,
-            "types": match.types,
-        }
-
-        # If --meta flag is set, retrieve and add metadata
-        if meta:
-            try:
-                asset = index.get_asset("default", match.iscc_id)
-                if asset.metadata:
-                    match_dict["metadata"] = asset.metadata
-            except FileNotFoundError:
-                # Asset not found, skip metadata
-                pass
-
-        matches_output.append(match_dict)
-
     # Close index
     index.close()
 
-    # Output as JSON
-    output = {
-        "query": {"iscc_code": results.query.iscc_code, "units": results.query.units},
-        "matches": matches_output,
-    }
+    # Serialize IsccSearchResult directly - faithfully reproduce index output
+    output = results.model_dump(mode="json", exclude_none=True)
 
     console.print_json(json.dumps(output))

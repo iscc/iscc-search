@@ -27,7 +27,7 @@ from iscc_search.indexes.simprint.models import SimprintRaw, SimprintEntryMulti
 import iscc_core as ic
 
 if TYPE_CHECKING:
-    from iscc_search.schema import IsccEntry  # noqa: F401
+    from iscc_search.schema import IsccEntry, IsccQuery, IsccChunkMatch  # noqa: F401
 
 
 class UsearchIndex:
@@ -65,7 +65,7 @@ class UsearchIndex:
     MAX_RESIZE_RETRIES = 10  # Maximum number of resize attempts
     MAX_MAP_SIZE = 1024 * 1024 * 1024 * 1024  # 1 TB maximum map size
 
-    def __init__(self, path, realm_id=None, max_dim=256, threshold=0.8, lmdb_options=None):
+    def __init__(self, path, realm_id=None, max_dim=256, threshold=0.0, lmdb_options=None):
         # type: (str | Path, int | None, int, float, dict | None) -> None
         """
         Create or open usearch index at directory path.
@@ -73,8 +73,8 @@ class UsearchIndex:
         :param path: Path to index directory (contains index.lmdb + .usearch files)
         :param realm_id: ISCC realm ID for new indexes (0 or 1). If None, inferred from first asset.
         :param max_dim: Maximum dimensions for NphdIndex (any multiple of 8 bits up to 256)
-        :param threshold: Similarity threshold for simprint search (0.0-1.0, default 0.8).
-            Will be used for both global and simprint searches in future.
+        :param threshold: Similarity threshold for simprint search (0.0-1.0, default 0.0 returns all).
+            Result count controlled by limit parameter. Will be used for global searches in future.
         :param lmdb_options: Custom LMDB options (max_dbs and subdir are forced)
         """
         self.path = Path(path)
@@ -337,77 +337,91 @@ class UsearchIndex:
         """
         # Normalize query
         query = common.normalize_query(query)
-        if not query.units:  # pragma: no cover
-            # No units to search
-            return IsccSearchResult(query=query, global_matches=[], chunk_matches=[])
 
-        # Aggregation: {key (int): {unit_type: score}}
-        aggregated = {}  # type: dict[int, dict[str, float]]
+        # Search simprints for chunk-level matches (can work without units)
+        chunk_matches = []  # type: list[IsccChunkMatch]
+        if self._simprint_index is not None and query.simprints:
+            chunk_matches = self._search_simprints(query, limit)
 
-        for unit_str in query.units:
-            unit = IsccUnit(unit_str)
-            unit_type = unit.unit_type
-            unit_body = unit.body
+        # Search units for global matches (only if units present)
+        matches = []  # type: list[IsccGlobalMatch]
+        if query.units:
+            # Aggregation: {key (int): {unit_type: score}}
+            aggregated = {}  # type: dict[int, dict[str, float]]
 
-            if unit_type.startswith("INSTANCE_"):
-                # Exact matching via LMDB dupsort
-                matches = self._search_instance_unit(unit_body)
-                for key, score in matches.items():
-                    if key not in aggregated:
-                        aggregated[key] = {}
-                    aggregated[key][unit_type] = score
-            else:
-                # Similarity matching via NphdIndex
-                if unit_type in self._nphd_indexes:
-                    matches = self._search_similarity_unit(unit_type, unit_body, limit)
-                    for key, score in matches.items():
+            for unit_str in query.units:
+                unit = IsccUnit(unit_str)
+                unit_type = unit.unit_type
+                unit_body = unit.body
+
+                if unit_type.startswith("INSTANCE_"):
+                    # Exact matching via LMDB dupsort
+                    matches_dict = self._search_instance_unit(unit_body)
+                    for key, score in matches_dict.items():
                         if key not in aggregated:
                             aggregated[key] = {}
-                        # Store max score if multiple matches for same unit_type
-                        aggregated[key][unit_type] = max(aggregated[key].get(unit_type, 0.0), score)
+                        aggregated[key][unit_type] = score
+                else:
+                    # Similarity matching via NphdIndex
+                    if unit_type in self._nphd_indexes:
+                        matches_dict = self._search_similarity_unit(unit_type, unit_body, limit)
+                        for key, score in matches_dict.items():
+                            if key not in aggregated:
+                                aggregated[key] = {}
+                            # Store max score if multiple matches for same unit_type
+                            aggregated[key][unit_type] = max(aggregated[key].get(unit_type, 0.0), score)
 
-        # Calculate average scores and sort
-        scored_results = []  # type: list[tuple[int, float, dict[str, float]]]
-        num_queried_units = len(query.units)
-        for key, unit_scores in aggregated.items():
-            # Average score across all queried units (unmatched = 0.0, normalized 0.0-1.0)
-            total_score = sum(unit_scores.values()) / num_queried_units
-            scored_results.append((key, total_score, unit_scores))
+            # Calculate average scores and sort
+            scored_results = []  # type: list[tuple[int, float, dict[str, float]]]
+            num_queried_units = len(query.units)
+            for key, unit_scores in aggregated.items():
+                # Average score across all queried units (unmatched = 0.0, normalized 0.0-1.0)
+                total_score = sum(unit_scores.values()) / num_queried_units
+                scored_results.append((key, total_score, unit_scores))
 
-        # Sort by total score descending
-        scored_results.sort(key=lambda x: x[1], reverse=True)
+            # Sort by total score descending
+            scored_results.sort(key=lambda x: x[1], reverse=True)
 
-        # Take top limit results
-        scored_results = scored_results[:limit]
+            # Take top limit results
+            scored_results = scored_results[:limit]
 
-        # Build IsccGlobalMatch objects with metadata
-        matches = []
-        try:
-            with self.env.begin() as txn:
-                assets_db = self.env.open_db(b"__assets__", txn=txn)
+            # Enrich with metadata
+            try:
+                with self.env.begin() as txn:
+                    assets_db = self.env.open_db(b"__assets__", txn=txn)
+
+                    for key, total_score, unit_scores in scored_results:
+                        # Reconstruct ISCC-ID from key
+                        iscc_id = str(IsccID.from_int(key, self._realm_id))
+
+                        # Fetch asset metadata
+                        source = None
+                        metadata = None
+                        key_bytes = struct.pack(">Q", key)
+                        asset_bytes = txn.get(key_bytes, db=assets_db)
+
+                        if asset_bytes is not None:
+                            asset = common.deserialize_asset(asset_bytes)
+                            if asset.metadata:
+                                source = asset.metadata.get("source")
+                                metadata = asset.metadata
+
+                        matches.append(
+                            IsccGlobalMatch(
+                                iscc_id=iscc_id,
+                                score=total_score,
+                                types=unit_scores,
+                                source=source,
+                                metadata=metadata,
+                            )
+                        )
+            except lmdb.ReadonlyError:  # pragma: no cover
+                # Database doesn't exist yet (empty index) - return matches without metadata
                 for key, total_score, unit_scores in scored_results:
-                    # Reconstruct ISCC-ID from key
                     iscc_id = str(IsccID.from_int(key, self._realm_id))
+                    matches.append(IsccGlobalMatch(iscc_id=iscc_id, score=total_score, types=unit_scores))
 
-                    # Fetch asset metadata
-                    metadata = None
-                    key_bytes = struct.pack(">Q", key)
-                    asset_bytes = txn.get(key_bytes, db=assets_db)
-                    if asset_bytes is not None:
-                        asset = common.deserialize_asset(asset_bytes)
-                        metadata = asset.metadata
-
-                    matches.append(
-                        IsccGlobalMatch(iscc_id=iscc_id, score=total_score, types=unit_scores, metadata=metadata)
-                    )
-        except lmdb.ReadonlyError:  # pragma: no cover
-            # Database doesn't exist yet (empty index) - return matches without metadata
-            for key, total_score, unit_scores in scored_results:
-                iscc_id = str(IsccID.from_int(key, self._realm_id))
-                matches.append(IsccGlobalMatch(iscc_id=iscc_id, score=total_score, types=unit_scores))
-
-        # TODO: Integrate LmdbSimprintIndexMulti for chunk_matches population
-        return IsccSearchResult(query=query, global_matches=matches, chunk_matches=[])
+        return IsccSearchResult(query=query, global_matches=matches, chunk_matches=chunk_matches)
 
     def flush(self):
         # type: () -> None
@@ -467,6 +481,126 @@ class UsearchIndex:
         # type: () -> int
         """Get current LMDB map_size."""
         return self.env.info()["map_size"]
+
+    def _search_simprints(self, query, limit):
+        # type: (IsccQuery, int) -> list[IsccChunkMatch]
+        """
+        Search simprints and convert results to IsccChunkMatch format.
+
+        Performs simprint search, enriches with metadata from LMDB, and converts
+        protocol-layer results to schema-layer format.
+
+        :param query: Query with simprints field
+        :param limit: Maximum number of chunk matches to return
+        :return: List of IsccChunkMatch objects with metadata enrichment
+        """
+
+        # Convert query simprints from base64 strings to bytes
+        simprints_bytes = {}  # type: dict[str, list[bytes]]
+        for simprint_type, simprint_objs in query.simprints.items():
+            # Extract string from Simprint RootModel objects
+            simprints_bytes[simprint_type] = [
+                ic.decode_base64(s.root if hasattr(s, "root") else s) for s in simprint_objs
+            ]
+
+        # Search simprint index
+        try:
+            raw_matches = self._simprint_index.search_raw_multi(
+                simprints=simprints_bytes,
+                limit=limit,
+                threshold=self.threshold,
+                detailed=True,  # Include chunk details
+            )
+        except Exception as e:
+            logger.error(f"Simprint search failed: {e}")
+            return []
+
+        # Convert results to schema format with metadata enrichment
+        chunk_matches = []
+        try:
+            with self.env.begin() as txn:
+                assets_db = self.env.open_db(b"__assets__", txn=txn)
+
+                for raw_match in raw_matches:
+                    chunk_match = self._convert_simprint_match(raw_match, assets_db, txn)
+                    chunk_matches.append(chunk_match)
+        except lmdb.ReadonlyError:  # pragma: no cover
+            # Database doesn't exist yet (empty index) - return results without metadata
+            for raw_match in raw_matches:
+                chunk_match = self._convert_simprint_match(raw_match, None, None)
+                chunk_matches.append(chunk_match)
+        except Exception as e:
+            logger.error(f"Failed to enrich simprint matches with metadata: {e}")
+            # Return results without metadata instead of losing all data
+            for raw_match in raw_matches:
+                chunk_match = self._convert_simprint_match(raw_match, None, None)
+                chunk_matches.append(chunk_match)
+
+        return chunk_matches
+
+    def _convert_simprint_match(self, raw_match, assets_db, txn):
+        # type: (SimprintMatchMulti, lmdb._Database | None, lmdb.Transaction | None) -> IsccChunkMatch
+        """
+        Convert SimprintMatchMulti to IsccChunkMatch with metadata enrichment.
+
+        Converts protocol-layer result (bytes) to schema-layer result (strings).
+        Fetches metadata from LMDB assets database if available.
+
+        :param raw_match: Protocol-layer match result
+        :param assets_db: LMDB database handle (or None if no enrichment)
+        :param txn: LMDB transaction (or None if no enrichment)
+        :return: Schema-layer chunk match with metadata
+        """
+        from iscc_search.schema import IsccChunkMatch, IsccMatchedChunk, Types
+
+        # Convert ISCC-ID from bytes to string
+        iscc_id_str = "ISCC:" + ic.encode_base32(raw_match.iscc_id)
+
+        # Fetch metadata from LMDB (if available)
+        source = None
+        metadata = None
+        if assets_db is not None and txn is not None:
+            # Extract 8-byte body from full 10-byte ISCC-ID (strip 2-byte header)
+            iscc_id_body = raw_match.iscc_id[2:]
+            key = int.from_bytes(iscc_id_body, "big", signed=False)
+            key_bytes = struct.pack(">Q", key)
+
+            asset_bytes = txn.get(key_bytes, db=assets_db)
+            if asset_bytes is not None:
+                asset = common.deserialize_asset(asset_bytes)
+                if asset.metadata:
+                    source = asset.metadata.get("source")
+                    metadata = asset.metadata
+
+        # Convert type results and chunks
+        types_converted = {}  # type: dict[str, Types]
+        for simprint_type, type_result in raw_match.types.items():
+            # Convert chunks if detailed=True
+            chunks_converted = None
+            if type_result.chunks is not None:
+                chunks_converted = [
+                    IsccMatchedChunk(
+                        query=ic.encode_base64(chunk.query),
+                        match=ic.encode_base64(chunk.match),
+                        score=chunk.score,
+                        freq=chunk.freq,
+                        offset=chunk.offset,
+                        size=chunk.size,
+                        content=None,  # Not populated in this integration
+                    )
+                    for chunk in type_result.chunks
+                ]
+
+            types_converted[simprint_type] = Types(
+                score=type_result.score,
+                matches=type_result.matches,
+                queried=type_result.queried,
+                chunks=chunks_converted,
+            )
+
+        return IsccChunkMatch(
+            iscc_id=iscc_id_str, score=raw_match.score, types=types_converted, source=source, metadata=metadata
+        )
 
     def __del__(self):  # pragma: no cover
         # type: () -> None

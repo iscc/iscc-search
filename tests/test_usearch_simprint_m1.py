@@ -49,7 +49,7 @@ def test_usearch_threshold_parameter(tmp_path):
 
     # Default threshold
     index2 = UsearchIndex(path=tmp_path / "test_index2")
-    assert index2.threshold == 0.8
+    assert index2.threshold == 0.0
     index2.close()
 
 

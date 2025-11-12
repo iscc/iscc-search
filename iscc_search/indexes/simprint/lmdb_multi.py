@@ -99,7 +99,7 @@ class LmdbSimprintIndexMulti:
             index = self._get_or_create_index(simprint_type, type_entry_list, self.realm_id)
             index.add_raw(type_entry_list)
 
-    def search_raw_multi(self, simprints, limit=10, threshold=0.8, detailed=True):
+    def search_raw_multi(self, simprints, limit=10, threshold=0.0, detailed=True):
         # type: (dict[str, list[bytes]], int, float, bool) -> list[SimprintMatchMulti]
         """
         Search for assets with similar simprints across multiple types.
@@ -109,9 +109,9 @@ class LmdbSimprintIndexMulti:
 
         :param simprints: Binary simprints grouped by type identifier
         :param limit: Maximum number of unique assets to return
-        :param threshold: Minimum similarity score (0.0 to 1.0) per type
+        :param threshold: Minimum similarity score (0.0 to 1.0) per type (default 0.0 returns all)
         :param detailed: If True, include individual chunk matches
-        :return: List of matched assets with type-grouped results
+        :return: List of matched assets with type-grouped results (limited by limit parameter)
         """
         if not simprints:
             return []
@@ -225,7 +225,11 @@ class LmdbSimprintIndexMulti:
             raise ValueError(f"ISCC-ID must be 10 bytes, got {len(iscc_id)}")
 
         self.realm_id = iscc_id[:2]
-        logger.debug(f"Extracted realm_id: {self.realm_id.hex()}")
+        # Decode realm for logging
+        import iscc_core as ic
+
+        _mt, realm, _vs, _len, _body = ic.decode_header(iscc_id)
+        logger.debug(f"Extracted realm_id: {realm}")
 
     def _validate_realm_id(self, iscc_id):
         # type: (bytes) -> None

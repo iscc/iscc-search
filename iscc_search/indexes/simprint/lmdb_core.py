@@ -161,16 +161,16 @@ class LmdbSimprintIndex:
 
         self._execute_batch_insert(new_asset_ids, simprint_pairs)
 
-    def search_raw(self, simprints, limit=10, threshold=0.8, detailed=True):
+    def search_raw(self, simprints, limit=10, threshold=0.0, detailed=True):
         # type: (list[bytes], int, float, bool) -> list[SimprintMatchRaw]
         """
         Search for assets with similar simprints using IDF-weighted scoring.
 
         :param simprints: Binary simprints to search for
         :param limit: Maximum number of assets to return
-        :param threshold: Minimum similarity score (0.0 to 1.0)
+        :param threshold: Minimum similarity score (0.0 to 1.0, default 0.0 returns all matches)
         :param detailed: If True, include individual chunk matches
-        :return: List of matched assets ordered by similarity
+        :return: List of matched assets ordered by similarity (limited by limit parameter)
         """
         if not simprints:
             return []
@@ -467,6 +467,8 @@ class LmdbSimprintIndex:
             idf_sum += idf
 
         avg_idf = idf_sum / len(matches)
+        # Clamp IDF to 0 minimum (common simprints shouldn't penalize matches)
+        avg_idf = max(0.0, avg_idf)
 
         # Calculate match ratio
         match_ratio = len(matches) / num_queried
@@ -481,7 +483,9 @@ class LmdbSimprintIndex:
             normalized_idf = 1.0
 
         # Blend match ratio with IDF weighting
-        return match_ratio * (0.5 + 0.5 * normalized_idf)
+        # Use 0.8:0.2 ratio to ensure perfect matches (match_ratio=1.0) always score >= 0.8
+        # even with common simprints (normalized_idf=0.0)
+        return 0.8 * match_ratio + 0.2 * match_ratio * normalized_idf
 
     def _format_match_result(self, iscc_id_body, matches, score, doc_frequencies, num_queried, detailed):
         # type: (bytes, list[tuple[bytes, bytes, int, int]], float, dict[bytes, int], int, bool) -> SimprintMatchRaw

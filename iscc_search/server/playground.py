@@ -25,6 +25,9 @@ def playground():
     <title>ISCC-Search Playground</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://releases.transloadit.com/uppy/v5.1.6/uppy.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/json.min.js"></script>
     <style>
         .uppy-DragDrop-container {
             border: 2px dashed #cbd5e1 !important;
@@ -94,6 +97,15 @@ def playground():
                 <div id="textResults" class="hidden mt-4">
                     <h3 class="text-lg font-semibold text-gray-800 mb-2">Search Results</h3>
                     <div id="textResultsContent" class="bg-gray-50 rounded p-4 overflow-auto max-h-96"></div>
+
+                    <details class="mt-4 border border-gray-300 rounded-lg">
+                        <summary class="cursor-pointer bg-gray-100 hover:bg-gray-200 px-4 py-2 font-semibold text-gray-700 rounded-t-lg">
+                            Raw JSON Response
+                        </summary>
+                        <div class="p-4 bg-gray-900 rounded-b-lg overflow-auto max-h-96">
+                            <pre class="text-sm"><code id="textJsonContent" class="language-json"></code></pre>
+                        </div>
+                    </details>
                 </div>
 
                 <div id="textError" class="hidden mt-4">
@@ -141,10 +153,18 @@ def playground():
             showElement(prefix + 'Loading');
         }
 
-        function showResults(prefix, content) {
+        function showResults(prefix, content, rawData = null) {
             hideElement(prefix + 'Loading');
             hideElement(prefix + 'Error');
             document.getElementById(prefix + 'ResultsContent').innerHTML = content;
+
+            // Populate raw JSON for text results
+            if (prefix === 'text' && rawData) {
+                const jsonElement = document.getElementById('textJsonContent');
+                jsonElement.textContent = JSON.stringify(rawData, null, 2);
+                hljs.highlightElement(jsonElement);
+            }
+
             showElement(prefix + 'Results');
         }
 
@@ -162,8 +182,8 @@ def playground():
                     html += '<span class="text-xs font-semibold text-green-600">Score: ' +
                             (match.score || 0).toFixed(4) + '</span>';
                     html += '</div>';
-                    if (match.meta && match.meta.name) {
-                        html += '<div class="text-sm text-gray-600">' + match.meta.name + '</div>';
+                    if (match.metadata && match.metadata.name) {
+                        html += '<div class="text-sm text-gray-600">' + match.metadata.name + '</div>';
                     }
                     html += '</div>';
                 });
@@ -180,11 +200,24 @@ def playground():
                     html += '<div class="bg-white border border-gray-200 rounded p-3 mb-2">';
                     html += '<div class="flex justify-between items-start mb-1">';
                     html += '<span class="font-mono text-xs text-blue-600">' + match.iscc_id + '</span>';
-                    html += '<span class="text-xs font-semibold text-green-600">Dist: ' +
-                            (match.distance || 0).toFixed(4) + '</span>';
+                    html += '<span class="text-xs font-semibold text-green-600">Score: ' +
+                            (match.score || 0).toFixed(4) + '</span>';
                     html += '</div>';
-                    html += '<div class="text-xs text-gray-500">Offset: ' + match.offset +
-                            ' | Type: ' + match.unit_type + '</div>';
+
+                    // Iterate through simprint types and their chunks
+                    if (match.types) {
+                        for (const [type, typeData] of Object.entries(match.types)) {
+                            html += '<div class="text-xs text-gray-700 mt-1 font-semibold">' + type +
+                                    ' (' + typeData.matches + '/' + typeData.queried + ' matches)</div>';
+                            if (typeData.chunks && typeData.chunks.length > 0) {
+                                typeData.chunks.forEach((chunk, cidx) => {
+                                    html += '<div class="text-xs text-gray-500 ml-2">└ Offset: ' +
+                                            chunk.offset + ' | Size: ' + chunk.size +
+                                            ' | Score: ' + (chunk.score || 0).toFixed(4) + '</div>';
+                                });
+                            }
+                        }
+                    }
                     html += '</div>';
                 });
                 html += '</div>';
@@ -294,7 +327,7 @@ def playground():
                 }
 
                 const data = await response.json();
-                showResults('text', formatResults(data));
+                showResults('text', formatResults(data), data);
 
             } catch (error) {
                 showError('text', error.message);

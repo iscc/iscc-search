@@ -123,8 +123,9 @@ def root():
 
 
 # Include API routers
-from iscc_search.server import indexes, assets, search  # noqa: E402
+from iscc_search.server import indexes, assets, search, playground  # noqa: E402
 
 app.include_router(indexes.router)
 app.include_router(assets.router)
 app.include_router(search.router)
+app.include_router(playground.router)

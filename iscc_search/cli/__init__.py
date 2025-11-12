@@ -11,6 +11,7 @@ from rich.progress import Progress, SpinnerColumn, TextColumn
 
 import iscc_search
 from iscc_search.cli.add import add_command
+from iscc_search.cli.search import search_command
 from iscc_search.cli.common import console, get_default_index
 
 __all__ = ["app", "main"]
@@ -22,8 +23,9 @@ app = typer.Typer(
     no_args_is_help=True,
 )
 
-# Register add command
+# Register commands
 app.command(name="add")(add_command)
+app.command(name="search")(search_command)
 
 
 @app.command()
@@ -72,79 +74,6 @@ def get(
         "iscc_code": asset.iscc_code,
         "units": asset.units,
         "metadata": asset.metadata,
-    }
-
-    console.print_json(json.dumps(output))
-
-
-@app.command()
-def search(
-    iscc_code,  # type: str
-    limit=typer.Option(3, "--limit", "-l", help="Maximum number of results"),  # type: int
-    meta: bool = typer.Option(False, "--meta", "-m", help="Include metadata for matched results"),
-):
-    """
-    Search for similar ISCC assets.
-
-    Returns top N most similar assets from the default index.
-
-    Example:
-        iscc-search search ISCC:KECYCMZIOY36XXGZ7S6QJQ2AEEXPOVEHZYPK6GMSFLU3WF54UPZMTPY
-        iscc-search search ISCC:KEC... --limit 10 --meta
-    """
-    from iscc_search.schema import IsccEntry
-
-    # Get default index
-    with Progress(
-        SpinnerColumn(),
-        TextColumn("[progress.description]{task.description}"),
-        console=console,
-    ) as progress:
-        task = progress.add_task("Loading index...", total=None)
-        index = get_default_index()
-        progress.remove_task(task)
-
-    # Create query asset
-    query = IsccEntry(iscc_code=iscc_code)
-
-    # Search
-    with Progress(
-        SpinnerColumn(),
-        TextColumn("[progress.description]{task.description}"),
-        console=console,
-    ) as progress:
-        task = progress.add_task("Searching...", total=None)
-        results = index.search_assets("default", query, limit=int(limit))
-        progress.remove_task(task)
-
-    # Build matches output
-    matches_output = []
-    for match in results.global_matches:
-        match_dict = {
-            "iscc_id": match.iscc_id,
-            "score": match.score,
-            "types": match.types,
-        }
-
-        # If --meta flag is set, retrieve and add metadata
-        if meta:
-            try:
-                asset = index.get_asset("default", match.iscc_id)
-                if asset.metadata:
-                    match_dict["metadata"] = asset.metadata
-            except FileNotFoundError:
-                # Asset not found, skip metadata
-                pass
-
-        matches_output.append(match_dict)
-
-    # Close index
-    index.close()
-
-    # Output as JSON
-    output = {
-        "query": {"iscc_code": results.query.iscc_code, "units": results.query.units},
-        "matches": matches_output,
     }
 
     console.print_json(json.dumps(output))

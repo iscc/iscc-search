@@ -51,14 +51,23 @@ def playground():
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <!-- File Upload Section -->
             <div class="bg-white rounded-lg shadow-md p-6">
-                <h2 class="text-2xl font-semibold text-gray-800 mb-4">File Search</h2>
-                <p class="text-sm text-gray-600 mb-4">Upload a file to generate an ISCC-CODE and search for similar content</p>
+                <h2 class="text-2xl font-semibold text-gray-800 mb-4">File Matching</h2>
+                <p class="text-sm text-gray-600 mb-4">Upload a file to generate ISCC-CODE and find similar indexed content</p>
 
                 <div id="uppyDragDrop" class="mb-4"></div>
 
                 <div id="fileResults" class="hidden">
                     <h3 class="text-lg font-semibold text-gray-800 mb-2">Matching Results</h3>
                     <div id="fileResultsContent" class="bg-gray-50 rounded p-4 overflow-auto max-h-96"></div>
+
+                    <details class="mt-4 border border-gray-300 rounded-lg">
+                        <summary class="cursor-pointer bg-gray-100 hover:bg-gray-200 px-4 py-2 font-semibold text-gray-700 rounded-t-lg">
+                            Raw JSON Response
+                        </summary>
+                        <div class="p-4 bg-gray-900 rounded-b-lg overflow-auto max-h-96">
+                            <pre class="text-sm"><code id="fileJsonContent" class="language-json"></code></pre>
+                        </div>
+                    </details>
                 </div>
 
                 <div id="fileError" class="hidden">
@@ -158,9 +167,9 @@ def playground():
             hideElement(prefix + 'Error');
             document.getElementById(prefix + 'ResultsContent').innerHTML = content;
 
-            // Populate raw JSON for text results
-            if (prefix === 'text' && rawData) {
-                const jsonElement = document.getElementById('textJsonContent');
+            // Populate raw JSON response
+            if (rawData) {
+                const jsonElement = document.getElementById(prefix + 'JsonContent');
                 jsonElement.textContent = JSON.stringify(rawData, null, 2);
                 hljs.highlightElement(jsonElement);
             }
@@ -292,7 +301,7 @@ def playground():
                 }
 
                 const searchData = await searchResponse.json();
-                showResults('file', formatResults(searchData));
+                showResults('file', formatResults(searchData), searchData);
 
             } catch (error) {
                 showError('file', error.message);

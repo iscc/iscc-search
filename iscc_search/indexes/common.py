@@ -24,11 +24,14 @@ def serialize_asset(asset):
     """
     Serialize IsccEntry to JSON bytes for storage.
 
+    Excludes simprints field to avoid duplication - simprints are stored
+    separately in the simprint index for efficient chunk-level search.
+
     :param asset: IsccEntry instance to serialize
     :return: UTF-8 encoded JSON bytes
     """
-    # Use model_dump for Pydantic v2 compatibility
-    asset_dict = asset.model_dump(mode="json", exclude_none=True)
+    # Exclude simprints to avoid storing them twice (they're in simprint index)
+    asset_dict = asset.model_dump(mode="json", exclude_none=True, exclude={"simprints"})
     return json.dumps(asset_dict, separators=(",", ":")).encode("utf-8")
 
 

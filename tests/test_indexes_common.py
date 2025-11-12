@@ -337,5 +337,5 @@ def test_normalize_query_with_neither(sample_iscc_ids):
     """Test normalize_query raises error when neither iscc_code nor units provided."""
     # Query with only iscc_id (no iscc_code or units)
     query = IsccQuery(iscc_id=sample_iscc_ids[0])
-    with pytest.raises(ValueError, match="must have either 'iscc_code' or 'units'"):
+    with pytest.raises(ValueError, match="must have 'iscc_code', 'units', or 'simprints'"):
         common.normalize_query(query)

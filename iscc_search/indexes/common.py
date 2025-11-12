@@ -223,15 +223,16 @@ def normalize_query(query):
     1. If query has both units and iscc_code → keep both
     2. If query has only units → try to derive iscc_code (if units form valid code)
     3. If query has only iscc_code → derive units from code
-    4. If query has neither → raise error
+    4. If query has only simprints → return as is (simprints-only query)
+    5. If query has neither units, iscc_code, nor simprints → raise error
 
     Note: Not all unit combinations form valid ISCC-CODEs. Units-only queries
     that don't form valid codes (e.g., missing DATA/INSTANCE) will work with
     LMDB backend but return no matches with memory backend.
 
-    :param query: Query object (may have iscc_code or units or both)
-    :return: Query with units and/or iscc_code populated
-    :raises ValueError: If query has neither iscc_code nor units
+    :param query: Query object (may have iscc_code, units, simprints, or combination)
+    :return: Query with units and/or iscc_code populated (simprints passed through)
+    :raises ValueError: If query has neither iscc_code, units, nor simprints
     """
     import iscc_core as ic
 
@@ -258,5 +259,9 @@ def normalize_query(query):
         units = [str(unit) for unit in code.units]
         return query.model_copy(update={"units": units})
 
-    # Case 4: Neither units nor iscc_code - cannot search
-    raise ValueError("Query asset must have either 'iscc_code' or 'units' for search")
+    # Case 4: Has simprints but no units/iscc_code - return as is (simprints-only query)
+    if query.simprints:
+        return query
+
+    # Case 5: Neither units nor iscc_code nor simprints - cannot search
+    raise ValueError("Query must have 'iscc_code', 'units', or 'simprints' for search")

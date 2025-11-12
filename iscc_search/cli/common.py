@@ -44,7 +44,7 @@ def get_default_index():
     """
     Get or create default usearch index.
 
-    Creates index at <data_dir>/usearch/default if it doesn't exist.
+    Creates index at <data_dir>/default if it doesn't exist.
 
     :return: Default index instance
     """
@@ -53,7 +53,7 @@ def get_default_index():
 
     # Use platform-specific data directory
     data_dir = Path(iscc_search.dirs.user_data_dir)
-    base_path = data_dir / "usearch"
+    base_path = data_dir
 
     # Create directory if needed
     base_path.mkdir(parents=True, exist_ok=True)

@@ -207,6 +207,8 @@ class LmdbIndex:
         # Normalize query to ensure it has units (derive from iscc_code if needed)
         query = common.normalize_query(query)
 
+        # TODO: Add support for simprint-only queries (currently only supports units/codes)
+
         with self.env.begin() as txn:
             # Track query unit lengths per type for normalization
             query_unit_lengths = {}  # type: dict[str, int]

@@ -57,7 +57,7 @@ def playground():
                 <div id="uppyDragDrop" class="mb-4"></div>
 
                 <div id="fileResults" class="hidden">
-                    <h3 class="text-lg font-semibold text-gray-800 mb-2">Search Results</h3>
+                    <h3 class="text-lg font-semibold text-gray-800 mb-2">Matching Results</h3>
                     <div id="fileResultsContent" class="bg-gray-50 rounded p-4 overflow-auto max-h-96"></div>
                 </div>
 
@@ -76,10 +76,10 @@ def playground():
                 </div>
             </div>
 
-            <!-- Text Search Section -->
+            <!-- Text Matching Section -->
             <div class="bg-white rounded-lg shadow-md p-6">
-                <h2 class="text-2xl font-semibold text-gray-800 mb-4">Text Search</h2>
-                <p class="text-sm text-gray-600 mb-4">Enter text to search for similar content using simprints</p>
+                <h2 class="text-2xl font-semibold text-gray-800 mb-4">Text Matching</h2>
+                <p class="text-sm text-gray-600 mb-4">Enter text to find granular/partial matches in indexed content using simprints</p>
 
                 <textarea
                     id="textInput"
@@ -95,7 +95,7 @@ def playground():
                 </button>
 
                 <div id="textResults" class="hidden mt-4">
-                    <h3 class="text-lg font-semibold text-gray-800 mb-2">Search Results</h3>
+                    <h3 class="text-lg font-semibold text-gray-800 mb-2">Matching Results</h3>
                     <div id="textResultsContent" class="bg-gray-50 rounded p-4 overflow-auto max-h-96"></div>
 
                     <details class="mt-4 border border-gray-300 rounded-lg">
@@ -188,8 +188,6 @@ def playground():
                     html += '</div>';
                 });
                 html += '</div>';
-            } else {
-                html += '<div class="text-gray-500 mb-4">No global matches found</div>';
             }
 
             // Chunk matches

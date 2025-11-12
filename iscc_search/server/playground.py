@@ -201,6 +201,9 @@ def playground():
                     html += '<span class="text-xs font-semibold text-green-600">Score: ' +
                             (match.score || 0).toFixed(4) + '</span>';
                     html += '</div>';
+                    if (match.metadata && match.metadata.name) {
+                        html += '<div class="text-sm text-gray-600 mb-1">' + match.metadata.name + '</div>';
+                    }
 
                     // Iterate through simprint types and their chunks
                     if (match.types) {

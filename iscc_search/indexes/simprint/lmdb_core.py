@@ -20,7 +20,6 @@ import json
 from pathlib import Path
 from typing import TYPE_CHECKING
 from collections import defaultdict
-import math
 
 import lmdb
 from loguru import logger
@@ -183,11 +182,10 @@ class LmdbSimprintIndex:
 
         asset_matches, doc_frequencies = self._fetch_matches_and_frequencies(query_simprints)
 
-        total_assets = max(len(self), 1)
         results = []
 
         for iscc_id_body, matches in asset_matches.items():
-            score = self._calculate_idf_score(matches, doc_frequencies, total_assets, len(query_simprints))
+            score = self._calculate_idf_score(matches, doc_frequencies, len(query_simprints))
 
             if score >= threshold:
                 result = self._format_match_result(
@@ -445,47 +443,62 @@ class LmdbSimprintIndex:
 
         return asset_matches, doc_frequencies
 
-    def _calculate_idf_score(self, matches, doc_frequencies, total_assets, num_queried):
-        # type: (list[tuple[bytes, bytes, int, int]], dict[bytes, int], int, int) -> float
+    def _calculate_idf_score(self, matches, doc_frequencies, num_queried):
+        # type: (list[tuple[bytes, bytes, int, int]], dict[bytes, int], int) -> float
         """
-        Calculate IDF-weighted similarity score.
+        Calculate similarity score using coverage and relative rarity within match set.
+
+        Score = Coverage × Quality
+        - Coverage: fraction of unique query simprints matched (0.0 to 1.0)
+        - Quality: min-max normalized inverse frequency (0.0 to 1.0)
+
+        Independent of index size - uses only frequencies within the matched set.
 
         :param matches: List of (query_simprint, match_simprint, offset, size) tuples
         :param doc_frequencies: Document frequency for each simprint
-        :param total_assets: Total number of assets in index
         :param num_queried: Number of simprints in query
         :return: Similarity score (0.0 to 1.0)
         """
         if not matches:
             return 0.0
 
-        # Calculate average IDF
-        idf_sum = 0.0
-        for query_simprint, _, _, _ in matches:
-            df = doc_frequencies.get(query_simprint, 1)
-            idf = math.log(total_assets / (1 + df))
-            idf_sum += idf
+        # Group by query simprint, keep best (lowest) frequency for each
+        query_to_best_freq = {}
+        for query_simprint, match_simprint, _, _ in matches:
+            freq = doc_frequencies.get(match_simprint, 1)
+            if query_simprint not in query_to_best_freq:
+                query_to_best_freq[query_simprint] = freq
+            else:
+                query_to_best_freq[query_simprint] = min(query_to_best_freq[query_simprint], freq)
 
-        avg_idf = idf_sum / len(matches)
-        # Clamp IDF to 0 minimum (common simprints shouldn't penalize matches)
-        avg_idf = max(0.0, avg_idf)
+        # Coverage: fraction of unique query simprints matched
+        coverage = len(query_to_best_freq) / num_queried
 
-        # Calculate match ratio
-        match_ratio = len(matches) / num_queried
+        # Quality: average relative rarity within this match set
+        freqs = list(query_to_best_freq.values())
 
-        # Normalize IDF against best achievable case (df=1 for all simprints)
-        # This allows perfect matches with rare simprints to reach 1.0
-        if total_assets > 2:
-            max_idf = math.log(total_assets / 2)
-            normalized_idf = min(avg_idf / max_idf, 1.0)
+        if len(freqs) == 1:
+            # Single match: treat as perfect quality
+            quality = 1.0
         else:
-            # Edge case: 1-2 assets, treat as perfect match
-            normalized_idf = 1.0
+            # Min-max normalize inverse frequencies
+            min_freq = min(freqs)
+            max_freq = max(freqs)
 
-        # Blend match ratio with IDF weighting
-        # Use 0.8:0.2 ratio to ensure perfect matches (match_ratio=1.0) always score >= 0.8
-        # even with common simprints (normalized_idf=0.0)
-        return 0.8 * match_ratio + 0.2 * match_ratio * normalized_idf
+            if min_freq == max_freq:
+                # All same frequency: treat as perfect quality
+                quality = 1.0
+            else:
+                # Map frequencies to quality scores: low freq = high quality
+                # Use inverse then normalize to [0, 1]
+                inverse_freqs = [1.0 / f for f in freqs]
+                min_inv = 1.0 / max_freq  # lowest quality
+                max_inv = 1.0 / min_freq  # highest quality
+
+                # Average normalized inverse frequency
+                quality = sum((inv - min_inv) / (max_inv - min_inv) for inv in inverse_freqs) / len(inverse_freqs)
+
+        return coverage * quality
 
     def _format_match_result(self, iscc_id_body, matches, score, doc_frequencies, num_queried, detailed):
         # type: (bytes, list[tuple[bytes, bytes, int, int]], float, dict[bytes, int], int, bool) -> SimprintMatchRaw

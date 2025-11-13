@@ -9,7 +9,7 @@ from iscc_search.server import get_index_from_state
 router = APIRouter(tags=["indexes"])
 
 
-@router.get("/indexes", response_model=list[IsccIndex])
+@router.get("/indexes", response_model=list[IsccIndex], response_model_exclude_unset=True)
 def list_indexes(index: IsccIndexProtocol = Depends(get_index_from_state)):
     # type: (...) -> list[IsccIndex]
     """
@@ -24,7 +24,9 @@ def list_indexes(index: IsccIndexProtocol = Depends(get_index_from_state)):
     return index.list_indexes()
 
 
-@router.post("/indexes", response_model=IsccIndex, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/indexes", response_model=IsccIndex, response_model_exclude_unset=True, status_code=status.HTTP_201_CREATED
+)
 def create_index(
     index_data: IsccIndex,
     index: IsccIndexProtocol = Depends(get_index_from_state),
@@ -49,7 +51,7 @@ def create_index(
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
 
 
-@router.get("/indexes/{name}", response_model=IsccIndex)
+@router.get("/indexes/{name}", response_model=IsccIndex, response_model_exclude_unset=True)
 def get_index(name: str, index: IsccIndexProtocol = Depends(get_index_from_state)):
     # type: (...) -> IsccIndex
     """

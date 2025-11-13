@@ -711,6 +711,10 @@ def test_search_with_wrong_length_simprints(tmp_path):
     # Search succeeds (truncates), but won't find matches since simprints don't match
     assert isinstance(results, list)
 
+    # Search again with oversized simprint - should truncate without warning (already warned once)
+    results2 = idx.search_raw([b"\x44" * 16])
+    assert isinstance(results2, list)
+
     # Search with 32-bit simprint - should raise error (too small)
     with pytest.raises(ValueError, match="Simprint too small"):
         idx.search_raw([b"\x33" * 4])

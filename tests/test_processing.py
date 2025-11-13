@@ -1,5 +1,6 @@
 """Tests for content processing functions."""
 
+from unittest import mock
 from iscc_search.processing import text_chunks, text_simprints
 
 
@@ -160,3 +161,99 @@ def test_text_simprints_custom_params():
     # Smaller chunks should generally produce more simprints
     # (not guaranteed due to CDC variability, but likely)
     assert len(simprints_small) >= len(simprints_large)
+
+
+def test_text_simprints_semantic():
+    """Test that semantic simprints are generated when iscc-sct is available."""
+    # Use longer text to ensure semantic processing works
+    text = """
+    The history of artificial intelligence began in ancient times with myths and stories
+    of artificial beings endowed with intelligence. Modern AI research began in the 1950s
+    and has progressed through various waves of enthusiasm and disappointment, known as
+    AI winters. Deep learning breakthroughs in the 2010s have led to dramatic progress
+    in computer vision, natural language processing, and other fields.
+    """
+
+    result = text_simprints(text)
+
+    # Should always have CONTENT_TEXT_V0
+    assert isinstance(result, dict)
+    assert "CONTENT_TEXT_V0" in result
+    assert len(result["CONTENT_TEXT_V0"]) > 0
+
+    # If iscc-sct is installed, should also have SEMANTIC_TEXT_V0
+    try:
+        import iscc_sct  # noqa: F401
+
+        # iscc-sct available - semantic simprints should be present
+        assert "SEMANTIC_TEXT_V0" in result
+        assert len(result["SEMANTIC_TEXT_V0"]) > 0
+        # Semantic simprints should be base64 strings
+        for simprint in result["SEMANTIC_TEXT_V0"]:
+            assert isinstance(simprint, str)
+            assert len(simprint) > 0
+    except ImportError:
+        # iscc-sct not available - only content simprints expected
+        assert "SEMANTIC_TEXT_V0" not in result
+
+
+def test_text_simprints_semantic_no_features():
+    """Test when semantic processing returns no features."""
+    text = "Test content " * 50
+
+    # Mock sct.gen_text_code_semantic to return empty features
+    with mock.patch("iscc_search.processing.HAS_ISCC_SCT", True):
+        with mock.patch("iscc_search.processing.sct") as mock_sct:
+            mock_sct.gen_text_code_semantic.return_value = {}  # No features key
+
+            result = text_simprints(text)
+
+            # Should have CONTENT_TEXT_V0 but not SEMANTIC_TEXT_V0
+            assert "CONTENT_TEXT_V0" in result
+            assert "SEMANTIC_TEXT_V0" not in result
+
+
+def test_text_simprints_semantic_empty_features():
+    """Test when semantic processing returns empty features list."""
+    text = "Test content " * 50
+
+    # Mock sct.gen_text_code_semantic to return empty features list
+    with mock.patch("iscc_search.processing.HAS_ISCC_SCT", True):
+        with mock.patch("iscc_search.processing.sct") as mock_sct:
+            mock_sct.gen_text_code_semantic.return_value = {"features": []}  # Empty list
+
+            result = text_simprints(text)
+
+            # Should have CONTENT_TEXT_V0 but not SEMANTIC_TEXT_V0
+            assert "CONTENT_TEXT_V0" in result
+            assert "SEMANTIC_TEXT_V0" not in result
+
+
+def test_text_simprints_semantic_no_simprints():
+    """Test when semantic processing returns features without simprints."""
+    text = "Test content " * 50
+
+    # Mock sct.gen_text_code_semantic to return features without simprints
+    with mock.patch("iscc_search.processing.HAS_ISCC_SCT", True):
+        with mock.patch("iscc_search.processing.sct") as mock_sct:
+            mock_sct.gen_text_code_semantic.return_value = {"features": [{}]}  # No simprints key
+
+            result = text_simprints(text)
+
+            # Should have CONTENT_TEXT_V0 but not SEMANTIC_TEXT_V0
+            assert "CONTENT_TEXT_V0" in result
+            assert "SEMANTIC_TEXT_V0" not in result
+
+
+def test_text_simprints_no_iscc_sct():
+    """Test simprint generation when iscc-sct is not available."""
+    text = "Test content " * 50
+
+    # Mock HAS_ISCC_SCT to False (simulating iscc-sct not installed)
+    with mock.patch("iscc_search.processing.HAS_ISCC_SCT", False):
+        result = text_simprints(text)
+
+        # Should have CONTENT_TEXT_V0 but not SEMANTIC_TEXT_V0
+        assert "CONTENT_TEXT_V0" in result
+        assert len(result["CONTENT_TEXT_V0"]) > 0
+        assert "SEMANTIC_TEXT_V0" not in result

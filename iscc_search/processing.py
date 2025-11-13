@@ -8,7 +8,7 @@ try:
     import iscc_sct as sct
 
     HAS_ISCC_SCT = True
-except ImportError:
+except ImportError:  # pragma: no cover
     HAS_ISCC_SCT = False
 
 

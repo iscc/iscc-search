@@ -10,7 +10,7 @@ from iscc_search.server import get_index_from_state
 router = APIRouter(tags=["search"])
 
 
-@router.post("/indexes/{name}/search", response_model=IsccSearchResult)
+@router.post("/indexes/{name}/search", response_model=IsccSearchResult, response_model_exclude_unset=True)
 def search_post(
     name: str,
     query: IsccQuery,
@@ -40,7 +40,7 @@ def search_post(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.get("/indexes/{name}/search", response_model=IsccSearchResult)
+@router.get("/indexes/{name}/search", response_model=IsccSearchResult, response_model_exclude_unset=True)
 def search_get(
     name: str,
     iscc_code: str = Query(..., description="ISCC-CODE to search for"),
@@ -72,7 +72,7 @@ def search_get(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.post("/indexes/{name}/search/text", response_model=IsccSearchResult)
+@router.post("/indexes/{name}/search/text", response_model=IsccSearchResult, response_model_exclude_unset=True)
 def search_text(
     name: str,
     text_query: TextQuery,

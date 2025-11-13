@@ -258,3 +258,29 @@ def test_search_text_with_limit(test_client, request):
     data = response.json()
     # Even with no matches, should not exceed limit
     assert len(data["global_matches"]) <= 5
+
+
+def test_response_excludes_unset_fields(test_client, request):
+    """Test that unset fields are excluded from API responses."""
+    # Skip for LMDB backend (doesn't support simprint-only queries)
+    if "lmdb" in str(request.node.callspec.id):
+        pytest.skip("LMDB backend doesn't support simprint-only queries")
+
+    # Create index
+    test_client.post("/indexes", json={"name": "testindex"})
+
+    # Search with text (generates simprints, but no iscc_id/iscc_code/units)
+    text_query = {"text": "Test content " * 50}
+    response = test_client.post("/indexes/testindex/search/text", json=text_query)
+
+    assert response.status_code == 200
+    data = response.json()
+
+    # Query object should have simprints but NOT iscc_id/iscc_code/units
+    query = data["query"]
+    assert "simprints" in query
+
+    # These fields should be OMITTED entirely (not present as null)
+    assert "iscc_id" not in query
+    assert "iscc_code" not in query
+    assert "units" not in query

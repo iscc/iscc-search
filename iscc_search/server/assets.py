@@ -12,6 +12,7 @@ router = APIRouter(tags=["assets"])
 @router.post(
     "/indexes/{name}/assets",
     response_model=list[IsccAddResult],
+    response_model_exclude_unset=True,
     status_code=status.HTTP_201_CREATED,
 )
 def add_assets(
@@ -41,7 +42,7 @@ def add_assets(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.get("/indexes/{name}/assets/{iscc_id}", response_model=IsccEntry)
+@router.get("/indexes/{name}/assets/{iscc_id}", response_model=IsccEntry, response_model_exclude_unset=True)
 def get_asset(
     name: str,
     iscc_id: str,

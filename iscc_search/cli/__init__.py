@@ -40,7 +40,3 @@ def main():
     # type: () -> None
     """CLI entry point."""
     app()
-
-
-if __name__ == "__main__":
-    main()

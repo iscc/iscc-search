@@ -72,7 +72,45 @@ def custom_docs():
       <head>
         <title>{app.title} - Documentation</title>
         <meta charset="utf-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />\
+        <script>
+          // Intercept fetch and XMLHttpRequest to add ngrok-skip-browser-warning header
+          // This bypasses ngrok's interstitial page for both schema loading and Try It requests
+          (function() {{
+            // Intercept fetch API
+            const originalFetch = window.fetch;
+            window.fetch = function(...args) {{
+              let [resource, config] = args;
+              config = config || {{}};
+              config.headers = config.headers || {{}};
+
+              // Add ngrok bypass header to all requests
+              if (config.headers instanceof Headers) {{
+                config.headers.set('ngrok-skip-browser-warning', '1');
+              }} else {{
+                config.headers['ngrok-skip-browser-warning'] = '1';
+              }}
+
+              return originalFetch(resource, config);
+            }};
+
+            // Intercept XMLHttpRequest for Try It feature
+            const originalXHROpen = XMLHttpRequest.prototype.open;
+            const originalXHRSend = XMLHttpRequest.prototype.send;
+
+            XMLHttpRequest.prototype.open = function(method, url, ...rest) {{
+              this._url = url;
+              this._method = method;
+              return originalXHROpen.apply(this, [method, url, ...rest]);
+            }};
+
+            XMLHttpRequest.prototype.send = function(...args) {{
+              // Add ngrok bypass header before sending
+              this.setRequestHeader('ngrok-skip-browser-warning', '1');
+              return originalXHRSend.apply(this, args);
+            }};
+          }})();
+        </script>
         <script src="https://unpkg.com/@stoplight/elements/web-components.min.js"></script>
         <link rel="stylesheet" href="https://unpkg.com/@stoplight/elements/styles.min.css">
         <style>

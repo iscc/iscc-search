@@ -226,13 +226,6 @@ class IsccMatchedChunk(BaseModel):
     ] = None
 
 
-class IsccMetadataModel(BaseModel):
-    pass
-    model_config = ConfigDict(
-        extra="allow",
-    )
-
-
 class TextQuery(BaseModel):
     text: Annotated[
         str,
@@ -441,7 +434,7 @@ class IsccChunkMatch(BaseModel):
         ),
     ] = None
     metadata: Annotated[
-        IsccMetadataModel | None,
+        IsccMetadata | None,
         Field(description="Optional asset metadata, denormalized from the index for convenience.\n"),
     ] = None
 

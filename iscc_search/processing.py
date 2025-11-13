@@ -7,8 +7,9 @@ import xxhash
 try:
     import iscc_sct as sct
 
-    HAS_ISCC_SCT = True
+    HAS_ISCC_SCT = True  # pragma: no cover
 except ImportError:  # pragma: no cover
+    sct = None  # type: ignore
     HAS_ISCC_SCT = False
 
 
@@ -58,7 +59,7 @@ def text_simprints(text, avg_chunk_size=512, ngram_size=13):
     result["CONTENT_TEXT_V0"] = content_simprints
 
     # Generate SEMANTIC_TEXT_V0 simprints if iscc-sct is available
-    if HAS_ISCC_SCT:
+    if HAS_ISCC_SCT:  # pragma: no cover
         semantic_result = sct.gen_text_code_semantic(text, simprints=True, bits_granular=256)
         if semantic_result.get("features") and len(semantic_result["features"]) > 0:
             semantic_simprints = semantic_result["features"][0].get("simprints", [])

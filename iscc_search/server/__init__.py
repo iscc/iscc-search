@@ -82,7 +82,7 @@ def custom_docs():
       <head>
         <title>{app.title} - Documentation</title>
         <meta charset="utf-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1" />\
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
         <script>
           // Intercept fetch and XMLHttpRequest to add ngrok-skip-browser-warning header
           // This bypasses ngrok's interstitial page for both schema loading and Try It requests
@@ -142,7 +142,7 @@ def custom_docs():
       </head>
       <body>
         <elements-api
-          apiDescriptionUrl="/openapi/openapi.yaml"
+          apiDescriptionUrl="/openapi/openapi.json"
           router="hash"
           layout="sidebar"
           hideExport="true"

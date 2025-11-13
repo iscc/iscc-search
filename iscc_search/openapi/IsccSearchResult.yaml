@@ -32,7 +32,7 @@ properties:
     type: array
     description: Segment-level simprint matches, ordered by relevance (best first)
     items:
-      $ref: "./draft/IsccChunkMatch.yaml"
+      $ref: "./IsccChunkMatch.yaml"
     default: []
 example:
   query:

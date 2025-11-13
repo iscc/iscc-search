@@ -62,7 +62,7 @@ def test_docs_endpoint(client):
     html_content = response.text
     assert "<!doctype html>" in html_content.lower()
     assert "ISCC-Search API - Documentation" in html_content
-    assert "/openapi/openapi.yaml" in html_content
+    assert "/openapi/openapi.json" in html_content
     assert "@stoplight/elements" in html_content
     assert "elements-api" in html_content
 
@@ -73,7 +73,7 @@ def test_custom_docs_function():
     html_content = result.body.decode("utf-8")
     assert "<!doctype html>" in html_content.lower()
     assert "ISCC-Search API - Documentation" in html_content
-    assert "/openapi/openapi.yaml" in html_content
+    assert "/openapi/openapi.json" in html_content
     assert "hideExport" in html_content
     assert "logo" in html_content
 

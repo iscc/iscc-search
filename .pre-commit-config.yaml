@@ -17,3 +17,8 @@ repos:
       - id: ruff-format
       - id: ruff-check
         args: [ --fix ]
+  - repo: https://github.com/python-openapi/openapi-spec-validator
+    rev: 0.7.2
+    hooks:
+      - id: openapi-spec-validator
+        files: ^iscc_search/openapi/openapi\.json$

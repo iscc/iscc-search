@@ -1,0 +1,1790 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "ISCC-Search API",
+    "description": "A Scalable Nearest Neighbor Search Multi-Index for the International Standard Content Code (ISCC)",
+    "version": "0.1.0"
+  },
+  "servers": [
+    {
+      "url": "/",
+      "description": "Current server"
+    }
+  ],
+  "paths": {
+    "/indexes": {
+      "get": {
+        "summary": "List all indexes",
+        "description": "Returns a list of all available ISCC indexes with their metadata",
+        "operationId": "listIndexes",
+        "tags": [
+          "indexes"
+        ],
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response with list of indexes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/IsccIndex"
+                  }
+                },
+                "example": [
+                  {
+                    "name": "default",
+                    "assets": 150000,
+                    "size": 42
+                  }
+                ]
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          }
+        }
+      },
+      "post": {
+        "summary": "Create a new index",
+        "description": "Creates a new ISCC index with the specified name. The index is initialized empty with 0 assets.",
+        "operationId": "createIndex",
+        "tags": [
+          "indexes"
+        ],
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "description": "Index configuration with unique name",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IsccIndex"
+              },
+              "example": {
+                "name": "myindex"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Index successfully created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IsccIndex"
+                },
+                "example": {
+                  "name": "myindex",
+                  "assets": 0,
+                  "size": 0
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request (e.g., invalid name format)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                },
+                "example": {
+                  "detail": "Invalid index name format"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "409": {
+            "description": "Index with this name already exists",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                },
+                "example": {
+                  "detail": "Index 'myindex' already exists"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/indexes/{name}": {
+      "get": {
+        "summary": "Get a specific index",
+        "description": "Returns metadata for a specific ISCC index by name",
+        "operationId": "getIndex",
+        "tags": [
+          "indexes"
+        ],
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "description": "Name of the index to retrieve",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9]*$",
+              "minLength": 1,
+              "maxLength": 32,
+              "example": "default"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response with index metadata",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IsccIndex"
+                },
+                "example": {
+                  "name": "default",
+                  "assets": 150000,
+                  "size": 42
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid index name format",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                },
+                "example": {
+                  "detail": "Invalid index name format"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "404": {
+            "description": "Index not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                },
+                "example": {
+                  "detail": "Index 'myindex' not found"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete an index",
+        "description": "Permanently deletes an ISCC index and all its data",
+        "operationId": "deleteIndex",
+        "tags": [
+          "indexes"
+        ],
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "description": "Name of the index to delete",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9]*$",
+              "minLength": 1,
+              "maxLength": 32,
+              "example": "myindex"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Index successfully deleted (no content returned)"
+          },
+          "400": {
+            "description": "Invalid index name format",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                },
+                "example": {
+                  "detail": "Invalid index name format"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "404": {
+            "description": "Index not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                },
+                "example": {
+                  "detail": "Index 'myindex' not found"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/indexes/{name}/assets": {
+      "post": {
+        "summary": "Add assets to an index",
+        "description": "Adds multiple ISCC assets to the specified index. Assets are processed atomically\n(all-or-nothing). Each asset must include an iscc_id field (client-generated).\nReturns status for each asset indicating whether it was newly created or already existed.\n",
+        "operationId": "addAssets",
+        "tags": [
+          "assets"
+        ],
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "description": "Name of the index to add assets to",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9]*$",
+              "minLength": 1,
+              "maxLength": 32,
+              "example": "default"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "description": "Array of ISCC assets to add (either iscc_code or units required)",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/IsccEntry"
+                }
+              },
+              "examples": {
+                "with_iscc_code": {
+                  "summary": "With ISCC-CODE",
+                  "description": "Minimal indexing using composite ISCC-CODE for similarity search",
+                  "value": [
+                    {
+                      "iscc_id": "ISCC:MAIGIIFJRDGEQQAA",
+                      "iscc_code": "ISCC:KECYCMZIOY36XXGZ7S6QJQ2AEEXPOVEHZYPK6GMSFLU3WF54UPZMTPY"
+                    }
+                  ]
+                },
+                "with_units": {
+                  "summary": "With ISCC-UNITs",
+                  "description": "Granular indexing using individual ISCC-UNITs for component-level search",
+                  "value": [
+                    {
+                      "iscc_id": "ISCC:MAIGIIFJRDGEQQAA",
+                      "units": [
+                        "ISCC:AADYCMZIOY36XXGZ5B5BME7EIPPXRFKYQZ7VXKI7V55AEQQE67A33BY",
+                        "ISCC:EED7ZPIEYNACCLXXZSS2LIM6JVXDYGCG2QSMC7DCPER4MYJPJATIM4Y",
+                        "ISCC:GADVJB6OD2XRTERK3G4KOFHGDJCBYEXAZCZLVVSA7MMURDPMJ5S5JWI",
+                        "ISCC:IAD6TOYXXSR7FSN7TRRRNOKQ6JCFK3ZF4KRFVEQRQ4M4PDPUR5H7GHQ"
+                      ]
+                    }
+                  ]
+                },
+                "with_simprints": {
+                  "summary": "With simprints",
+                  "description": "Chunk-level indexing using simprints for granular content segment matching",
+                  "value": [
+                    {
+                      "iscc_id": "ISCC:MAIGIIFJRDGEQQAA",
+                      "simprints": {
+                        "CONTENT_TEXT_V0": [
+                          {
+                            "simprint": "AXvu3tp2kF8mN9qL4rT1sZ",
+                            "offset": 12500,
+                            "size": 350
+                          },
+                          {
+                            "simprint": "B4kl9mQ1pP7xY3jH8vW2aF",
+                            "offset": 45230,
+                            "size": 412
+                          }
+                        ],
+                        "SEMANTIC_TEXT_V0": [
+                          {
+                            "simprint": "CYhq2nR8oL3pT5mK9sX4bG",
+                            "offset": 78900,
+                            "size": 389
+                          },
+                          {
+                            "simprint": "D9mn7vT4qK2rU6nL1tY5cH",
+                            "offset": 123450,
+                            "size": 301
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Assets successfully added to index",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/IsccAddResult"
+                  }
+                },
+                "example": [
+                  {
+                    "iscc_id": "ISCC:MAIGIIFJRDGEQQAA",
+                    "status": "created"
+                  },
+                  {
+                    "iscc_id": "ISCC:MAIGXXFZRDGEQQBB",
+                    "status": "created"
+                  }
+                ]
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request (malformed ISCC, validation error)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                },
+                "example": {
+                  "detail": "Invalid ISCC format in asset 1"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "404": {
+            "description": "Index not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                },
+                "example": {
+                  "detail": "Index 'myindex' not found"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/indexes/{name}/assets/{iscc_id}": {
+      "get": {
+        "summary": "Get a specific asset by ISCC-ID",
+        "description": "Retrieves a single ISCC asset from the index by its ISCC-ID. This is useful for\nfetching full asset details after a search operation, which returns only ISCC-IDs.\n",
+        "operationId": "getAsset",
+        "tags": [
+          "assets"
+        ],
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "description": "Name of the index containing the asset",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9]*$",
+              "minLength": 1,
+              "maxLength": 32,
+              "example": "default"
+            }
+          },
+          {
+            "name": "iscc_id",
+            "in": "path",
+            "required": true,
+            "description": "ISCC-ID of the asset to retrieve",
+            "schema": {
+              "type": "string",
+              "pattern": "^ISCC:[A-Z2-7]{16}$",
+              "example": "ISCC:MAIGIIFJRDGEQQAA"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response with asset details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IsccEntry"
+                },
+                "example": {
+                  "iscc_id": "ISCC:MAIGIIFJRDGEQQAA",
+                  "iscc_code": "ISCC:KECYCMZIOY36XXGZ7S6QJQ2AEEXPOVEHZYPK6GMSFLU3WF54UPZMTPY",
+                  "units": [
+                    "ISCC:AADYCMZIOY36XXGZ5B5BME7EIPPXRFKYQZ7VXKI7V55AEQQE67A33BY",
+                    "ISCC:EED7ZPIEYNACCLXXZSS2LIM6JVXDYGCG2QSMC7DCPER4MYJPJATIM4Y"
+                  ],
+                  "metadata": {
+                    "title": "Example Document",
+                    "creator": "John Doe"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid ISCC-ID format",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                },
+                "example": {
+                  "detail": "Invalid ISCC-ID format"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "404": {
+            "description": "Index or asset not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                },
+                "examples": {
+                  "indexNotFound": {
+                    "value": {
+                      "detail": "Index 'myindex' not found"
+                    }
+                  },
+                  "assetNotFound": {
+                    "value": {
+                      "detail": "Asset 'ISCC:MAIGIIFJRDGEQQAA' not found in index 'myindex'"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/indexes/{name}/search": {
+      "post": {
+        "summary": "Search for similar ISCCs (POST)",
+        "description": "Searches for similar ISCC assets in the index using the provided query asset.\nSupports complex queries with multiple units and custom ISCC-CODEs.\n",
+        "operationId": "searchPost",
+        "tags": [
+          "search"
+        ],
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "description": "Name of the index to search",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9]*$",
+              "minLength": 1,
+              "maxLength": 32,
+              "example": "default"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "description": "ISCC query for similarity search",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IsccQuery"
+              },
+              "example": {
+                "iscc_code": "ISCC:KECYCMZIOY36XXGZ7S6QJQ2AEEXPOVEHZYPK6GMSFLU3WF54UPZMTPY",
+                "units": [
+                  "ISCC:AADYCMZIOY36XXGZ5B5BME7EIPPXRFKYQZ7VXKI7V55AEQQE67A33BY",
+                  "ISCC:EED7ZPIEYNACCLXXZSS2LIM6JVXDYGCG2QSMC7DCPER4MYJPJATIM4Y"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Search results with matched assets",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IsccSearchResult"
+                },
+                "example": {
+                  "query": {
+                    "iscc_code": "ISCC:KECYCMZIOY36XXGZ7S6QJQ2AEEXPOVEHZYPK6GMSFLU3WF54UPZMTPY",
+                    "units": [
+                      "ISCC:AADYCMZIOY36XXGZ5B5BME7EIPPXRFKYQZ7VXKI7V55AEQQE67A33BY",
+                      "ISCC:EED7ZPIEYNACCLXXZSS2LIM6JVXDYGCG2QSMC7DCPER4MYJPJATIM4Y"
+                    ]
+                  },
+                  "metric": "bitlength",
+                  "matches": [
+                    {
+                      "iscc_id": "ISCC:MAIGIIFJRDGEQQAA",
+                      "score": 448,
+                      "matches": {
+                        "CONTENT_TEXT_V0": 256,
+                        "DATA_NONE_V0": 128,
+                        "INSTANCE_NONE_V0": 64
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request (malformed ISCC)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                },
+                "example": {
+                  "detail": "Invalid ISCC format"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "404": {
+            "description": "Index not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                },
+                "example": {
+                  "detail": "Index 'myindex' not found"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "summary": "Search for similar ISCCs (GET)",
+        "description": "Convenience endpoint for searching by ISCC-CODE via query parameter.\nThe ISCC-CODE is decomposed into units for searching.\n",
+        "operationId": "searchGet",
+        "tags": [
+          "search"
+        ],
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "description": "Name of the index to search",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9]*$",
+              "minLength": 1,
+              "maxLength": 32,
+              "example": "default"
+            }
+          },
+          {
+            "name": "iscc_code",
+            "in": "query",
+            "required": true,
+            "description": "ISCC-CODE to search for (will be decomposed into units)",
+            "schema": {
+              "type": "string",
+              "pattern": "^ISCC:[A-Z2-7]{16,}$"
+            },
+            "example": "ISCC:KECYCMZIOY36XXGZ7S6QJQ2AEEXPOVEHZYPK6GMSFLU3WF54UPZMTPY"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Search results with matched assets",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IsccSearchResult"
+                },
+                "example": {
+                  "query": {
+                    "iscc_code": "ISCC:KECYCMZIOY36XXGZ7S6QJQ2AEEXPOVEHZYPK6GMSFLU3WF54UPZMTPY",
+                    "units": [
+                      "ISCC:AADYCMZIOY36XXGZ5B5BME7EIPPXRFKYQZ7VXKI7V55AEQQE67A33BY",
+                      "ISCC:EED7ZPIEYNACCLXXZSS2LIM6JVXDYGCG2QSMC7DCPER4MYJPJATIM4Y"
+                    ]
+                  },
+                  "metric": "bitlength",
+                  "matches": [
+                    {
+                      "iscc_id": "ISCC:MAIGIIFJRDGEQQAA",
+                      "score": 448,
+                      "matches": {
+                        "CONTENT_TEXT_V0": 256,
+                        "DATA_NONE_V0": 128,
+                        "INSTANCE_NONE_V0": 64
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid ISCC-CODE format",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                },
+                "example": {
+                  "detail": "Invalid ISCC-CODE format"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "404": {
+            "description": "Index not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                },
+                "example": {
+                  "detail": "Index 'myindex' not found"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/indexes/{name}/search/text": {
+      "post": {
+        "summary": "Search by plain text",
+        "description": "Generates simprints from the provided text and searches for similar content\nsegments in the index. Returns chunk-level matches based on text similarity.\n",
+        "operationId": "searchText",
+        "tags": [
+          "search"
+        ],
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "description": "Name of the index to search",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9]*$",
+              "minLength": 1,
+              "maxLength": 32,
+              "example": "default"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "description": "Plain text content to search for",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TextQuery"
+              },
+              "example": {
+                "text": "This is the content I want to find similar matches for..."
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Search results with matched assets and chunks",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IsccSearchResult"
+                },
+                "example": {
+                  "query": {
+                    "text": "This is the content I want to find similar matches for..."
+                  },
+                  "chunk_matches": [
+                    {
+                      "iscc_id": "ISCC:MAIGIIFJRDGEQQAA",
+                      "simprint": "AXvu3tp2kF8mN9qL4rT1sZ",
+                      "score": 0.95,
+                      "offset": 12500,
+                      "size": 350
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                },
+                "example": {
+                  "detail": "Text content cannot be empty"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "404": {
+            "description": "Index not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpError"
+                },
+                "example": {
+                  "detail": "Index 'myindex' not found"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "ApiKeyAuth": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-API-Key",
+        "description": "Optional API key (required only if ISCC_SEARCH_API_SECRET is configured)"
+      }
+    },
+    "responses": {
+      "UnauthorizedError": {
+        "description": "Unauthorized - Invalid or missing API key",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/HttpError"
+            },
+            "example": {
+              "detail": "Unauthorized"
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "HttpError": {
+        "type": "object",
+        "required": [
+          "detail"
+        ],
+        "properties": {
+          "detail": {
+            "oneOf": [
+              {
+                "type": "string",
+                "description": "Single error message"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Multiple error messages (e.g., validation errors)"
+              }
+            ]
+          }
+        },
+        "examples": [
+          {
+            "detail": "Index 'myindex' not found"
+          },
+          {
+            "detail": [
+              "Invalid ISCC format in asset 0",
+              "Invalid ISCC format in asset 2"
+            ]
+          }
+        ]
+      },
+      "IsccIndex": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "http://purl.org/iscc/schema/iscc-index.json",
+        "title": "IsccIndex",
+        "type": "object",
+        "description": "A named index for searching and matching ISCCs",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Short unique name of the index (valid code identifier)",
+            "pattern": "^[a-z][a-z0-9]*$",
+            "minLength": 1,
+            "maxLength": 32,
+            "example": "default"
+          },
+          "assets": {
+            "type": "integer",
+            "description": "Number of ISCCs in the index (server-generated, read-only)",
+            "minimum": 0,
+            "readOnly": true,
+            "example": 150000
+          },
+          "size": {
+            "type": "integer",
+            "description": "Size of index in megabytes (server-generated, read-only)",
+            "minimum": 0,
+            "readOnly": true,
+            "example": 42
+          }
+        },
+        "example": {
+          "name": "production",
+          "assets": 250000,
+          "size": 68
+        }
+      },
+      "IsccEntry": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "http://purl.org/iscc/schema/iscc-entry.json",
+        "title": "IsccEntry",
+        "type": "object",
+        "description": "ISCC asset data for indexing and search.\n\nWhen adding assets: `iscc_id` is required.\nWhen searching: `iscc_id` is optional (typically only `iscc_code` or `units` is provided).\n\n**Requirement**: At least one of `iscc_code` or `units` must be provided (validated at runtime).\n\nThe complete object contains all three fields (iscc_id, iscc_code, and units).\n",
+        "properties": {
+          "iscc_id": {
+            "type": "string",
+            "description": "Globally unique digital asset identifier (ISCC-ID)",
+            "pattern": "^ISCC:[A-Z2-7]{16,}$",
+            "example": "ISCC:MAIGIIFJRDGEQQAA"
+          },
+          "iscc_code": {
+            "type": "string",
+            "description": "Composite ISCC-CODE combining multiple ISCC-UNITs",
+            "pattern": "^ISCC:[A-Z2-7]{16,}$",
+            "example": "ISCC:KECYCMZIOY36XXGZ7S6QJQ2AEEXPOVEHZYPK6GMSFLU3WF54UPZMTPY"
+          },
+          "units": {
+            "type": "array",
+            "description": "List of ISCC-UNITs as canonical strings (variable-length, 64-256 bits)",
+            "items": {
+              "type": "string",
+              "description": "Individual ISCC-UNIT in canonical format (variable-length, 64-256 bits)",
+              "example": "ISCC:AADYCMZIOY36XXGZ5B5BME7EIPPXRFKYQZ7VXKI7V55AEQQE67A33BY"
+            },
+            "minItems": 2
+          },
+          "simprints": {
+            "type": "object",
+            "description": "Simprint groups for chunk-level indexing. Keys are simprint type identifiers\n(e.g., \"CONTENT_TEXT_V0\", \"SEMANTIC_TEXT_V0\"), values are arrays of simprint\nentries with location metadata.\n\n**Simprint types** are versioned identifiers determining matching strategy and\nabstraction level:\n- `CONTENT_TEXT_V0`: Lexical similarity (near-duplicates, minor edits)\n- `SEMANTIC_TEXT_V0`: Conceptual similarity (paraphrases, translations)\n- `INSTANCE_NONE_V0`: Exact bitstream matches (cryptographic identity)\n\n**Extensibility**: New simprint types can be added without schema changes.\n\n**Storage**: Each simprint is indexed with its parent iscc_id, enabling reverse\nlookup from simprint → chunks → assets.\n",
+            "additionalProperties": {
+              "type": "array",
+              "description": "Array of simprint entries with location metadata",
+              "items": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "$id": "http://purl.org/iscc/schema/iscc-simprint.json",
+                "title": "IsccSimprint",
+                "type": "object",
+                "description": "A simprint entry associating a similarity hash with its location in the source content.\n\nSimprints are headerless base64-encoded hashes that identify content segments (passages,\nimage regions, audio/video clips). Each simprint must include positioning metadata to\nenable chunk retrieval and result presentation.\n\n**Offset/size interpretation** depends on the parent asset's modality:\n- **Text**: offset=byte_position, size=byte_length (UTF-8)\n- **Audio/Video**: offset=milliseconds_start, size=milliseconds_duration\n- **Image**: offset=packed(x,y), size=packed(width,height)\n\nSee IsccChunk schema documentation for detailed offset/size semantics.\n",
+                "required": [
+                  "simprint",
+                  "offset",
+                  "size"
+                ],
+                "properties": {
+                  "simprint": {
+                    "type": "string",
+                    "description": "Base64-encoded simprint hash (headerless, variable length).\n\nTypical lengths:\n- 64-bit: 11 chars (base64url without padding)\n- 128-bit: 22 chars (base64url without padding)\n- 256-bit: 43 chars (base64url without padding)\n",
+                    "pattern": "^[A-Za-z0-9+/_=-]+$",
+                    "minLength": 11,
+                    "example": "AXvu3tp2kF8mN9qL4rT1sZ"
+                  },
+                  "offset": {
+                    "type": "integer",
+                    "description": "Starting position/time/coordinates in the source content.\n\n**Interpretation by modality**:\n- Text: UTF-8 byte offset (0-indexed)\n- Audio/Video: Milliseconds from start (0-indexed)\n- Image: Packed coordinates (x << 16 | y)\n\nSee IsccChunk documentation for detailed semantics.\n",
+                    "minimum": 0,
+                    "maximum": 4294967295,
+                    "example": 12500
+                  },
+                  "size": {
+                    "type": "integer",
+                    "description": "Extent/duration/dimensions of the content segment.\n\n**Interpretation by modality**:\n- Text: UTF-8 byte length\n- Audio/Video: Duration in milliseconds\n- Image: Packed dimensions (width << 16 | height)\n\nSee IsccChunk documentation for detailed semantics.\n",
+                    "minimum": 0,
+                    "maximum": 4294967295,
+                    "example": 350
+                  }
+                },
+                "example": {
+                  "simprint": "AXvu3tp2kF8mN9qL4rT1sZ",
+                  "offset": 12500,
+                  "size": 350
+                }
+              },
+              "minItems": 1
+            },
+            "example": {
+              "CONTENT_TEXT_V0": [
+                {
+                  "simprint": "AXvu3tp2kF8mN9qL4rT1sZ",
+                  "offset": 12500,
+                  "size": 350
+                },
+                {
+                  "simprint": "B4kl9mQ1pP7xY3jH8vW2aF",
+                  "offset": 45230,
+                  "size": 412
+                }
+              ],
+              "SEMANTIC_TEXT_V0": [
+                {
+                  "simprint": "CYhq2nR8oL3pT5mK9sX4bG",
+                  "offset": 78900,
+                  "size": 389
+                },
+                {
+                  "simprint": "D9mn7vT4qK2rU6nL1tY5cH",
+                  "offset": 123450,
+                  "size": 301
+                }
+              ]
+            }
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Optional application-specific metadata. This field allows clients to store\ncustom data without requiring API changes. The server stores this data\nopaquely without validation.\n",
+            "example": {
+              "source": "example.com",
+              "uploaded_by": "user123",
+              "content_type": "image/jpeg",
+              "tags": [
+                "nature",
+                "landscape"
+              ]
+            }
+          }
+        }
+      },
+      "IsccQuery": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "http://purl.org/iscc/schema/iscc-query.json",
+        "title": "IsccQuery",
+        "type": "object",
+        "description": "Unified query format for ISCC search supporting three modes:\n\n1. **Global matching** (`iscc_code` or `units`): Match entire assets by ISCC-UNITs\n2. **Chunk matching** (`simprints`): Match content segments within assets\n3. **Combined** (both modes): Return both global_matches and chunk_matches\n\n**Requirement**: At least one of `iscc_id`, `iscc_code`, `units`, or `simprints` must be provided (validated at runtime).\n\n**Query modes**:\n- With `iscc_id`: Backend retrieves stored units and searches for similar assets (\"find similar to this\")\n- With `iscc_code` or `units`: Direct asset-level similarity search\n- With `simprints`: Segment-level similarity search\n- Combined: `iscc_code`/`units` + `simprints` returns both global and chunk matches\n\n**Query precedence**: If `iscc_id` is provided, it takes precedence - all other query\nfields (`iscc_code`, `units`, `simprints`) are ignored. This ensures clear semantics:\n\"find assets similar to this specific indexed asset\".\n\n**Query expansion**: When `iscc_id` is provided, the backend automatically retrieves\nthe associated units from storage and uses them for similarity search.\n",
+        "properties": {
+          "iscc_id": {
+            "type": "string",
+            "description": "ISCC-ID of a known indexed asset to use as similarity reference. The backend\nretrieves the stored units for this ID and searches for similar assets.\n\n**Use case**: \"Find assets similar to ISCC:MAI...\" (more-like-this query)\n\n**Precedence**: When provided, `iscc_id` takes precedence over all other query\nfields. Any provided `iscc_code`, `units`, or `simprints` are ignored.\n\n**Behavior**:\n- Backend looks up iscc_id → units in storage\n- Performs similarity search with those units\n- Returns matches excluding the query asset itself (no self-match)\n\n**Error handling**: Returns HTTP 404 if iscc_id is not found in the index.\n",
+            "pattern": "^ISCC:[A-Z2-7]{16,}$",
+            "example": "ISCC:MAIGIIFJRDGEQQAA"
+          },
+          "iscc_code": {
+            "type": "string",
+            "description": "Composite ISCC-CODE combining multiple ISCC-UNITs. The system automatically\nextracts individual units for parallel search across unit-specific indexes.\n",
+            "pattern": "^ISCC:[A-Z2-7]{16,}$",
+            "example": "ISCC:KADUHBUDQUT3LPWRJH6BUAG7HMBIXX6JRQRX3JH7EBIOSMXEVL5URBBUPOIOTU4HLSSQ"
+          },
+          "units": {
+            "type": "array",
+            "description": "Explicit list of ISCC-UNITs for asset-level matching. Can be used instead of\nor in addition to `iscc_code` for fine-grained control over which units are queried.\n",
+            "items": {
+              "type": "string",
+              "description": "Individual ISCC-UNIT in canonical format (variable-length, 64-256 bits)",
+              "example": "ISCC:AADYCMZIOY36XXGZ5B5BME7EIPPXRFKYQZ7VXKI7V55AEQQE67A33BY"
+            },
+            "minItems": 1,
+            "example": [
+              "ISCC:AAAUHBUDQUT3LPWR",
+              "ISCC:CAAUT7A2ADPTWAUL",
+              "ISCC:EAA57SMMEN62J7ZA",
+              "ISCC:GAAVB2JS4SVPWSEE",
+              "ISCC:IAATI64Q5HJYOXFF"
+            ]
+          },
+          "simprints": {
+            "type": "object",
+            "description": "Simprint groups for chunk-level matching. Keys are simprint type identifiers\n(e.g., \"CONTENT_TEXT_V0\", \"SEMANTIC_TEXT_V0\", \"INSTANCE_NONE_V0\"), values are\narrays of headerless base64-encoded simprints.\n\n**Simprint types** are versioned identifiers that determine:\n- Matching strategy (exact collision vs approximate similarity)\n- Abstraction level (semantic vs content vs data)\n- Segmentation approach (sentence chunks, embedding windows, etc.)\n\n**Extensibility**: New simprint types can be added without schema changes.\nUnknown types are ignored gracefully.\n\n**Common types**:\n- `CONTENT_TEXT_V0`: Lexical similarity (near-duplicates, minor edits)\n- `SEMANTIC_TEXT_V0`: Conceptual similarity (paraphrases, translations)\n- `INSTANCE_NONE_V0`: Exact bitstream matches (cryptographic identity)\n",
+            "additionalProperties": {
+              "type": "array",
+              "description": "Array of base64-encoded simprint hashes (headerless, variable length)",
+              "items": {
+                "type": "string",
+                "description": "Base64-encoded simprint hash (url-safe or standard base64). Typical lengths:\n- 128-bit: 22 chars (base64url without padding)\n- 256-bit: 43 chars (base64 with padding) or 42 chars (without)\n",
+                "pattern": "^[A-Za-z0-9+/_=-]+$",
+                "example": "AXvu3tp2kF8mN9qL4rT1sZ"
+              },
+              "minItems": 1
+            },
+            "example": {
+              "CONTENT_TEXT_V0": [
+                "AXvu3tp2kF8mN9qL4rT1sZ",
+                "B4kl9mQ1pP7xY3jH8vW2aF"
+              ],
+              "SEMANTIC_TEXT_V0": [
+                "CYhq2nR8oL3pT5mK9sX4bG",
+                "D9mn7vT4qK2rU6nL1tY5cH",
+                "E1pj8wU5rM9sV7oN2uZ6dJ"
+              ]
+            }
+          }
+        },
+        "example": {
+          "iscc_code": "ISCC:KADUHBUDQUT3LPWRJH6BUAG7HMBIXX6JRQRX3JH7EBIOSMXEVL5URBBUPOIOTU4HLSSQ",
+          "units": [
+            "ISCC:AAAUHBUDQUT3LPWR",
+            "ISCC:CAAUT7A2ADPTWAUL",
+            "ISCC:EAA57SMMEN62J7ZA",
+            "ISCC:GAAVB2JS4SVPWSEE",
+            "ISCC:IAATI64Q5HJYOXFF"
+          ],
+          "simprints": {
+            "CONTENT_TEXT_V0": [
+              "AXvu3tp2kF8mN9qL4rT1sZ",
+              "B4kl9mQ1pP7xY3jH8vW2aF"
+            ],
+            "SEMANTIC_TEXT_V0": [
+              "CYhq2nR8oL3pT5mK9sX4bG",
+              "D9mn7vT4qK2rU6nL1tY5cH",
+              "E1pj8wU5rM9sV7oN2uZ6dJ"
+            ]
+          }
+        }
+      },
+      "IsccAddResult": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "http://purl.org/iscc/schema/iscc-add-result.json",
+        "title": "IsccAddResult",
+        "type": "object",
+        "description": "Result of adding an ISCC asset to an index. Contains the ISCC-ID\nand operation status.\n",
+        "required": [
+          "iscc_id",
+          "status"
+        ],
+        "properties": {
+          "iscc_id": {
+            "type": "string",
+            "description": "The ISCC-ID of the asset that was added to the index (must be provided in add request)",
+            "pattern": "^ISCC:[A-Z2-7]{16,}$",
+            "example": "ISCC:MAIGIIFJRDGEQQAA"
+          },
+          "status": {
+            "type": "string",
+            "description": "Outcome of the add operation. \"created\" means asset was newly added to the index,\n\"updated\" means asset already existed (duplicate skipped via dupdata=False).\n",
+            "enum": [
+              "created",
+              "updated"
+            ],
+            "example": "created"
+          }
+        },
+        "example": {
+          "iscc_id": "ISCC:MAIGIIFJRDGEQQAA",
+          "status": "created"
+        }
+      },
+      "IsccGlobalMatch": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "http://purl.org/iscc/schema/iscc-global-match.json",
+        "title": "IsccGlobalMatch",
+        "type": "object",
+        "description": "A single match result from ISCC lookup search. Contains the matched ISCC-ID,\naggregated score, and detailed bit-match breakdown per unit_type.\n",
+        "required": [
+          "iscc_id",
+          "score",
+          "types"
+        ],
+        "properties": {
+          "iscc_id": {
+            "type": "string",
+            "description": "The matched ISCC-ID from the index",
+            "pattern": "^ISCC:[A-Z2-7]{16,}$",
+            "example": "ISCC:MAIGIIFJRDGEQQAA"
+          },
+          "score": {
+            "type": "number",
+            "description": "Overall similarity score (0.0-1.0), computed as the average of matched\nunit similarities across all queried units.\n\n**Score semantics**:\n- 1.0: Perfect match (all queried units matched exactly)\n- 0.0-1.0: Partial match (some units matched with varying similarity)\n- Higher score indicates better overall match\n\nThis normalized score enables direct comparison across matches regardless\nof the number or types of units queried.\n",
+            "minimum": 0.0,
+            "maximum": 1.0,
+            "example": 0.85
+          },
+          "types": {
+            "type": "object",
+            "description": "Per-unit-type similarity breakdown. Keys are unit type identifiers\n(e.g., \"META_NONE_V0\", \"CONTENT_TEXT_V0\"), values are similarity scores (0.0-1.0).\n\n**Missing keys**: Unit types that were queried but not found in this asset\nare omitted (implicitly 0.0).\n\n**Score semantics** (normalized against query unit length):\n- 1.0: Perfect match (all query bits matched)\n- 0.0-1.0: Partial match (NPHD distance for similarity-preserving units)\n- INSTANCE units: Binary scoring (1.0 = identity match, 0.0 = no match)\n\nA 64-bit query with perfect 64-bit match scores 1.0, same as 256-bit perfect match.\nScore reflects \"how well does this match MY query\", not absolute bit count.\n",
+            "additionalProperties": {
+              "type": "number",
+              "minimum": 0.0,
+              "maximum": 1.0
+            },
+            "minProperties": 1,
+            "example": {
+              "META_NONE_V0": 1.0,
+              "CONTENT_TEXT_V0": 1.0,
+              "DATA_NONE_V0": 1.0,
+              "INSTANCE_NONE_V0": 0.25
+            }
+          },
+          "metadata": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "$id": "http://purl.org/iscc/schema/iscc-metadata.json",
+            "title": "IsccMetadata",
+            "type": "object",
+            "description": "Extensible metadata container for application-specific data.\n\nThis schema allows clients to attach arbitrary structured data to indexed assets\nwithout requiring API changes. The index stores this data opaquely without validation\nor interpretation.\n\n**Storage**: Metadata is stored per ISCC-ID and can be retrieved with search results.\n\n**Standard fields**: While all fields are optional and additional properties are allowed,\nthe following standard fields are recommended for interoperability:\n- `name`: Title or name of the work\n- `source`: Absolute URI to raw content (enables chunk retrieval)\n\n**Chunk retrieval workflow**: When search results include chunk matches with offset/size,\nclients can use the `source` URI to retrieve the actual content of those chunks by reading\nfrom the specified byte range.\n\n**Use cases**:\n- Content retrieval (chunk access via offset/size)\n- Asset identification (name, external IDs)\n- Content classification (tags, categories, content ratings)\n- Integration data (external references, API endpoints)\n- Business logic (access control, pricing, licensing)\n",
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Title or name of the work manifested by the asset",
+                "example": "Digital Philosophy: An Introduction"
+              },
+              "source": {
+                "type": "string",
+                "format": "uri",
+                "description": "Absolute URI to the raw content that was used for chunking and ISCC generation.\n\nSupports fsspec-style URIs for various storage backends:\n- HTTP(S): `https://example.com/content/document.pdf`\n- S3: `s3://bucket/path/to/file.epub`\n- Local: `file:///absolute/path/to/document.txt`\n- Azure: `az://container/path/to/file.docx`\n- GCS: `gs://bucket/path/to/file.pdf`\n\nThis URI enables clients to retrieve chunk content using offset/size from search results.\n",
+                "example": "https://example.com/content/9788899445566.txt"
+              }
+            },
+            "additionalProperties": true,
+            "example": {
+              "name": "Digital Philosophy: An Introduction",
+              "source": "s3://content-bucket/books/9788899445566.txt"
+            }
+          }
+        },
+        "example": {
+          "iscc_id": "ISCC:MAIGIIFJRDGEQQAA",
+          "score": 0.85,
+          "types": {
+            "META_NONE_V0": 1.0,
+            "CONTENT_TEXT_V0": 1.0,
+            "DATA_NONE_V0": 1.0,
+            "INSTANCE_NONE_V0": 0.25
+          },
+          "metadata": {
+            "name": "Example Document",
+            "filename": "example.pdf"
+          }
+        }
+      },
+      "IsccSearchResult": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "http://purl.org/iscc/schema/iscc-search-result.json",
+        "title": "IsccSearchResult",
+        "type": "object",
+        "description": "Search result for a single query asset. Contains the original query and matched ISCCs.\n",
+        "required": [
+          "query",
+          "global_matches"
+        ],
+        "properties": {
+          "query": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "$id": "http://purl.org/iscc/schema/iscc-query.json",
+            "title": "IsccQuery",
+            "type": "object",
+            "description": "Unified query format for ISCC search supporting three modes:\n\n1. **Global matching** (`iscc_code` or `units`): Match entire assets by ISCC-UNITs\n2. **Chunk matching** (`simprints`): Match content segments within assets\n3. **Combined** (both modes): Return both global_matches and chunk_matches\n\n**Requirement**: At least one of `iscc_id`, `iscc_code`, `units`, or `simprints` must be provided (validated at runtime).\n\n**Query modes**:\n- With `iscc_id`: Backend retrieves stored units and searches for similar assets (\"find similar to this\")\n- With `iscc_code` or `units`: Direct asset-level similarity search\n- With `simprints`: Segment-level similarity search\n- Combined: `iscc_code`/`units` + `simprints` returns both global and chunk matches\n\n**Query precedence**: If `iscc_id` is provided, it takes precedence - all other query\nfields (`iscc_code`, `units`, `simprints`) are ignored. This ensures clear semantics:\n\"find assets similar to this specific indexed asset\".\n\n**Query expansion**: When `iscc_id` is provided, the backend automatically retrieves\nthe associated units from storage and uses them for similarity search.\n",
+            "properties": {
+              "iscc_id": {
+                "type": "string",
+                "description": "ISCC-ID of a known indexed asset to use as similarity reference. The backend\nretrieves the stored units for this ID and searches for similar assets.\n\n**Use case**: \"Find assets similar to ISCC:MAI...\" (more-like-this query)\n\n**Precedence**: When provided, `iscc_id` takes precedence over all other query\nfields. Any provided `iscc_code`, `units`, or `simprints` are ignored.\n\n**Behavior**:\n- Backend looks up iscc_id → units in storage\n- Performs similarity search with those units\n- Returns matches excluding the query asset itself (no self-match)\n\n**Error handling**: Returns HTTP 404 if iscc_id is not found in the index.\n",
+                "pattern": "^ISCC:[A-Z2-7]{16,}$",
+                "example": "ISCC:MAIGIIFJRDGEQQAA"
+              },
+              "iscc_code": {
+                "type": "string",
+                "description": "Composite ISCC-CODE combining multiple ISCC-UNITs. The system automatically\nextracts individual units for parallel search across unit-specific indexes.\n",
+                "pattern": "^ISCC:[A-Z2-7]{16,}$",
+                "example": "ISCC:KADUHBUDQUT3LPWRJH6BUAG7HMBIXX6JRQRX3JH7EBIOSMXEVL5URBBUPOIOTU4HLSSQ"
+              },
+              "units": {
+                "type": "array",
+                "description": "Explicit list of ISCC-UNITs for asset-level matching. Can be used instead of\nor in addition to `iscc_code` for fine-grained control over which units are queried.\n",
+                "items": {
+                  "type": "string",
+                  "description": "Individual ISCC-UNIT in canonical format (variable-length, 64-256 bits)",
+                  "example": "ISCC:AADYCMZIOY36XXGZ5B5BME7EIPPXRFKYQZ7VXKI7V55AEQQE67A33BY"
+                },
+                "minItems": 1,
+                "example": [
+                  "ISCC:AAAUHBUDQUT3LPWR",
+                  "ISCC:CAAUT7A2ADPTWAUL",
+                  "ISCC:EAA57SMMEN62J7ZA",
+                  "ISCC:GAAVB2JS4SVPWSEE",
+                  "ISCC:IAATI64Q5HJYOXFF"
+                ]
+              },
+              "simprints": {
+                "type": "object",
+                "description": "Simprint groups for chunk-level matching. Keys are simprint type identifiers\n(e.g., \"CONTENT_TEXT_V0\", \"SEMANTIC_TEXT_V0\", \"INSTANCE_NONE_V0\"), values are\narrays of headerless base64-encoded simprints.\n\n**Simprint types** are versioned identifiers that determine:\n- Matching strategy (exact collision vs approximate similarity)\n- Abstraction level (semantic vs content vs data)\n- Segmentation approach (sentence chunks, embedding windows, etc.)\n\n**Extensibility**: New simprint types can be added without schema changes.\nUnknown types are ignored gracefully.\n\n**Common types**:\n- `CONTENT_TEXT_V0`: Lexical similarity (near-duplicates, minor edits)\n- `SEMANTIC_TEXT_V0`: Conceptual similarity (paraphrases, translations)\n- `INSTANCE_NONE_V0`: Exact bitstream matches (cryptographic identity)\n",
+                "additionalProperties": {
+                  "type": "array",
+                  "description": "Array of base64-encoded simprint hashes (headerless, variable length)",
+                  "items": {
+                    "type": "string",
+                    "description": "Base64-encoded simprint hash (url-safe or standard base64). Typical lengths:\n- 128-bit: 22 chars (base64url without padding)\n- 256-bit: 43 chars (base64 with padding) or 42 chars (without)\n",
+                    "pattern": "^[A-Za-z0-9+/_=-]+$",
+                    "example": "AXvu3tp2kF8mN9qL4rT1sZ"
+                  },
+                  "minItems": 1
+                },
+                "example": {
+                  "CONTENT_TEXT_V0": [
+                    "AXvu3tp2kF8mN9qL4rT1sZ",
+                    "B4kl9mQ1pP7xY3jH8vW2aF"
+                  ],
+                  "SEMANTIC_TEXT_V0": [
+                    "CYhq2nR8oL3pT5mK9sX4bG",
+                    "D9mn7vT4qK2rU6nL1tY5cH",
+                    "E1pj8wU5rM9sV7oN2uZ6dJ"
+                  ]
+                }
+              }
+            },
+            "example": {
+              "iscc_code": "ISCC:KADUHBUDQUT3LPWRJH6BUAG7HMBIXX6JRQRX3JH7EBIOSMXEVL5URBBUPOIOTU4HLSSQ",
+              "units": [
+                "ISCC:AAAUHBUDQUT3LPWR",
+                "ISCC:CAAUT7A2ADPTWAUL",
+                "ISCC:EAA57SMMEN62J7ZA",
+                "ISCC:GAAVB2JS4SVPWSEE",
+                "ISCC:IAATI64Q5HJYOXFF"
+              ],
+              "simprints": {
+                "CONTENT_TEXT_V0": [
+                  "AXvu3tp2kF8mN9qL4rT1sZ",
+                  "B4kl9mQ1pP7xY3jH8vW2aF"
+                ],
+                "SEMANTIC_TEXT_V0": [
+                  "CYhq2nR8oL3pT5mK9sX4bG",
+                  "D9mn7vT4qK2rU6nL1tY5cH",
+                  "E1pj8wU5rM9sV7oN2uZ6dJ"
+                ]
+              }
+            }
+          },
+          "global_matches": {
+            "type": "array",
+            "description": "Asset-level ISCC-UNIT matches, ordered by relevance (best first)",
+            "items": {
+              "$schema": "https://json-schema.org/draft/2020-12/schema",
+              "$id": "http://purl.org/iscc/schema/iscc-global-match.json",
+              "title": "IsccGlobalMatch",
+              "type": "object",
+              "description": "A single match result from ISCC lookup search. Contains the matched ISCC-ID,\naggregated score, and detailed bit-match breakdown per unit_type.\n",
+              "required": [
+                "iscc_id",
+                "score",
+                "types"
+              ],
+              "properties": {
+                "iscc_id": {
+                  "type": "string",
+                  "description": "The matched ISCC-ID from the index",
+                  "pattern": "^ISCC:[A-Z2-7]{16,}$",
+                  "example": "ISCC:MAIGIIFJRDGEQQAA"
+                },
+                "score": {
+                  "type": "number",
+                  "description": "Overall similarity score (0.0-1.0), computed as the average of matched\nunit similarities across all queried units.\n\n**Score semantics**:\n- 1.0: Perfect match (all queried units matched exactly)\n- 0.0-1.0: Partial match (some units matched with varying similarity)\n- Higher score indicates better overall match\n\nThis normalized score enables direct comparison across matches regardless\nof the number or types of units queried.\n",
+                  "minimum": 0.0,
+                  "maximum": 1.0,
+                  "example": 0.85
+                },
+                "types": {
+                  "type": "object",
+                  "description": "Per-unit-type similarity breakdown. Keys are unit type identifiers\n(e.g., \"META_NONE_V0\", \"CONTENT_TEXT_V0\"), values are similarity scores (0.0-1.0).\n\n**Missing keys**: Unit types that were queried but not found in this asset\nare omitted (implicitly 0.0).\n\n**Score semantics** (normalized against query unit length):\n- 1.0: Perfect match (all query bits matched)\n- 0.0-1.0: Partial match (NPHD distance for similarity-preserving units)\n- INSTANCE units: Binary scoring (1.0 = identity match, 0.0 = no match)\n\nA 64-bit query with perfect 64-bit match scores 1.0, same as 256-bit perfect match.\nScore reflects \"how well does this match MY query\", not absolute bit count.\n",
+                  "additionalProperties": {
+                    "type": "number",
+                    "minimum": 0.0,
+                    "maximum": 1.0
+                  },
+                  "minProperties": 1,
+                  "example": {
+                    "META_NONE_V0": 1.0,
+                    "CONTENT_TEXT_V0": 1.0,
+                    "DATA_NONE_V0": 1.0,
+                    "INSTANCE_NONE_V0": 0.25
+                  }
+                },
+                "metadata": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "$id": "http://purl.org/iscc/schema/iscc-metadata.json",
+                  "title": "IsccMetadata",
+                  "type": "object",
+                  "description": "Extensible metadata container for application-specific data.\n\nThis schema allows clients to attach arbitrary structured data to indexed assets\nwithout requiring API changes. The index stores this data opaquely without validation\nor interpretation.\n\n**Storage**: Metadata is stored per ISCC-ID and can be retrieved with search results.\n\n**Standard fields**: While all fields are optional and additional properties are allowed,\nthe following standard fields are recommended for interoperability:\n- `name`: Title or name of the work\n- `source`: Absolute URI to raw content (enables chunk retrieval)\n\n**Chunk retrieval workflow**: When search results include chunk matches with offset/size,\nclients can use the `source` URI to retrieve the actual content of those chunks by reading\nfrom the specified byte range.\n\n**Use cases**:\n- Content retrieval (chunk access via offset/size)\n- Asset identification (name, external IDs)\n- Content classification (tags, categories, content ratings)\n- Integration data (external references, API endpoints)\n- Business logic (access control, pricing, licensing)\n",
+                  "properties": {
+                    "name": {
+                      "type": "string",
+                      "description": "Title or name of the work manifested by the asset",
+                      "example": "Digital Philosophy: An Introduction"
+                    },
+                    "source": {
+                      "type": "string",
+                      "format": "uri",
+                      "description": "Absolute URI to the raw content that was used for chunking and ISCC generation.\n\nSupports fsspec-style URIs for various storage backends:\n- HTTP(S): `https://example.com/content/document.pdf`\n- S3: `s3://bucket/path/to/file.epub`\n- Local: `file:///absolute/path/to/document.txt`\n- Azure: `az://container/path/to/file.docx`\n- GCS: `gs://bucket/path/to/file.pdf`\n\nThis URI enables clients to retrieve chunk content using offset/size from search results.\n",
+                      "example": "https://example.com/content/9788899445566.txt"
+                    }
+                  },
+                  "additionalProperties": true,
+                  "example": {
+                    "name": "Digital Philosophy: An Introduction",
+                    "source": "s3://content-bucket/books/9788899445566.txt"
+                  }
+                }
+              },
+              "example": {
+                "iscc_id": "ISCC:MAIGIIFJRDGEQQAA",
+                "score": 0.85,
+                "types": {
+                  "META_NONE_V0": 1.0,
+                  "CONTENT_TEXT_V0": 1.0,
+                  "DATA_NONE_V0": 1.0,
+                  "INSTANCE_NONE_V0": 0.25
+                },
+                "metadata": {
+                  "name": "Example Document",
+                  "filename": "example.pdf"
+                }
+              }
+            },
+            "example": [
+              {
+                "iscc_id": "ISCC:MAIGIIFJRDGEQQAA",
+                "score": 448,
+                "matches": {
+                  "CONTENT_TEXT_V0": 256,
+                  "DATA_NONE_V0": 128,
+                  "INSTANCE_NONE_V0": 64
+                }
+              },
+              {
+                "iscc_id": "ISCC:MAIGXXFZRDGEQQBB",
+                "score": 384,
+                "matches": {
+                  "CONTENT_TEXT_V0": 256,
+                  "DATA_NONE_V0": 128
+                }
+              }
+            ]
+          },
+          "chunk_matches": {
+            "type": "array",
+            "description": "Segment-level simprint matches, ordered by relevance (best first)",
+            "items": {
+              "$schema": "https://json-schema.org/draft/2020-12/schema",
+              "$id": "http://purl.org/iscc/schema/iscc-chunk-match.json",
+              "title": "IsccChunkMatch",
+              "type": "object",
+              "description": "Segment-level similarity match result.\n\nRepresents a matched asset based on simprint collisions/similarity. The overall\nscore is computed using IDF-weighted averaging across all query simprints.\n\n**Score calculation**:\n- Each query simprint has an IDF weight computed from document frequency (freq)\n- IDF = log(total_assets / (1 + freq))\n- Matched simprints contribute: idf * similarity\n- Unmatched simprints contribute: idf * 0.0\n- Overall score = sum(contributions) / sum(all_idfs)\n\n**Example**: Query with 2 CONTENT + 3 SEMANTIC simprints (1000 total assets)\n- CONTENT: idf1=log(1000/43)=3.15, idf2=log(1000/51)=2.97\n- SEMANTIC: idf3=log(1000/87)=2.44, idf4=log(1000/123)=2.11, idf5=log(1000/201)=1.61\n- Type scores: CONTENT=(3.15*1.0+2.97*1.0)/(3.15+2.97)=1.0, SEMANTIC=(2.44*0.94+2.11*1.0+1.61*0.0)/(2.44+2.11+1.61)=0.72\n- Overall: (3.15*1.0+2.97*1.0+2.44*0.94+2.11*1.0+1.61*0.0)/12.28=0.88\n\n**Properties**:\n- Normalized 0.0-1.0 range (directly comparable)\n- IDF-weighted (rare simprints have more influence)\n- Accounts for partial matches (some simprints matched, others not)\n",
+              "required": [
+                "iscc_id",
+                "score",
+                "types"
+              ],
+              "properties": {
+                "iscc_id": {
+                  "type": "string",
+                  "description": "The matched ISCC-ID from the index",
+                  "pattern": "^ISCC:[A-Z2-7]{16,}$",
+                  "example": "ISCC:MAIGIHZPQR7XKLAB"
+                },
+                "score": {
+                  "type": "number",
+                  "description": "Overall IDF-weighted score (0.0-1.0).\n\nComputed as the weighted average of matched simprint similarities across\nall query simprints, with weights determined by IDF values (derived from\ndocument frequencies).\n\nInterpretation: \"88% of query matched (by IDF weight)\"\n",
+                  "minimum": 0.0,
+                  "maximum": 1.0,
+                  "example": 0.88
+                },
+                "types": {
+                  "type": "object",
+                  "description": "Per-simprint-type match statistics. Keys are simprint type identifiers\n(e.g., \"CONTENT_TEXT_V0\", \"SEMANTIC_TEXT_V0\"), values are stat objects\ncontaining similarity, matches, queried counts, and optional chunk details.\n\n**Data locality**: Stats and chunks are co-located per type, enabling\ntype-specific workflows (e.g., \"show only semantic matches\").\n\n**Missing keys**: Simprint types that were queried but had no matches\nare omitted.\n",
+                  "additionalProperties": {
+                    "type": "object",
+                    "description": "Match statistics and optional chunk details for a single simprint type",
+                    "required": [
+                      "score",
+                      "matches",
+                      "queried"
+                    ],
+                    "properties": {
+                      "score": {
+                        "type": "number",
+                        "description": "IDF-weighted score for this simprint type (0.0-1.0).\nComputed using the same formula as overall score but only\nfor simprints of this type. IDF weights are derived from\ndocument frequencies (freq field in chunks).\n",
+                        "minimum": 0.0,
+                        "maximum": 1.0,
+                        "example": 0.954
+                      },
+                      "matches": {
+                        "type": "integer",
+                        "description": "Number of query simprints of this type that found matches in this asset.\n",
+                        "minimum": 0,
+                        "example": 2
+                      },
+                      "queried": {
+                        "type": "integer",
+                        "description": "Total number of query simprints of this type that were searched.\n",
+                        "minimum": 1,
+                        "example": 2
+                      },
+                      "chunks": {
+                        "type": "array",
+                        "description": "Optional detailed list of matched chunks for this simprint type.\n\nProvides granular match information: which simprints matched, where they\nare located, similarity scores, and optional content preview.\n\n**Performance note**: This array can be large (100+ entries per type).\nConsider omitting or paginating for production use.\n\n**Note**: The simprint type is implicit from the parent dictionary key,\nso it's not included in individual chunk objects.\n",
+                        "items": {
+                          "$schema": "https://json-schema.org/draft/2020-12/schema",
+                          "$id": "http://purl.org/iscc/schema/iscc-matched-chunk.json",
+                          "title": "IsccMatchedChunk",
+                          "type": "object",
+                          "description": "Detailed information about a matched content chunk, including similarity metrics\nand optional content preview.\n\nExtends the basic chunk location data (offset, size) with match-specific information:\n- Query and index simprint comparison\n- Score (0.0-1.0 for soft boundaries, 1.0 for exact matches)\n- Document frequency (rarity measure) for ranking\n- Optional content preview (data URL)\n",
+                          "required": [
+                            "query",
+                            "match",
+                            "score",
+                            "freq",
+                            "offset",
+                            "size"
+                          ],
+                          "properties": {
+                            "query": {
+                              "type": "string",
+                              "description": "Base64-encoded simprint from the query that matched this chunk.\nIn hard-boundary indexes, equals match. In soft-boundary indexes,\nmay differ (similar but not identical).\n",
+                              "pattern": "^[A-Za-z0-9+/_=-]+$",
+                              "example": "AXvu3tp2kF8mN9qL4rT1sZ"
+                            },
+                            "match": {
+                              "type": "string",
+                              "description": "Base64-encoded simprint stored in the index that was matched.\nIn hard-boundary indexes, equals query. In soft-boundary indexes,\nmay differ (within similarity threshold).\n",
+                              "pattern": "^[A-Za-z0-9+/_=-]+$",
+                              "example": "AXvu3tp2kF8mN9qL4rT1sZ"
+                            },
+                            "score": {
+                              "type": "number",
+                              "description": "Similarity score between query and match simprints (0.0-1.0).\n\n**Hard-boundary indexes**: Always 1.0 (exact collision)\n**Soft-boundary indexes**: NPHD-based similarity (1.0 = identical, 0.0 = maximum distance)\n\nThis field enables forward compatibility with soft-boundary matching.\n",
+                              "minimum": 0.0,
+                              "maximum": 1.0,
+                              "example": 1.0
+                            },
+                            "freq": {
+                              "type": "integer",
+                              "description": "Document frequency - number of assets containing this simprint.\n\nMeasures simprint rarity: lower values indicate rarer simprints that are\nmore discriminative for ranking. Used for IDF-weighted similarity calculations.\n",
+                              "minimum": 1,
+                              "example": 42
+                            },
+                            "offset": {
+                              "type": "integer",
+                              "description": "Starting position/time/coordinates in the source content.\nSee IsccChunk documentation for modality-specific interpretation.\n",
+                              "minimum": 0,
+                              "maximum": 4294967295,
+                              "example": 12500
+                            },
+                            "size": {
+                              "type": "integer",
+                              "description": "Extent/duration/dimensions of the content segment.\nSee IsccChunk documentation for modality-specific interpretation.\n",
+                              "minimum": 0,
+                              "maximum": 4294967295,
+                              "example": 350
+                            },
+                            "content": {
+                              "type": "string",
+                              "pattern": "^data:[^;]+;base64,.+$",
+                              "description": "Optional chunk content as data URL (RFC 2397).\nPopulated on-demand by fetching from source and extracting the chunk region.\nUseful for match verification and content preview.\n",
+                              "example": "data:text/plain;base64,SWYgd2UgdGhpbmsgb2YgdGhlIGRpZ2l0YWwgd29ybGQgYXMgYSBuZXcgZm9ybSBvZiBwaGlsb3NvcGh5Li4u"
+                            }
+                          },
+                          "example": {
+                            "query": "AXvu3tp2kF8mN9qL4rT1sZ",
+                            "match": "AXvu3tp2kF8mN9qL4rT1sZ",
+                            "score": 1.0,
+                            "freq": 42,
+                            "offset": 12500,
+                            "size": 350,
+                            "content": "data:text/plain;base64,SWYgd2UgdGhpbmsgb2YgdGhlIGRpZ2l0YWwgd29ybGQgYXMgYSBuZXcgZm9ybSBvZiBwaGlsb3NvcGh5Li4u"
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "minProperties": 1,
+                  "example": {
+                    "CONTENT_TEXT_V0": {
+                      "score": 0.954,
+                      "matches": 2,
+                      "queried": 2,
+                      "chunks": [
+                        {
+                          "query": "AXvu3tp2kF8mN9qL4rT1sZ",
+                          "match": "AXvu3tp2kF8mN9qL4rT1sZ",
+                          "score": 1.0,
+                          "freq": 42,
+                          "offset": 12500,
+                          "size": 350
+                        },
+                        {
+                          "query": "B4kl9mQ1pP7xY3jH8vW2aF",
+                          "match": "B4kl9mQ1pP7xY3jH8vW2aF",
+                          "score": 1.0,
+                          "freq": 50,
+                          "offset": 45230,
+                          "size": 412
+                        }
+                      ]
+                    },
+                    "SEMANTIC_TEXT_V0": {
+                      "score": 0.891,
+                      "matches": 2,
+                      "queried": 3,
+                      "chunks": [
+                        {
+                          "query": "CYhq2nR8oL3pT5mK9sX4bG",
+                          "match": "CYhq3nR7oL2pT5mK9sX4bG",
+                          "score": 0.94,
+                          "freq": 86,
+                          "offset": 78900,
+                          "size": 389
+                        },
+                        {
+                          "query": "D9mn7vT4qK2rU6nL1tY5cH",
+                          "match": "D9mn7vT4qK2rU6nL1tY5cH",
+                          "score": 1.0,
+                          "freq": 122,
+                          "offset": 123450,
+                          "size": 301
+                        }
+                      ]
+                    }
+                  }
+                },
+                "source": {
+                  "type": "string",
+                  "format": "uri",
+                  "description": "Optional resolvable URL to the full content containing these chunks.\nUsed for chunk retrieval workflow (source URI + offset/size).\n\nSupports various URI schemes via fsspec:\n- https:// - Standard HTTP(S) URLs\n- s3:// - AWS S3 buckets\n- file:// - Local filesystem\n- az:// - Azure Blob Storage\n- gs:// - Google Cloud Storage\n",
+                  "example": "https://example.com/9788899445566.epub"
+                },
+                "metadata": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "$id": "http://purl.org/iscc/schema/iscc-metadata.json",
+                  "title": "IsccMetadata",
+                  "type": "object",
+                  "description": "Extensible metadata container for application-specific data.\n\nThis schema allows clients to attach arbitrary structured data to indexed assets\nwithout requiring API changes. The index stores this data opaquely without validation\nor interpretation.\n\n**Storage**: Metadata is stored per ISCC-ID and can be retrieved with search results.\n\n**Standard fields**: While all fields are optional and additional properties are allowed,\nthe following standard fields are recommended for interoperability:\n- `name`: Title or name of the work\n- `source`: Absolute URI to raw content (enables chunk retrieval)\n\n**Chunk retrieval workflow**: When search results include chunk matches with offset/size,\nclients can use the `source` URI to retrieve the actual content of those chunks by reading\nfrom the specified byte range.\n\n**Use cases**:\n- Content retrieval (chunk access via offset/size)\n- Asset identification (name, external IDs)\n- Content classification (tags, categories, content ratings)\n- Integration data (external references, API endpoints)\n- Business logic (access control, pricing, licensing)\n",
+                  "properties": {
+                    "name": {
+                      "type": "string",
+                      "description": "Title or name of the work manifested by the asset",
+                      "example": "Digital Philosophy: An Introduction"
+                    },
+                    "source": {
+                      "type": "string",
+                      "format": "uri",
+                      "description": "Absolute URI to the raw content that was used for chunking and ISCC generation.\n\nSupports fsspec-style URIs for various storage backends:\n- HTTP(S): `https://example.com/content/document.pdf`\n- S3: `s3://bucket/path/to/file.epub`\n- Local: `file:///absolute/path/to/document.txt`\n- Azure: `az://container/path/to/file.docx`\n- GCS: `gs://bucket/path/to/file.pdf`\n\nThis URI enables clients to retrieve chunk content using offset/size from search results.\n",
+                      "example": "https://example.com/content/9788899445566.txt"
+                    }
+                  },
+                  "additionalProperties": true,
+                  "example": {
+                    "name": "Digital Philosophy: An Introduction",
+                    "source": "s3://content-bucket/books/9788899445566.txt"
+                  }
+                }
+              },
+              "example": {
+                "iscc_id": "ISCC:MAIGIHZPQR7XKLAB",
+                "score": 0.88,
+                "source": "https://example.com/9788899445566.epub",
+                "types": {
+                  "CONTENT_TEXT_V0": {
+                    "score": 1.0,
+                    "matches": 2,
+                    "queried": 2,
+                    "chunks": [
+                      {
+                        "query": "AXvu3tp2kF8mN9qL4rT1sZ",
+                        "match": "AXvu3tp2kF8mN9qL4rT1sZ",
+                        "score": 1.0,
+                        "freq": 42,
+                        "offset": 12500,
+                        "size": 350
+                      },
+                      {
+                        "query": "B4kl9mQ1pP7xY3jH8vW2aF",
+                        "match": "B4kl9mQ1pP7xY3jH8vW2aF",
+                        "score": 1.0,
+                        "freq": 50,
+                        "offset": 45230,
+                        "size": 412
+                      }
+                    ]
+                  },
+                  "SEMANTIC_TEXT_V0": {
+                    "score": 0.72,
+                    "matches": 2,
+                    "queried": 3,
+                    "chunks": [
+                      {
+                        "query": "CYhq2nR8oL3pT5mK9sX4bG",
+                        "match": "CYhq3nR7oL2pT5mK9sX4bG",
+                        "score": 0.94,
+                        "freq": 86,
+                        "offset": 78900,
+                        "size": 389
+                      },
+                      {
+                        "query": "D9mn7vT4qK2rU6nL1tY5cH",
+                        "match": "D9mn7vT4qK2rU6nL1tY5cH",
+                        "score": 1.0,
+                        "freq": 122,
+                        "offset": 123450,
+                        "size": 301
+                      }
+                    ]
+                  }
+                },
+                "metadata": {
+                  "name": "Digital Philosophy: An Introduction",
+                  "filename": "9788899445566.epub"
+                }
+              }
+            },
+            "default": []
+          }
+        },
+        "example": {
+          "query": {
+            "iscc_id": "ISCC:MAIGXXFZRDGEQQCC",
+            "iscc_code": "ISCC:KECYCMZIOY36XXGZ7S6QJQ2AEEXPOVEHZYPK6GMSFLU3WF54UPZMTPY",
+            "units": [
+              "ISCC:AADYCMZIOY36XXGZ5B5BME7EIPPXRFKYQZ7VXKI7V55AEQQE67A33BY",
+              "ISCC:EED7ZPIEYNACCLXXZSS2LIM6JVXDYGCG2QSMC7DCPER4MYJPJATIM4Y"
+            ]
+          },
+          "global_matches": [
+            {
+              "iscc_id": "ISCC:MAIGIIFJRDGEQQAA",
+              "score": 448,
+              "matches": {
+                "CONTENT_TEXT_V0": 256,
+                "DATA_NONE_V0": 128,
+                "INSTANCE_NONE_V0": 64
+              }
+            },
+            {
+              "iscc_id": "ISCC:MAIGXXFZRDGEQQBB",
+              "score": 384,
+              "matches": {
+                "CONTENT_TEXT_V0": 256,
+                "DATA_NONE_V0": 128
+              }
+            }
+          ]
+        }
+      },
+      "TextQuery": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "http://purl.org/iscc/schema/text-query.json",
+        "title": "TextQuery",
+        "type": "object",
+        "description": "Query for text-based similarity search using simprints",
+        "required": [
+          "text"
+        ],
+        "properties": {
+          "text": {
+            "type": "string",
+            "description": "Plain text content to generate simprints and search for",
+            "minLength": 1,
+            "example": "This is the content I want to find similar matches for..."
+          }
+        },
+        "example": {
+          "text": "This is the content I want to find similar matches for..."
+        }
+      }
+    }
+  }
+}

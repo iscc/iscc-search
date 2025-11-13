@@ -85,6 +85,7 @@ dev = [
     "httpx>=0.28.1",
     "psutil>=7.1.2",
     "pytest-xdist>=3.8.0",
+    "radon>=6.0.1",
 ]
 semantic = [
     "iscc-sct>=0.1.3",
@@ -148,4 +149,5 @@ format-markdown = { shell = "uv run mdformat --end-of-line lf --wrap 112 --numbe
 precommit = { shell = "uv run prek run"}
 format = { sequence = ["format-code", "format-markdown",], help = "Format all files" }
 test = { shell = "uv run python -m pytest -n auto --tb=line --no-header -q --cov --cov-config=pyproject.toml --cov-report=xml --cov-report=term-missing", help = "Test the code with pytest" }
-all = { sequence = ["build-schema", "format", "test",], help = "Run all tasks" }
+check-complexity = { shell = "uv run radon cc --min C --show-complexity --average iscc_search/", help = "Check code complexity with radon" }
+all = { sequence = ["build-schema", "format", "test", "check-complexity"], help = "Run all tasks" }

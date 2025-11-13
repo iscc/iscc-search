@@ -7,6 +7,7 @@ Common functionality used across multiple CLI commands.
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+import iscc_core as ic
 from loguru import logger
 from rich.console import Console
 from rich.logging import RichHandler
@@ -70,8 +71,8 @@ def get_default_index():
     return manager
 
 
-def parse_simprints_from_features(features):
-    # type: (list[dict]) -> dict[str, list[dict]] | None
+def parse_simprints_from_features(features, simprint_bits=None):
+    # type: (list[dict], int | None) -> dict[str, list[dict]] | None
     """
     Transform features array from .iscc.json format to IsccEntry.simprints format.
 
@@ -86,6 +87,7 @@ def parse_simprints_from_features(features):
         ]}
 
     :param features: List of feature dicts from .iscc.json file
+    :param simprint_bits: Truncate simprints to this bit length (64, 128, 192, 256)
     :return: Dict mapping simprint types to lists of simprint objects, or None if empty
     """
     if not features:
@@ -119,10 +121,38 @@ def parse_simprints_from_features(features):
                 f"Using {min_len} entries."
             )
 
-        # Zip together simprints, offsets, sizes
+        # Zip together simprints, offsets, sizes (with optional truncation)
         simprint_list = []
         for i in range(min_len):
-            simprint_list.append({"simprint": simprints[i], "offset": offsets[i], "size": sizes[i]})
+            simprint_str = simprints[i]
+
+            # Truncate simprint if requested
+            if simprint_bits is not None:
+                try:
+                    # Decode base64 to binary
+                    simprint_bytes = ic.decode_base64(simprint_str)
+
+                    # Calculate target bytes
+                    target_bytes = simprint_bits // 8
+
+                    # Validate size
+                    if len(simprint_bytes) < target_bytes:
+                        raise ValueError(
+                            f"Simprint too small for {simprint_type}: "
+                            f"{len(simprint_bytes) * 8} bits < {simprint_bits} bits"
+                        )
+
+                    # Truncate to target size
+                    simprint_bytes = simprint_bytes[:target_bytes]
+
+                    # Re-encode to base64
+                    simprint_str = ic.encode_base64(simprint_bytes)
+
+                except Exception as e:
+                    logger.error(f"Failed to truncate simprint for {simprint_type}: {e}")
+                    continue  # Skip this simprint
+
+            simprint_list.append({"simprint": simprint_str, "offset": offsets[i], "size": sizes[i]})
 
         # Add to result (merge if type already exists - shouldn't happen but handle gracefully)
         if simprint_type in result:

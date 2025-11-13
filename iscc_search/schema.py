@@ -35,9 +35,9 @@ class IsccSimprint(BaseModel):
     simprint: Annotated[
         str,
         Field(
-            description="Base64-encoded simprint hash (headerless, variable length).\n\nTypical lengths:\n- 128-bit: 22 chars (base64url without padding)\n- 256-bit: 42 chars (without padding)\n",
+            description="Base64-encoded simprint hash (headerless, variable length).\n\nTypical lengths:\n- 64-bit: 11 chars (base64url without padding)\n- 128-bit: 22 chars (base64url without padding)\n- 256-bit: 43 chars (base64url without padding)\n",
             examples=["AXvu3tp2kF8mN9qL4rT1sZ"],
-            min_length=16,
+            min_length=11,
             pattern="^[A-Za-z0-9+/_=-]+$",
         ),
     ]

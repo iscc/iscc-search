@@ -3,6 +3,14 @@
 import iscc_core as ic
 import xxhash
 
+# Try to import iscc-sct for semantic simprint generation
+try:
+    import iscc_sct as sct
+
+    HAS_ISCC_SCT = True
+except ImportError:
+    HAS_ISCC_SCT = False
+
 
 def text_chunks(text, avg_size=512):
     # type: (str, int) -> Generator[str, None, None]
@@ -20,22 +28,23 @@ def text_chunks(text, avg_size=512):
 
 
 def text_simprints(text, avg_chunk_size=512, ngram_size=13):
-    # type: (str, int, int) -> list[str]
+    # type: (str, int, int) -> dict[str, list[str]]
     """
-    Generate CONTENT_TEXT_V0 simprints from plain text.
+    Generate simprints from plain text.
 
-    The text is cleaned, chunked using content-defined chunking, and each chunk
-    is processed to produce a minhash-based simprint for similarity search.
+    Generates CONTENT_TEXT_V0 simprints using minhash-based approach.
+    If iscc-sct is installed, also generates SEMANTIC_TEXT_V0 simprints.
 
     :param text: Plain text input
     :param avg_chunk_size: Target average chunk size in characters (default: 512)
     :param ngram_size: Size of character n-grams for feature extraction (default: 13)
-    :return: List of base64-encoded simprint strings
+    :return: Dictionary mapping simprint types to lists of base64-encoded simprints
     """
-    # Clean text before processing
-    cleaned_text = ic.text_clean(text)
+    result = {}
 
-    simprints = []
+    # Generate CONTENT_TEXT_V0 simprints
+    cleaned_text = ic.text_clean(text)
+    content_simprints = []
     for chunk in text_chunks(cleaned_text, avg_size=avg_chunk_size):
         # Generate n-grams from collapsed/normalized text
         ngrams = ("".join(chars) for chars in ic.sliding_window(ic.text_collapse(chunk), ngram_size))
@@ -44,6 +53,16 @@ def text_simprints(text, avg_chunk_size=512, ngram_size=13):
         # Apply minhash to create similarity-preserving fingerprint
         minimum_hash_digest = ic.alg_minhash_256(features)
         # Encode as base64 simprint
-        simprints.append(ic.encode_base64(minimum_hash_digest))
+        content_simprints.append(ic.encode_base64(minimum_hash_digest))
 
-    return simprints
+    result["CONTENT_TEXT_V0"] = content_simprints
+
+    # Generate SEMANTIC_TEXT_V0 simprints if iscc-sct is available
+    if HAS_ISCC_SCT:
+        semantic_result = sct.gen_text_code_semantic(text, simprints=True, bits_granular=256)
+        if semantic_result.get("features") and len(semantic_result["features"]) > 0:
+            semantic_simprints = semantic_result["features"][0].get("simprints", [])
+            if semantic_simprints:
+                result["SEMANTIC_TEXT_V0"] = semantic_simprints
+
+    return result

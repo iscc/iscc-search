@@ -46,8 +46,8 @@ def expand_pattern_to_files(pattern):
         return list(Path(".").glob(pattern))
 
 
-def parse_asset_files(files, verbose=False):
-    # type: (list[Path], bool) -> tuple[list[IsccEntry], list[str]]
+def parse_asset_files(files, verbose=False, simprint_bits=None):
+    # type: (list[Path], bool, int | None) -> tuple[list[IsccEntry], list[str]]
     """
     Parse JSON files into IsccEntry objects.
 
@@ -55,6 +55,7 @@ def parse_asset_files(files, verbose=False):
 
     :param files: List of file paths to parse
     :param verbose: Show detailed progress for each file
+    :param simprint_bits: Truncate simprints to this bit length (64, 128, 192, 256)
     :return: Tuple of (assets, errors)
     """
     assets = []
@@ -137,7 +138,7 @@ def parse_asset_files(files, verbose=False):
                         }
                         features.append(feature_dict)
 
-                    simprints = parse_simprints_from_features(features)
+                    simprints = parse_simprints_from_features(features, simprint_bits=simprint_bits)
                     if simprints:
                         asset_data["simprints"] = simprints
 
@@ -184,6 +185,9 @@ def format_add_results(results, files_count, assets_count, errors):
 def add_command(
     pattern,  # type: str
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Show detailed progress"),
+    simprint_bits: int | None = typer.Option(
+        None, "--simprint-bits", "-s", help="Truncate simprints to this bit length (64, 128, 192, or 256)"
+    ),
 ):
     # type: (...) -> None
     """
@@ -194,9 +198,16 @@ def add_command(
 
     Example:
         iscc-search add myfolder/*.json
-        iscc-search add /path/to/assets/
-        iscc-search add asset.iscc.json
+        iscc-search add -s 64 /path/to/assets/
+        iscc-search add --simprint-bits 128 asset.iscc.json
     """
+    # Validate simprint_bits parameter
+    if simprint_bits is not None:
+        valid_sizes = [64, 128, 192, 256]
+        if simprint_bits not in valid_sizes:
+            console.print(f"[red]Invalid --simprint-bits: {simprint_bits}. Must be one of: {valid_sizes}[/red]")
+            raise typer.Exit(code=3)
+
     # Get or create default index
     with Progress(
         SpinnerColumn(),
@@ -215,7 +226,7 @@ def add_command(
         raise typer.Exit(code=2)
 
     # Parse JSON files and create assets
-    assets, errors = parse_asset_files(files, verbose=verbose)
+    assets, errors = parse_asset_files(files, verbose=verbose, simprint_bits=simprint_bits)
 
     if not assets:
         console.print("[red]No valid assets found[/red]")

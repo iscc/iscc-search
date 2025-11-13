@@ -26,10 +26,11 @@ properties:
       Base64-encoded simprint hash (headerless, variable length).
 
       Typical lengths:
+      - 64-bit: 11 chars (base64url without padding)
       - 128-bit: 22 chars (base64url without padding)
-      - 256-bit: 42 chars (without padding)
+      - 256-bit: 43 chars (base64url without padding)
     pattern: "^[A-Za-z0-9+/_=-]+$"
-    minLength: 16
+    minLength: 11
     example: "AXvu3tp2kF8mN9qL4rT1sZ"
   offset:
     type: integer

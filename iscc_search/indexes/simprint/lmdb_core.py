@@ -174,9 +174,9 @@ class LmdbSimprintIndex:
         if not simprints:
             return []
 
-        # Validate simprint lengths if ndim is configured
+        # Normalize simprint lengths if ndim is configured
         if self.ndim is not None:
-            query_simprints = self._validate_simprints(simprints)
+            query_simprints = self._normalize_simprints(simprints)
         else:
             query_simprints = simprints
 
@@ -281,23 +281,42 @@ class LmdbSimprintIndex:
 
         raise ValueError("Cannot auto-detect ndim: no simprints in entries")
 
-    def _validate_simprints(self, simprints):
+    def _normalize_simprints(self, simprints):
         # type: (list[bytes]) -> list[bytes]
         """
-        Validate that all simprints match configured ndim.
+        Normalize simprints to match configured ndim.
+
+        Auto-truncates simprints that are larger than expected (convenient for queries).
+        Rejects simprints that are smaller than expected (can't pad safely).
 
         :param simprints: List of binary simprints
-        :return: Validated simprints
-        :raises ValueError: If any simprint has wrong length
+        :return: Normalized simprints (truncated if necessary)
+        :raises ValueError: If any simprint is too small
         """
         expected_bytes = self.simprint_bytes
+        normalized = []
+
         for simprint in simprints:
-            if len(simprint) != expected_bytes:
+            if len(simprint) == expected_bytes:
+                # Perfect match
+                normalized.append(simprint)
+            elif len(simprint) > expected_bytes:
+                # Truncate and warn
+                if not hasattr(self, "_truncation_warned"):
+                    logger.warning(
+                        f"Auto-truncating query simprints from {len(simprint) * 8} bits to {self.ndim} bits "
+                        f"to match index configuration"
+                    )
+                    self._truncation_warned = True
+                normalized.append(simprint[:expected_bytes])
+            else:
+                # Too small - reject
                 raise ValueError(
-                    f"Simprint length mismatch: expected {expected_bytes} bytes "
-                    f"(ndim={self.ndim}), got {len(simprint)} bytes"
+                    f"Simprint too small: expected {expected_bytes} bytes (ndim={self.ndim}), "
+                    f"got {len(simprint)} bytes. Cannot pad simprints safely."
                 )
-        return simprints
+
+        return normalized
 
     def _pack_chunk_pointer(self, iscc_id_body, offset, size):
         # type: (bytes, int, int) -> bytes

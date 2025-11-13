@@ -698,7 +698,7 @@ def test_persistence_128bit(tmp_path):
 
 def test_search_with_wrong_length_simprints(tmp_path):
     # type: (Path) -> None
-    """Test that searching with wrong-length simprints raises ValueError."""
+    """Test that searching auto-truncates larger simprints and rejects smaller ones."""
     path = tmp_path / "search_validation.lmdb"
     idx = LmdbSimprintIndex(str(path), ndim=64)
 
@@ -706,9 +706,14 @@ def test_search_with_wrong_length_simprints(tmp_path):
     iscc_id = b"\x01" * 8
     idx.add_raw([MockSimprintEntryRaw(iscc_id, [MockSimprintRaw(b"\x11" * 8, 0, 256)])])
 
-    # Try to search with 128-bit simprint
-    with pytest.raises(ValueError, match="Simprint length mismatch"):
-        idx.search_raw([b"\x22" * 16])
+    # Search with 128-bit simprint - should auto-truncate to 64-bit
+    results = idx.search_raw([b"\x22" * 16])
+    # Search succeeds (truncates), but won't find matches since simprints don't match
+    assert isinstance(results, list)
+
+    # Search with 32-bit simprint - should raise error (too small)
+    with pytest.raises(ValueError, match="Simprint too small"):
+        idx.search_raw([b"\x33" * 4])
 
     idx.close()
 

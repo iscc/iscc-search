@@ -83,9 +83,10 @@ def search_text(
     """
     Search for similar content by plain text.
 
-    Generates CONTENT_TEXT_V0 simprints from the input text and searches for
-    similar content segments in the index. Returns chunk-level matches based on
-    text similarity.
+    Generates simprints from the input text and searches for similar content
+    segments in the index. Always generates CONTENT_TEXT_V0 simprints.
+    If iscc-sct is installed, also generates SEMANTIC_TEXT_V0 simprints.
+    Returns chunk-level matches based on text similarity.
 
     :param name: Index name
     :param text_query: TextQuery with plain text content
@@ -95,11 +96,11 @@ def search_text(
     :raises HTTPException: 404 if index not found, 400 for invalid text
     """
     try:
-        # Generate simprints from text
-        simprints = text_simprints(text_query.text)
+        # Generate simprints from text (dict with CONTENT_TEXT_V0 and optionally SEMANTIC_TEXT_V0)
+        simprints_dict = text_simprints(text_query.text)
 
         # Create query with generated simprints
-        query = IsccQuery(simprints={"CONTENT_TEXT_V0": simprints})
+        query = IsccQuery(simprints=simprints_dict)
 
         # Search using the simprint query
         return index.search_assets(name, query, limit)

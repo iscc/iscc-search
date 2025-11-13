@@ -152,3 +152,4 @@ AGENTS.md
 
 # Local scratch directory for debugging and one-off scripts
 scratch/
+.playwright-mcp/

@@ -10,7 +10,7 @@ Provides configuration management using Pydantic settings with support for:
 
 from pathlib import Path
 from urllib.parse import urlparse
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 import iscc_search
 
@@ -38,6 +38,8 @@ class SearchSettings(BaseSettings):
                    - lmdb:///path → LMDB index at directory path
                    - usearch:///path → Usearch index with HNSW + LMDB (high-performance)
                    - postgres:///connection → PostgreSQL index (planned)
+        api_secret: Optional API secret for authentication (if unset, API is public)
+        cors_origins: List of allowed CORS origins (default: ["*"] for all origins)
     """
 
     index_uri: str = Field(
@@ -49,6 +51,28 @@ class SearchSettings(BaseSettings):
         None,
         description="Optional API secret for authentication (if unset, API is public)",
     )
+
+    cors_origins: list[str] = Field(
+        ["*"],
+        description="CORS allowed origins (comma-separated in env var, or '*' for all)",
+    )
+
+    @field_validator("cors_origins", mode="before")
+    @classmethod
+    def parse_cors_origins(cls, v):
+        # type: (str|list[str]) -> list[str]
+        """
+        Parse CORS origins from environment variable or config.
+
+        Accepts either a list (from direct instantiation) or a comma-separated
+        string (from ISCC_SEARCH_CORS_ORIGINS environment variable).
+
+        :param v: CORS origins as list or comma-separated string
+        :return: List of allowed origin strings
+        """
+        if isinstance(v, str):
+            return [origin.strip() for origin in v.split(",")]
+        return v
 
     model_config = SettingsConfigDict(
         env_prefix="ISCC_SEARCH_",

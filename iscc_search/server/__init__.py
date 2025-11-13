@@ -4,9 +4,10 @@ import typing  # noqa: F401
 from contextlib import asynccontextmanager
 from pathlib import Path
 from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
-from iscc_search.settings import get_index
+from iscc_search.settings import get_index, search_settings
 from iscc_search.protocols.index import IsccIndexProtocol  # noqa: F401
 
 
@@ -51,6 +52,15 @@ app = FastAPI(
     docs_url=None,  # Disable default docs
     redoc_url=None,  # Disable default redoc
     openapi_url=None,  # We'll serve our own OpenAPI spec
+)
+
+# Configure CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=search_settings.cors_origins,
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # Mount OpenAPI schema files as static directory

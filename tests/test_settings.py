@@ -197,3 +197,39 @@ def test_get_index_usearch_uri():
     finally:
         # Restore original
         iscc_search.settings.search_settings.index_uri = original_uri
+
+
+def test_cors_origins_default():
+    """Test cors_origins field has correct default value."""
+    settings = SearchSettings()
+    assert settings.cors_origins == ["*"]
+    assert isinstance(settings.cors_origins, list)
+
+
+def test_cors_origins_custom_list():
+    """Test cors_origins field with custom list."""
+    custom_origins = ["https://example.com", "https://app.example.com"]
+    settings = SearchSettings(cors_origins=custom_origins)
+    assert settings.cors_origins == custom_origins
+
+
+def test_cors_origins_comma_separated_string():
+    """Test cors_origins field parses comma-separated string."""
+    cors_string = "https://example.com,https://app.example.com,http://localhost:3000"
+    settings = SearchSettings(cors_origins=cors_string)
+    expected = ["https://example.com", "https://app.example.com", "http://localhost:3000"]
+    assert settings.cors_origins == expected
+
+
+def test_cors_origins_comma_separated_with_spaces():
+    """Test cors_origins field handles spaces in comma-separated string."""
+    cors_string = "https://example.com, https://app.example.com,  http://localhost:3000"
+    settings = SearchSettings(cors_origins=cors_string)
+    expected = ["https://example.com", "https://app.example.com", "http://localhost:3000"]
+    assert settings.cors_origins == expected
+
+
+def test_cors_origins_single_wildcard_string():
+    """Test cors_origins field handles single wildcard as string."""
+    settings = SearchSettings(cors_origins="*")
+    assert settings.cors_origins == ["*"]

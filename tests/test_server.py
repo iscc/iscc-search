@@ -164,3 +164,73 @@ def test_lifespan_shutdown():
     finally:
         # Restore original URI
         iscc_search.settings.search_settings.index_uri = original_uri
+
+
+def test_cors_headers_default(client):
+    """Test CORS headers are present in response with default settings."""
+    # CORS headers only appear when Origin header is present
+    response = client.get("/", headers={"Origin": "https://example.com"})
+    assert response.status_code == 200
+    # Default should allow all origins
+    assert "access-control-allow-origin" in response.headers
+    assert response.headers["access-control-allow-origin"] == "*"
+
+
+def test_cors_preflight_request(client):
+    """Test CORS preflight OPTIONS request."""
+    response = client.options(
+        "/",
+        headers={
+            "Origin": "https://example.com",
+            "Access-Control-Request-Method": "GET",
+            "Access-Control-Request-Headers": "content-type",
+        },
+    )
+    assert response.status_code == 200
+    assert "access-control-allow-origin" in response.headers
+    assert "access-control-allow-methods" in response.headers
+    assert "access-control-allow-headers" in response.headers
+
+
+def test_cors_with_custom_origins():
+    """Test CORS with custom allowed origins."""
+    import iscc_search.settings
+
+    # Save original values
+    original_uri = iscc_search.settings.search_settings.index_uri
+    original_cors = iscc_search.settings.search_settings.cors_origins
+
+    try:
+        # Override settings
+        iscc_search.settings.search_settings.index_uri = "memory://"
+        iscc_search.settings.search_settings.cors_origins = [
+            "https://example.com",
+            "https://app.example.com",
+        ]
+
+        # Need to reimport to pick up new settings
+        from importlib import reload
+        import iscc_search.server
+
+        reload(iscc_search.server)
+
+        with TestClient(iscc_search.server.app) as client:
+            response = client.get(
+                "/",
+                headers={"Origin": "https://example.com"},
+            )
+            assert response.status_code == 200
+            assert "access-control-allow-origin" in response.headers
+            # When not using wildcard, FastAPI reflects the origin
+            assert response.headers["access-control-allow-origin"] in [
+                "https://example.com",
+                "https://app.example.com",
+            ]
+    finally:
+        # Restore original values
+        iscc_search.settings.search_settings.index_uri = original_uri
+        iscc_search.settings.search_settings.cors_origins = original_cors
+        # Reload module to restore original state
+        import iscc_search.server
+
+        reload(iscc_search.server)

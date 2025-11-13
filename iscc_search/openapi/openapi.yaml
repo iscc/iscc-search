@@ -15,6 +15,8 @@ paths:
       operationId: listIndexes
       tags:
         - indexes
+      security:
+        - ApiKeyAuth: []
       responses:
         '200':
           description: Successful response with list of indexes
@@ -28,12 +30,16 @@ paths:
                 - name: "default"
                   assets: 150000
                   size: 42
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
     post:
       summary: Create a new index
       description: Creates a new ISCC index with the specified name. The index is initialized empty with 0 assets.
       operationId: createIndex
       tags:
         - indexes
+      security:
+        - ApiKeyAuth: []
       requestBody:
         required: true
         description: Index configuration with unique name
@@ -62,6 +68,8 @@ paths:
                 $ref: '#/components/schemas/HttpError'
               example:
                 detail: "Invalid index name format"
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
         '409':
           description: Index with this name already exists
           content:
@@ -77,6 +85,8 @@ paths:
       operationId: getIndex
       tags:
         - indexes
+      security:
+        - ApiKeyAuth: []
       parameters:
         - name: name
           in: path
@@ -107,6 +117,8 @@ paths:
                 $ref: '#/components/schemas/HttpError'
               example:
                 detail: "Invalid index name format"
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
         '404':
           description: Index not found
           content:
@@ -121,6 +133,8 @@ paths:
       operationId: deleteIndex
       tags:
         - indexes
+      security:
+        - ApiKeyAuth: []
       parameters:
         - name: name
           in: path
@@ -143,6 +157,8 @@ paths:
                 $ref: '#/components/schemas/HttpError'
               example:
                 detail: "Invalid index name format"
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
         '404':
           description: Index not found
           content:
@@ -161,6 +177,8 @@ paths:
       operationId: addAssets
       tags:
         - assets
+      security:
+        - ApiKeyAuth: []
       parameters:
         - name: name
           in: path
@@ -240,6 +258,8 @@ paths:
                 $ref: '#/components/schemas/HttpError'
               example:
                 detail: "Invalid ISCC format in asset 1"
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
         '404':
           description: Index not found
           content:
@@ -257,6 +277,8 @@ paths:
       operationId: getAsset
       tags:
         - assets
+      security:
+        - ApiKeyAuth: []
       parameters:
         - name: name
           in: path
@@ -300,6 +322,8 @@ paths:
                 $ref: '#/components/schemas/HttpError'
               example:
                 detail: "Invalid ISCC-ID format"
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
         '404':
           description: Index or asset not found
           content:
@@ -322,6 +346,8 @@ paths:
       operationId: searchPost
       tags:
         - search
+      security:
+        - ApiKeyAuth: []
       parameters:
         - name: name
           in: path
@@ -374,6 +400,8 @@ paths:
                 $ref: '#/components/schemas/HttpError'
               example:
                 detail: "Invalid ISCC format"
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
         '404':
           description: Index not found
           content:
@@ -390,6 +418,8 @@ paths:
       operationId: searchGet
       tags:
         - search
+      security:
+        - ApiKeyAuth: []
       parameters:
         - name: name
           in: path
@@ -438,6 +468,8 @@ paths:
                 $ref: '#/components/schemas/HttpError'
               example:
                 detail: "Invalid ISCC-CODE format"
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
         '404':
           description: Index not found
           content:
@@ -455,6 +487,8 @@ paths:
       operationId: searchText
       tags:
         - search
+      security:
+        - ApiKeyAuth: []
       parameters:
         - name: name
           in: path
@@ -499,6 +533,8 @@ paths:
                 $ref: '#/components/schemas/HttpError'
               example:
                 detail: "Text content cannot be empty"
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
         '404':
           description: Index not found
           content:
@@ -509,6 +545,21 @@ paths:
                 detail: "Index 'myindex' not found"
 
 components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: Optional API key (required only if ISCC_SEARCH_API_SECRET is configured)
+  responses:
+    UnauthorizedError:
+      description: Unauthorized - Invalid or missing API key
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/HttpError'
+          example:
+            detail: "Unauthorized"
   schemas:
     HttpError:
       $ref: './HttpError.yaml'

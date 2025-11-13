@@ -45,6 +45,11 @@ class SearchSettings(BaseSettings):
         description="URI specifying index backend (memory://, lmdb://, usearch://, postgres://)",
     )
 
+    api_secret: str | None = Field(
+        None,
+        description="Optional API secret for authentication (if unset, API is public)",
+    )
+
     model_config = SettingsConfigDict(
         env_prefix="ISCC_SEARCH_",
         env_file_encoding="utf-8",

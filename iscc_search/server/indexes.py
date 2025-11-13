@@ -4,13 +4,17 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from iscc_search.protocols.index import IsccIndexProtocol
 from iscc_search.schema import IsccIndex
 from iscc_search.server import get_index_from_state
+from iscc_search.server.auth import verify_api_key
 
 
 router = APIRouter(tags=["indexes"])
 
 
 @router.get("/indexes", response_model=list[IsccIndex], response_model_exclude_unset=True)
-def list_indexes(index: IsccIndexProtocol = Depends(get_index_from_state)):
+def list_indexes(
+    index: IsccIndexProtocol = Depends(get_index_from_state),
+    auth: None = Depends(verify_api_key),
+):
     # type: (...) -> list[IsccIndex]
     """
     List all available indexes with metadata.
@@ -30,6 +34,7 @@ def list_indexes(index: IsccIndexProtocol = Depends(get_index_from_state)):
 def create_index(
     index_data: IsccIndex,
     index: IsccIndexProtocol = Depends(get_index_from_state),
+    auth: None = Depends(verify_api_key),
 ):
     # type: (...) -> IsccIndex
     """
@@ -52,7 +57,11 @@ def create_index(
 
 
 @router.get("/indexes/{name}", response_model=IsccIndex, response_model_exclude_unset=True)
-def get_index(name: str, index: IsccIndexProtocol = Depends(get_index_from_state)):
+def get_index(
+    name: str,
+    index: IsccIndexProtocol = Depends(get_index_from_state),
+    auth: None = Depends(verify_api_key),
+):
     # type: (...) -> IsccIndex
     """
     Get metadata for a specific index.
@@ -72,7 +81,11 @@ def get_index(name: str, index: IsccIndexProtocol = Depends(get_index_from_state
 
 
 @router.delete("/indexes/{name}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_index(name: str, index: IsccIndexProtocol = Depends(get_index_from_state)):
+def delete_index(
+    name: str,
+    index: IsccIndexProtocol = Depends(get_index_from_state),
+    auth: None = Depends(verify_api_key),
+):
     # type: (...) -> None
     """
     Delete an index and all its data.

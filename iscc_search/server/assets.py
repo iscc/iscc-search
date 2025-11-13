@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from iscc_search.protocols.index import IsccIndexProtocol
 from iscc_search.schema import IsccAddResult, IsccEntry
 from iscc_search.server import get_index_from_state
+from iscc_search.server.auth import verify_api_key
 
 
 router = APIRouter(tags=["assets"])
@@ -19,6 +20,7 @@ def add_assets(
     name: str,
     assets: list[IsccEntry],
     index: IsccIndexProtocol = Depends(get_index_from_state),
+    auth: None = Depends(verify_api_key),
 ):
     # type: (...) -> list[IsccAddResult]
     """
@@ -47,6 +49,7 @@ def get_asset(
     name: str,
     iscc_id: str,
     index: IsccIndexProtocol = Depends(get_index_from_state),
+    auth: None = Depends(verify_api_key),
 ):
     # type: (...) -> IsccEntry
     """

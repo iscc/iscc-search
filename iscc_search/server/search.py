@@ -5,6 +5,7 @@ from iscc_search.processing import text_simprints
 from iscc_search.protocols.index import IsccIndexProtocol
 from iscc_search.schema import IsccQuery, IsccSearchResult, TextQuery
 from iscc_search.server import get_index_from_state
+from iscc_search.server.auth import verify_api_key
 
 
 router = APIRouter(tags=["search"])
@@ -16,6 +17,7 @@ def search_post(
     query: IsccQuery,
     limit: int = 100,
     index: IsccIndexProtocol = Depends(get_index_from_state),
+    auth: None = Depends(verify_api_key),
 ):
     # type: (...) -> IsccSearchResult
     """
@@ -46,6 +48,7 @@ def search_get(
     iscc_code: str = Query(..., description="ISCC-CODE to search for"),
     limit: int = 100,
     index: IsccIndexProtocol = Depends(get_index_from_state),
+    auth: None = Depends(verify_api_key),
 ):
     # type: (...) -> IsccSearchResult
     """
@@ -78,6 +81,7 @@ def search_text(
     text_query: TextQuery,
     limit: int = 100,
     index: IsccIndexProtocol = Depends(get_index_from_state),
+    auth: None = Depends(verify_api_key),
 ):
     # type: (...) -> IsccSearchResult
     """

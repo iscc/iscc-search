@@ -811,3 +811,57 @@ def test_realm_id_persistence(tmp_path):
     idx2 = LmdbSimprintIndex(str(path))
     assert idx2.realm_id == realm_id
     idx2.close()
+
+
+def test_calculate_idf_score_duplicate_query_simprints(index):
+    # type: (LmdbSimprintIndex) -> None
+    """Test IDF score when same query simprint matches multiple times (line 472)."""
+    # Scenario: query_simprint appears twice with different frequencies
+    # This triggers the min() path on line 472
+    query_sp = b"\x11" * 8
+    match_sp1 = b"\xaa" * 8
+    match_sp2 = b"\xbb" * 8
+
+    # Same query simprint matches two different simprints with different frequencies
+    matches = [
+        (query_sp, match_sp1, 0, 256),  # First match
+        (query_sp, match_sp2, 256, 256),  # Second match with same query_sp
+    ]
+    doc_frequencies = {
+        match_sp1: 10,  # Common
+        match_sp2: 2,  # Rare
+    }
+    num_queried = 1
+
+    score = index._calculate_idf_score(matches, doc_frequencies, num_queried)
+
+    # Should use minimum frequency (2) for this query simprint
+    # Coverage = 1/1 = 1.0, Quality = 1.0 (single unique query)
+    assert score == 1.0
+
+
+def test_calculate_idf_score_same_frequencies(index):
+    # type: (LmdbSimprintIndex) -> None
+    """Test IDF score when multiple query simprints have identical frequencies (line 490)."""
+    # Scenario: multiple different query simprints, but all match simprints with same frequency
+    # This triggers min_freq == max_freq check on line 488-490
+    query_sp1 = b"\x11" * 8
+    query_sp2 = b"\x22" * 8
+    match_sp1 = b"\xaa" * 8
+    match_sp2 = b"\xbb" * 8
+
+    matches = [
+        (query_sp1, match_sp1, 0, 256),
+        (query_sp2, match_sp2, 256, 256),
+    ]
+    # Both match simprints have identical frequency
+    doc_frequencies = {
+        match_sp1: 5,
+        match_sp2: 5,
+    }
+    num_queried = 2
+
+    score = index._calculate_idf_score(matches, doc_frequencies, num_queried)
+
+    # Coverage = 2/2 = 1.0, Quality = 1.0 (all same frequency)
+    assert score == 1.0

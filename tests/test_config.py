@@ -1,6 +1,7 @@
 """Tests for configuration management."""
 
 import json
+from pathlib import Path
 
 import pytest
 
@@ -239,41 +240,54 @@ def test_config_manager_list_indexes(config_manager):
     assert len(active_indexes) == 1
 
 
-@pytest.mark.skip(reason="Auto-discovery testing requires mocking property which is complex")
-def test_config_manager_auto_discovery(config_manager, temp_config_path, tmp_path, monkeypatch):
-    # type: (ConfigManager, Path, Path, pytest.MonkeyPatch) -> None
+@pytest.mark.skip(reason="Auto-discovery mocking complex on Windows - covered by integration tests")
+def test_config_manager_auto_discovery(temp_config_path, tmp_path):
+    # type: (Path, Path) -> None
     """Test auto-discovery of local indexes."""
+    from unittest.mock import patch, PropertyMock
+    import iscc_search
+
     # Create mock index directories with index.lmdb files
     data_dir = tmp_path / "data"
     data_dir.mkdir()
 
     index1_dir = data_dir / "index1"
-    index1_dir.mkdir()
+    index1_dir.mkdir(parents=True)
     (index1_dir / "index.lmdb").touch()
 
     index2_dir = data_dir / "index2"
-    index2_dir.mkdir()
+    index2_dir.mkdir(parents=True)
     (index2_dir / "index.lmdb").touch()
 
-    # Mock the data directory
+    # Mock user_data_dir property to return the actual directory
+    with patch.object(type(iscc_search.dirs), "user_data_dir", new_callable=PropertyMock) as mock_dir:
+        # Return Path object since that's what the property returns
+        mock_dir.return_value = data_dir
+
+        # Create config manager
+        from iscc_search.config import ConfigManager
+
+        manager = ConfigManager(config_path=temp_config_path)
+
+        # Load config (will auto-discover)
+        manager.load()
+
+        indexes = manager.list_indexes()
+        names = [name for name, _, _ in indexes]
+
+        # Should find auto-discovered indexes plus default
+        assert "index1" in names
+        assert "index2" in names
+
+
+def test_config_manager_auto_discovery_skips_existing(tmp_path, monkeypatch):
+    # type: (Path, pytest.MonkeyPatch) -> None
+    """Test auto-discovery doesn't override existing configurations (covers line 407)."""
     import iscc_search
 
-    monkeypatch.setattr(iscc_search.dirs, "user_data_dir", str(data_dir))
+    # Create temp config path
+    temp_config_path = tmp_path / "config.json"
 
-    # Load config (will auto-discover)
-    config_manager.load()
-
-    indexes = config_manager.list_indexes()
-    names = [name for name, _, _ in indexes]
-
-    assert "index1" in names
-    assert "index2" in names
-
-
-@pytest.mark.skip(reason="Auto-discovery testing requires mocking property which is complex")
-def test_config_manager_auto_discovery_skips_existing(config_manager, temp_config_path, tmp_path, monkeypatch):
-    # type: (ConfigManager, Path, Path, pytest.MonkeyPatch) -> None
-    """Test auto-discovery doesn't override existing configurations."""
     # Create initial config with "test" index
     config_data = {
         "active_index": "test",
@@ -285,18 +299,27 @@ def test_config_manager_auto_discovery_skips_existing(config_manager, temp_confi
     data_dir = tmp_path / "data"
     data_dir.mkdir()
     test_dir = data_dir / "test"
-    test_dir.mkdir()
+    test_dir.mkdir(parents=True)
     (test_dir / "index.lmdb").touch()
 
-    # Mock the data directory
-    import iscc_search
+    # Create a mock dirs object with custom user_data_dir
+    class MockDirs:
+        @property
+        def user_data_dir(self):
+            # type: () -> str
+            return str(data_dir)
 
-    monkeypatch.setattr(iscc_search.dirs, "user_data_dir", str(data_dir))
+    monkeypatch.setattr(iscc_search, "dirs", MockDirs())
+
+    # Create config manager
+    from iscc_search.config import ConfigManager
+
+    manager = ConfigManager(config_path=temp_config_path)
 
     # Load config (will attempt auto-discovery)
-    config_manager.load()
+    manager.load()
 
-    indexes = config_manager.list_indexes()
+    indexes = manager.list_indexes()
     test_cfg = [cfg for name, cfg, _ in indexes if name == "test"][0]
 
     # Should still be remote (not overridden by auto-discovery)
@@ -310,3 +333,224 @@ def test_index_config_from_dict_unknown_type():
         from iscc_search.config import IndexConfig
 
         IndexConfig.from_dict("test", {"type": "unknown"})
+
+
+def test_config_manager_default_path():
+    # type: () -> None
+    """Test ConfigManager uses default path when none provided."""
+    import iscc_search
+
+    manager = ConfigManager()
+    expected_path = iscc_search.dirs.user_data_dir
+    assert str(expected_path) in str(manager.config_path)
+
+
+def test_config_manager_load_corrupted_config(temp_config_path):
+    # type: (Path) -> None
+    """Test ConfigManager handles corrupted config file gracefully."""
+    # Write invalid JSON
+    temp_config_path.parent.mkdir(parents=True, exist_ok=True)
+    temp_config_path.write_text("{ invalid json }")
+
+    manager = ConfigManager(config_path=temp_config_path)
+    config = manager.load()
+
+    # Should create default config after error
+    assert config.active_index == "default"
+    assert "default" in config.indexes
+
+
+def test_config_manager_save_without_load():
+    # type: () -> None
+    """Test ConfigManager.save raises error when no config loaded."""
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        temp_path = Path(tmpdir) / "config.json"
+        manager = ConfigManager(config_path=temp_path)
+
+        with pytest.raises(ValueError, match="No config loaded"):
+            manager.save()
+
+
+def test_config_manager_lazy_load_in_get_active():
+    # type: () -> None
+    """Test get_active triggers lazy load."""
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        temp_path = Path(tmpdir) / "config.json"
+        manager = ConfigManager(config_path=temp_path)
+
+        # get_active should trigger load
+        active = manager.get_active()
+        assert active is not None
+        assert active.name == "default"
+
+
+def test_config_manager_lazy_load_in_set_active():
+    # type: () -> None
+    """Test set_active triggers lazy load."""
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        temp_path = Path(tmpdir) / "config.json"
+
+        # Pre-create config with two indexes
+        config_data = {
+            "active_index": "first",
+            "indexes": {
+                "first": {"type": "local", "path": "/path1"},
+                "second": {"type": "local", "path": "/path2"},
+            },
+        }
+        temp_path.write_text(json.dumps(config_data))
+
+        manager = ConfigManager(config_path=temp_path)
+
+        # set_active should trigger load
+        manager.set_active("second")
+        assert manager.get_active().name == "second"
+
+
+def test_config_manager_lazy_load_in_add_index():
+    # type: () -> None
+    """Test add_index triggers lazy load."""
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        temp_path = Path(tmpdir) / "config.json"
+        manager = ConfigManager(config_path=temp_path)
+
+        # add_index should trigger load
+        manager.add_index(LocalIndexConfig(name="new_index"))
+
+        indexes = manager.list_indexes()
+        names = [name for name, _, _ in indexes]
+        assert "new_index" in names
+
+
+def test_config_manager_lazy_load_in_remove_index():
+    # type: () -> None
+    """Test remove_index triggers lazy load."""
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        temp_path = Path(tmpdir) / "config.json"
+
+        # Pre-create config with index to remove
+        config_data = {
+            "active_index": "default",
+            "indexes": {
+                "default": {"type": "local", "path": "/path1"},
+                "to_remove": {"type": "local", "path": "/path2"},
+            },
+        }
+        temp_path.write_text(json.dumps(config_data))
+
+        manager = ConfigManager(config_path=temp_path)
+
+        # remove_index should trigger load
+        manager.remove_index("to_remove")
+
+        indexes = manager.list_indexes()
+        names = [name for name, _, _ in indexes]
+        assert "to_remove" not in names
+
+
+def test_config_manager_lazy_load_in_list_indexes():
+    # type: () -> None
+    """Test list_indexes triggers lazy load."""
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        temp_path = Path(tmpdir) / "config.json"
+        manager = ConfigManager(config_path=temp_path)
+
+        # list_indexes should trigger load
+        indexes = manager.list_indexes()
+        assert len(indexes) > 0
+
+
+def test_config_manager_remove_all_indexes_clears_active(config_manager):
+    # type: (ConfigManager) -> None
+    """Test removing all indexes sets active to None."""
+    config_manager.load()
+
+    # Remove default index (the only one)
+    config_manager.remove_index("default")
+
+    # Active should be None
+    assert config_manager.get_active() is None
+
+
+def test_get_config_manager_singleton():
+    # type: () -> None
+    """Test get_config_manager returns singleton instance."""
+    from iscc_search.config import get_config_manager
+
+    # Clear singleton
+    import iscc_search.config
+
+    iscc_search.config._config_manager = None
+
+    manager1 = get_config_manager()
+    manager2 = get_config_manager()
+
+    assert manager1 is manager2
+
+
+def test_index_config_base_class_to_dict():
+    # type: () -> None
+    """Test IndexConfig base class to_dict fallback."""
+    from iscc_search.config import IndexConfig
+
+    # Create custom subclass that doesn't override to_dict to test base implementation
+    class TestIndexConfig(IndexConfig):
+        pass
+
+    config = TestIndexConfig(name="test", type_="test_type")
+    data = config.to_dict()
+
+    # Base implementation just returns type
+    assert "type" in data
+    assert data["type"] == "test_type"
+
+
+def test_config_manager_auto_discover_no_data_dir(tmp_path, monkeypatch):
+    # type: (Path, pytest.MonkeyPatch) -> None
+    """Test auto_discover when data directory doesn't exist (covers line 398)."""
+    import iscc_search
+
+    # Create config in temp directory with initial content
+    temp_config = tmp_path / "config.json"
+    config_data = {
+        "active_index": "default",
+        "indexes": {"default": {"type": "local", "path": "/tmp/default"}},
+    }
+    temp_config.write_text(json.dumps(config_data))
+
+    # Create a non-existent data directory path
+    nonexistent_path = tmp_path / "nonexistent"
+    assert not nonexistent_path.exists()
+
+    # Create a mock dirs object with custom user_data_dir
+    class MockDirs:
+        @property
+        def user_data_dir(self):
+            # type: () -> str
+            return str(nonexistent_path)
+
+    monkeypatch.setattr(iscc_search, "dirs", MockDirs())
+
+    # Create config manager with temp config path
+    from iscc_search.config import ConfigManager
+
+    manager = ConfigManager(config_path=temp_config)
+
+    # Load config (will attempt auto-discovery on non-existent path)
+    config = manager.load()
+
+    # Should succeed without errors (early return at line 398 when path doesn't exist)
+    assert config is not None
+    assert "default" in config.indexes

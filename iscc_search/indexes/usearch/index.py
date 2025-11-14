@@ -270,18 +270,17 @@ class UsearchIndex:
                 # Reset NphdIndexes - they have vectors from failed transaction
                 self._nphd_indexes = {}
                 old_size = self.map_size
-                new_size = old_size * 2
 
-                # Check if new size would exceed maximum
-                if new_size > self.MAX_MAP_SIZE:
-                    raise RuntimeError(
-                        f"Cannot resize LMDB map beyond MAX_MAP_SIZE ({self.MAX_MAP_SIZE:,} bytes). "
-                        f"Current size: {old_size:,}, attempted size: {new_size:,}. "
-                        f"Consider splitting data across multiple indexes or increasing MAX_MAP_SIZE."
-                    )
+                # Limit resize increment to max 1GB to avoid wasting space
+                increase = min(old_size, 1024 * 1024 * 1024)
+                new_size = min(old_size + increase, self.MAX_MAP_SIZE)
+
+                # Check if we've hit the limit
+                if new_size == old_size:
+                    raise RuntimeError(f"Cannot resize beyond {self.MAX_MAP_SIZE} bytes")
 
                 logger.info(
-                    f"UsearchIndex map_size increased from {old_size:,} to {new_size:,} bytes "
+                    f"Resizing LMDB from {old_size:,} to {new_size:,} bytes (increase: {increase:,}) "
                     f"(retry {retry_count}/{self.MAX_RESIZE_RETRIES})"
                 )
                 self.env.set_mapsize(new_size)

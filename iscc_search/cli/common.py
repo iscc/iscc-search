@@ -4,7 +4,6 @@ Shared utilities for ISCC-Search CLI.
 Common functionality used across multiple CLI commands.
 """
 
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 import iscc_core as ic
@@ -15,9 +14,8 @@ from rich.logging import RichHandler
 if TYPE_CHECKING:
     from iscc_search.protocols.index import IsccIndexProtocol  # noqa: F401
 
-import iscc_search
 
-__all__ = ["console", "get_default_index", "parse_simprints_from_features"]
+__all__ = ["console", "get_active_index", "parse_simprints_from_features"]
 
 
 # Shared console instance for all CLI commands
@@ -40,35 +38,63 @@ logger.add(
 )
 
 
-def get_default_index():
-    # type: () -> IsccIndexProtocol
+def get_active_index(index_name=None):
+    # type: (str|None) -> tuple[IsccIndexProtocol, str]
     """
-    Get or create default usearch index.
+    Get active index from configuration.
 
-    Creates index at <data_dir>/default if it doesn't exist.
+    Returns the configured active index (local or remote) or creates a default
+    local index if no configuration exists. If index_name is provided, uses that
+    index instead of the active one.
 
-    :return: Default index instance
+    :param index_name: Optional index name to override active index
+    :return: Tuple of (index instance, index name used)
     """
+    from iscc_search.config import get_config_manager, LocalIndexConfig, RemoteIndexConfig
     from iscc_search.indexes.usearch import UsearchIndexManager
-    from iscc_search.schema import IsccIndex
+    from iscc_search.remote import RemoteIndex
 
-    # Use platform-specific data directory
-    data_dir = Path(iscc_search.dirs.user_data_dir)
-    base_path = data_dir
+    config_manager = get_config_manager()
+    config_manager.load()
 
-    # Create directory if needed
-    base_path.mkdir(parents=True, exist_ok=True)
+    # Get target index config
+    if index_name is not None:
+        # Use specified index
+        indexes = {name: cfg for name, cfg, _ in config_manager.list_indexes()}
+        if index_name not in indexes:
+            raise ValueError(f"Index '{index_name}' not found in configuration")
+        index_config = indexes[index_name]
+        target_name = index_name
+    else:
+        # Use active index
+        index_config = config_manager.get_active()
+        if index_config is None:
+            raise ValueError("No active index configured. Use 'iscc-search index add' to configure an index.")
+        target_name = index_config.name
 
-    manager = UsearchIndexManager(str(base_path))
+    # Create appropriate index instance
+    if isinstance(index_config, LocalIndexConfig):
+        from iscc_search.schema import IsccIndex
 
-    # Check if index exists, create if not
-    try:
-        manager.get_index("default")
-    except FileNotFoundError:
-        # Index doesn't exist, create it
-        manager.create_index(IsccIndex(name="default"))
+        manager = UsearchIndexManager(index_config.path)
 
-    return manager
+        # Ensure physical index exists (create if missing)
+        try:
+            manager.get_index(target_name)
+        except FileNotFoundError:
+            # Index doesn't exist, create it
+            manager.create_index(IsccIndex(name=target_name))
+
+        return manager, target_name
+    elif isinstance(index_config, RemoteIndexConfig):
+        remote_index = RemoteIndex(
+            url=index_config.url,
+            index_name=target_name,
+            api_key=index_config.api_key,
+        )
+        return remote_index, target_name
+    else:
+        raise ValueError(f"Unknown index type: {type(index_config)}")
 
 
 def parse_simprints_from_features(features, simprint_bits=None):

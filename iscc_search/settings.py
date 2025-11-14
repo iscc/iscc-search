@@ -1,5 +1,42 @@
 """
-Settings management for ISCC-Search.
+Server runtime settings for ISCC-Search API.
+
+**PURPOSE**: Configure the FastAPI server deployment via environment variables.
+
+**SCOPE**: Single index backend per server deployment. This is used exclusively
+by the API server (iscc-search serve) to configure runtime behavior.
+
+**USAGE**:
+- Deploying the API server with uvicorn
+- Configuring server behavior (CORS, authentication)
+- Setting which index backend to use (memory://, lmdb://, usearch://)
+
+**CONFIGURATION SOURCE**: Environment variables with ISCC_SEARCH_ prefix
+
+**NOT FOR**: CLI multi-index workflows. See iscc_search.config for that.
+
+---
+
+**RELATIONSHIP WITH config.py**:
+
+iscc-search has TWO independent configuration systems:
+
+1. **settings.py (this file)** - Server deployment configuration
+   - Consumer: API server (iscc-search serve)
+   - Source: Environment variables (ISCC_SEARCH_*)
+   - Scope: Single index per deployment
+   - Pattern: 12-factor app principles
+
+2. **config.py** - CLI multi-index management
+   - Consumer: CLI commands (add, search, get)
+   - Source: Persistent JSON file (~/.iscc-search/config.json)
+   - Scope: Multiple named indexes with "active" concept
+   - Pattern: Git-like workflow (add/list/use/remove)
+
+These systems are SEPARATE and serve different purposes. The serve command uses
+settings.py while CLI data commands use config.py.
+
+---
 
 Provides configuration management using Pydantic settings with support for:
 - Environment variables with ISCC_SEARCH_ prefix

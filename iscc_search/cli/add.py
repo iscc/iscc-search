@@ -12,7 +12,7 @@ import typer
 from loguru import logger
 from rich.progress import BarColumn, MofNCompleteColumn, Progress, SpinnerColumn, TextColumn
 
-from iscc_search.cli.common import console, get_default_index, parse_simprints_from_features
+from iscc_search.cli.common import console, parse_simprints_from_features
 from iscc_search.schema import IsccEntry
 from iscc_search.utils import timer
 
@@ -43,7 +43,14 @@ def expand_pattern_to_files(pattern):
         return files
     else:
         # Glob pattern
-        return list(Path(".").glob(pattern))
+        if pattern_path.is_absolute():
+            # For absolute paths, glob from parent directory
+            parent = pattern_path.parent
+            name = pattern_path.name
+            return list(parent.glob(name))
+        else:
+            # For relative patterns, glob from current directory
+            return list(Path(".").glob(pattern))
 
 
 def parse_asset_files(files, verbose=False, simprint_bits=None):
@@ -188,10 +195,11 @@ def add_command(
     simprint_bits: int | None = typer.Option(
         None, "--simprint-bits", "-s", help="Truncate simprints to this bit length (64, 128, 192, or 256)"
     ),
+    index_name: str | None = typer.Option(None, "--index", help="Index name to use (overrides active index)"),
 ):
     # type: (...) -> None
     """
-    Add ISCC assets from JSON files to the default index.
+    Add ISCC assets from JSON files to the active index.
 
     Accepts file paths, directory paths, or glob patterns.
     Files must be valid JSON with 'iscc_code' or 'iscc'/'units' fields.
@@ -200,7 +208,10 @@ def add_command(
         iscc-search add myfolder/*.json
         iscc-search add -s 64 /path/to/assets/
         iscc-search add --simprint-bits 128 asset.iscc.json
+        iscc-search add --index production data/*.json
     """
+    from iscc_search.cli.common import get_active_index
+
     # Validate simprint_bits parameter
     if simprint_bits is not None:
         valid_sizes = [64, 128, 192, 256]
@@ -208,14 +219,19 @@ def add_command(
             console.print(f"[red]Invalid --simprint-bits: {simprint_bits}. Must be one of: {valid_sizes}[/red]")
             raise typer.Exit(code=3)
 
-    # Get or create default index
+    # Get active or specified index
     with Progress(
         SpinnerColumn(),
         TextColumn("[progress.description]{task.description}"),
         console=console,
     ) as progress:
         task = progress.add_task("Initializing index...", total=None)
-        index = get_default_index()
+        try:
+            index, target_index_name = get_active_index(index_name)
+        except ValueError as e:
+            progress.remove_task(task)
+            console.print(f"[red]Error: {e}[/red]")
+            raise typer.Exit(code=1)
         progress.remove_task(task)
 
     # Expand pattern to files
@@ -237,8 +253,8 @@ def add_command(
         raise typer.Exit(code=4)
 
     # Add assets to index
-    with timer(f"Indexing {len(assets)} asset(s)"):
-        results = index.add_assets("default", assets)
+    with timer(f"Indexing {len(assets)} asset(s) to '{target_index_name}'"):
+        results = index.add_assets(target_index_name, assets)
 
     # Close index to save all data
     with Progress(

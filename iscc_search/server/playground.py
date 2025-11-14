@@ -42,9 +42,32 @@ def playground():
 <body class="bg-gray-50">
     <div class="container mx-auto px-4 py-8 max-w-7xl">
         <!-- Header -->
-        <div class="mb-8">
+        <div class="mb-6">
             <h1 class="text-4xl font-bold text-gray-900 mb-2">ISCC-Search Playground</h1>
             <p class="text-gray-600">Interactive testing interface for similarity search</p>
+        </div>
+
+        <!-- Index Selection -->
+        <div class="bg-white rounded-lg shadow-md p-4 mb-6">
+            <div class="flex items-center gap-4">
+                <label for="indexSelect" class="text-sm font-semibold text-gray-700 whitespace-nowrap">
+                    Active Index:
+                </label>
+                <select
+                    id="indexSelect"
+                    class="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                    <option value="">Loading indexes...</option>
+                </select>
+                <div id="indexInfo" class="text-sm text-gray-600 whitespace-nowrap hidden">
+                    <span id="indexAssetCount" class="font-semibold"></span>
+                </div>
+            </div>
+            <div id="indexError" class="hidden mt-2">
+                <div class="bg-yellow-50 border border-yellow-200 text-yellow-700 px-3 py-2 rounded text-sm">
+                    <p id="indexErrorMessage"></p>
+                </div>
+            </div>
         </div>
 
         <!-- Main Grid -->
@@ -240,6 +263,72 @@ def playground():
             return html;
         }
 
+        // Index management
+        let selectedIndex = '';
+        let indexesData = [];
+
+        async function loadIndexes() {
+            try {
+                const response = await fetch('/indexes');
+                if (!response.ok) {
+                    throw new Error('Failed to load indexes: ' + response.statusText);
+                }
+
+                indexesData = await response.json();
+                const select = document.getElementById('indexSelect');
+                select.innerHTML = '';
+
+                if (indexesData.length === 0) {
+                    select.innerHTML = '<option value="">No indexes available</option>';
+                    document.getElementById('indexErrorMessage').textContent =
+                        'No indexes found. Create an index first.';
+                    showElement('indexError');
+                    return;
+                }
+
+                indexesData.forEach((index) => {
+                    const option = document.createElement('option');
+                    option.value = index.name;
+                    option.textContent = index.name;
+                    select.appendChild(option);
+                });
+
+                // Select first index by default
+                selectedIndex = indexesData[0].name;
+                select.value = selectedIndex;
+                updateIndexInfo();
+
+            } catch (error) {
+                document.getElementById('indexErrorMessage').textContent = error.message;
+                showElement('indexError');
+            }
+        }
+
+        function updateIndexInfo() {
+            const index = indexesData.find(i => i.name === selectedIndex);
+            if (index) {
+                const assetCount = index.assets || 0;
+                const sizeMB = (index.size || 0).toFixed(2);
+
+                document.getElementById('indexAssetCount').textContent =
+                    `${assetCount} assets, ${sizeMB} MB`;
+                showElement('indexInfo');
+            }
+        }
+
+        function getSelectedIndex() {
+            return selectedIndex || 'default';
+        }
+
+        // Handle index selection change
+        document.getElementById('indexSelect').addEventListener('change', (e) => {
+            selectedIndex = e.target.value;
+            updateIndexInfo();
+        });
+
+        // Load indexes on page load
+        loadIndexes();
+
         // File Upload with Uppy
         const uppy = new Uppy({
             debug: false,
@@ -286,7 +375,7 @@ def playground():
                 document.getElementById('fileLoadingMessage').textContent =
                     'Searching with ISCC: ' + isccCode + '...';
 
-                const searchResponse = await fetch('/indexes/default/search', {
+                const searchResponse = await fetch(`/indexes/${getSelectedIndex()}/search`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
@@ -322,7 +411,7 @@ def playground():
             showLoading('text');
 
             try {
-                const response = await fetch('/indexes/default/search/text', {
+                const response = await fetch(`/indexes/${getSelectedIndex()}/search/text`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'

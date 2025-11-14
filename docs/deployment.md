@@ -1,138 +1,177 @@
-# Deployment Notes
+# Production Deployment
 
-> **Note:** This document captures deployment considerations as they arise during development. Full deployment
-> documentation will be written when the project approaches production readiness.
+## ⚠️ Critical: Data Corruption Risks
 
-## Concurrency Model by Index Type
+**NEVER use multiple workers with usearch backend** - it WILL corrupt your indexes.
 
-ISCC-SEARCH provides multiple index implementations with different concurrency characteristics. Choose the right
-index for your deployment based on these constraints.
+```bash
+# ❌ WRONG - corrupts data
+uvicorn iscc_search.server:app --workers 4
 
-### Memory Index (`memory://`)
+# ✅ CORRECT - single worker
+uvicorn iscc_search.server:app
+```
 
-**Concurrency:** Single-process only (in-memory Python objects)
+**Why:**
 
-The memory index exists only in the process's memory space and cannot be shared between processes.
+- `.usearch` files have no file locking or multi-process coordination
+- Instance cache doesn't synchronize between processes
+- Improper shutdown (SIGKILL) loses unsaved indexes
 
-**Deployment:** Development and testing only. Not suitable for production.
+**Solutions:**
 
-### LMDB Index (`lmdb:///path`)
+- Use single worker with FastAPI async/await (handles 1000s concurrent connections)
+- Scale horizontally with separate data directories (one per instance)
+- Ensure graceful shutdown: Docker `stop_grace_period > 60s`
 
-**Concurrency:** LMDB supports multi-reader/single-writer, but manager cache is process-local
+## Quick Start
 
-**Constraints:**
+```bash
+# Run with Docker Compose
+docker-compose up -d
 
-1. **LMDB database files** support multi-reader/single-writer with built-in locking (lock=True)
-2. **Manager instance cache** (`LmdbIndexManager._index_cache`) does not synchronize between processes
-3. Multiple reader processes work correctly, but cache warming is per-process
+# View logs
+docker-compose logs -f
 
-**Impact:** Multiple processes can read safely, but the cache doesn't benefit subsequent processes.
+# Stop gracefully (IMPORTANT: waits for index save)
+docker-compose stop
 
-**Deployment:** Single-process recommended for simplicity. Multi-process reads are safe but may have redundant
-cache warming overhead.
+# Backup data
+docker cp iscc-search-api:/data ./backup
+```
 
-### Usearch Index (`usearch:///path`)
+## Essential Configuration
 
-**Concurrency:** Single-process only
+### Graceful Shutdown (Required)
 
-**Constraints:**
+**Dockerfile:**
 
-1. **Usearch files** (`.usearch`) have no file locking or multi-process coordination
-2. **Manager instance cache** (`UsearchIndexManager._index_cache`) does not synchronize between processes
-3. While **LMDB component** supports multi-reader/single-writer, the combined system is limited by usearch's
-    single-process constraint
+```dockerfile
+CMD ["uvicorn", "iscc_search.server:app",
+     "--timeout-graceful-shutdown", "60"]
+```
 
-**Impact:** Running multiple processes against the same indexes **will corrupt data**.
+**docker-compose.yml:**
 
-**Deployment:** Single-process only. See recommended patterns below.
+```yaml
+stop_grace_period: 90s  # Must be > uvicorn timeout
+```
 
-### Postgres Index (`postgresql://...`)
+**Timing:** `Docker grace (90s) > Uvicorn timeout (60s) + buffer`
 
-**Concurrency:** Multi-process (planned)
+### Environment Variables
 
-The planned Postgres index will naturally support multi-process deployments as PostgreSQL handles concurrency
-and locking internally.
-
-**Deployment:** Multi-process and distributed deployments will be supported.
-
-______________________________________________________________________
-
-## Impact Summary
-
-| Index Type | Multi-Process Reads | Multi-Process Writes | Recommended Pattern        |
-| ---------- | ------------------- | -------------------- | -------------------------- |
-| Memory     | ❌ No               | ❌ No                | Single process             |
-| LMDB       | ✅ Yes (safe)       | ⚠️ Single writer     | Single process (preferred) |
-| Usearch    | ❌ No               | ❌ No                | Single process             |
-| Postgres   | ✅ Yes (planned)    | ✅ Yes (planned)     | Multi-process              |
-
-______________________________________________________________________
-
-## Recommended Deployment Patterns
-
-### For Usearch Index (High-Performance Similarity Search)
-
-**Use single-process async servers:**
-
-- **FastAPI + Uvicorn** (single process, async workers)
-- **Starlette** or other async frameworks
-- Single process can handle thousands of concurrent connections via async/await
+| Variable                   | Default           | Required | Description             |
+| -------------------------- | ----------------- | -------- | ----------------------- |
+| `ISCC_SEARCH_INDEX_URI`    | `usearch:///data` | No       | Backend URI             |
+| `ISCC_SEARCH_CORS_ORIGINS` | `*`               | No       | Comma-separated origins |
+| `ISCC_SEARCH_API_SECRET`   | None              | No       | API authentication      |
 
 **Example:**
 
-```bash
-# Good: Single process with async concurrency
-uvicorn myapp:app --host 0.0.0.0 --port 8000
-
-# Bad: Multiple worker processes (WILL CORRUPT USEARCH FILES)
-uvicorn myapp:app --workers 4  # DON'T DO THIS with usearch://
-gunicorn myapp:app --workers 4  # DON'T DO THIS with usearch://
+```yaml
+environment:
+  - ISCC_SEARCH_INDEX_URI=usearch:///data
+  - ISCC_SEARCH_CORS_ORIGINS=https://example.com
 ```
 
-**Why this works:**
+### Resource Limits
 
-- Async/await handles I/O concurrency efficiently
-- Usearch search operations release the GIL during computation
-- Single process eliminates coordination overhead
-- No risk of .usearch file corruption
-
-### For LMDB Index (Prefix Matching Only)
-
-**Single-process recommended, multi-process reads acceptable:**
-
-```bash
-# Preferred: Single process
-uvicorn myapp:app --host 0.0.0.0 --port 8000
-
-# Acceptable: Multi-process reads (if needed)
-# Note: Each process warms its own cache
-uvicorn myapp:app --workers 4  # Safe but cache-inefficient with lmdb://
+```yaml
+deploy:
+  resources:
+    limits:
+      cpus: '2.0'
+      memory: 4G
 ```
 
-**Multi-process considerations:**
+**Memory:** Usearch indexes load entirely into memory (~2-4GB for small indexes) **CPU:** Single worker uses 1-2
+cores effectively with async I/O
 
-- Safe for concurrent reads (LMDB handles locking)
-- Single writer process required for writes
-- Each process maintains separate instance cache (redundant memory usage)
-- May be useful for CPU-bound workloads that can't use async
+## Index Comparison
 
-### For Memory Index (Testing Only)
+| Backend           | Multi-Process | Use Case          | Status  |
+| ----------------- | ------------- | ----------------- | ------- |
+| `memory://`       | ❌ No         | Testing only      | Ready   |
+| `lmdb:///path`    | ⚠️ Reads only | Prefix matching   | Ready   |
+| `usearch:///path` | ❌ No         | Similarity search | Ready   |
+| `postgres://`     | ✅ Yes        | Future            | Planned |
 
-Development/testing only - concurrency not applicable.
+**Recommended:** Use `usearch://` backend with single worker for production.
 
-### For Postgres Index (Future)
+## Scaling Patterns
 
-Multi-process deployments will be fully supported when implemented.
+### Horizontal Scaling (Multiple Instances)
 
-______________________________________________________________________
+✅ **Correct** - separate data volumes:
 
-## When to Consider Multi-Process Enhancements
+```yaml
+services:
+  iscc-search-1:
+    volumes:
+      - iscc-data-1:/data
 
-For **Usearch Index**, only consider multi-process support if you encounter:
+  iscc-search-2:
+    volumes:
+      - iscc-data-2:/data
+```
 
-1. Real use case requiring process parallelism (not just web serving)
-2. Benchmarks showing single-process async is insufficient
-3. CPU-bound workload that can't leverage async
+❌ **Wrong** - shared volume corrupts data:
 
-See `docs/roadmap.md` for read-only mode enhancement (10% solution) that would enable limited multi-process
-deployments for Usearch Index.
+```yaml
+services:
+  iscc-search-1:
+    volumes:
+      - iscc-data:/data  # DANGER
+
+  iscc-search-2:
+    volumes:
+      - iscc-data:/data  # CORRUPTION
+```
+
+### Load Balancing
+
+Use nginx/traefik to distribute across independent instances:
+
+```nginx
+upstream iscc_search {
+    server iscc-search-1:8000;
+    server iscc-search-2:8000;
+}
+```
+
+## Production Checklist
+
+- [ ] Single worker configured (no `--workers`)
+- [ ] Graceful shutdown timeouts set (60s uvicorn, 90s docker)
+- [ ] Data volume mounted at `/data`
+- [ ] CORS origins configured (not `*`)
+- [ ] API secret set if needed
+- [ ] Health checks passing
+- [ ] Backup strategy tested
+- [ ] Load tested with single worker
+
+## Troubleshooting
+
+### Index Corruption
+
+**Symptoms:** Inconsistent results, startup errors **Cause:** Multiple workers or SIGKILL shutdown **Fix:**
+Restore from backup, verify single worker config
+
+### Slow Shutdown
+
+**Symptoms:** Docker stop takes full grace period **Cause:** Large indexes need time to save **Fix:** Increase
+`stop_grace_period` in docker-compose.yml
+
+### Out of Memory
+
+**Symptoms:** Container killed, OOM errors **Cause:** Indexes too large for allocated memory **Fix:** Increase
+memory limits or shard across instances
+
+## Monitoring
+
+Watch logs for:
+
+- `Saved NphdIndex for unit_type` - index saved successfully
+- `Closed simprint index` - clean shutdown
+- `MapFullError` - LMDB auto-resize (normal)

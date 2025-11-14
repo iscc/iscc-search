@@ -41,7 +41,7 @@ properties:
       - Returns matches excluding the query asset itself (no self-match)
 
       **Error handling**: Returns HTTP 404 if iscc_id is not found in the index.
-    pattern: "^ISCC:[A-Z2-7]{16,}$"
+    pattern: "^ISCC:[A-Z2-7]{16}$"
     example: "ISCC:MAIGIIFJRDGEQQAA"
   iscc_code:
     type: string

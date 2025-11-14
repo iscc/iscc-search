@@ -18,16 +18,16 @@ properties:
       $ref: "./IsccGlobalMatch.yaml"
     example:
       - iscc_id: "ISCC:MAIGIIFJRDGEQQAA"
-        score: 448
-        matches:
-          CONTENT_TEXT_V0: 256
-          DATA_NONE_V0: 128
-          INSTANCE_NONE_V0: 64
+        score: 0.97
+        types:
+          CONTENT_TEXT_V0: 1.0
+          DATA_NONE_V0: 0.5
+          INSTANCE_NONE_V0: 0.25
       - iscc_id: "ISCC:MAIGXXFZRDGEQQBB"
-        score: 384
-        matches:
-          CONTENT_TEXT_V0: 256
-          DATA_NONE_V0: 128
+        score: 0.75
+        types:
+          CONTENT_TEXT_V0: 1.0
+          DATA_NONE_V0: 0.5
   chunk_matches:
     type: array
     description: Segment-level simprint matches, ordered by relevance (best first)
@@ -43,13 +43,13 @@ example:
       - "ISCC:EED7ZPIEYNACCLXXZSS2LIM6JVXDYGCG2QSMC7DCPER4MYJPJATIM4Y"
   global_matches:
     - iscc_id: "ISCC:MAIGIIFJRDGEQQAA"
-      score: 448
-      matches:
-        CONTENT_TEXT_V0: 256
-        DATA_NONE_V0: 128
-        INSTANCE_NONE_V0: 64
+      score: 0.97
+      types:
+        CONTENT_TEXT_V0: 1.0
+        DATA_NONE_V0: 0.5
+        INSTANCE_NONE_V0: 0.25
     - iscc_id: "ISCC:MAIGXXFZRDGEQQBB"
-      score: 384
-      matches:
-        CONTENT_TEXT_V0: 256
-        DATA_NONE_V0: 128
+      score: 0.75
+      types:
+        CONTENT_TEXT_V0: 1.0
+        DATA_NONE_V0: 0.5

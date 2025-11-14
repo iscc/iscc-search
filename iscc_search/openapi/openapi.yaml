@@ -416,14 +416,13 @@ paths:
                   units:
                     - "ISCC:AADYCMZIOY36XXGZ5B5BME7EIPPXRFKYQZ7VXKI7V55AEQQE67A33BY"
                     - "ISCC:EED7ZPIEYNACCLXXZSS2LIM6JVXDYGCG2QSMC7DCPER4MYJPJATIM4Y"
-                metric: "bitlength"
-                matches:
+                global_matches:
                   - iscc_id: "ISCC:MAIGIIFJRDGEQQAA"
-                    score: 448
-                    matches:
-                      CONTENT_TEXT_V0: 256
-                      DATA_NONE_V0: 128
-                      INSTANCE_NONE_V0: 64
+                    score: 0.97
+                    types:
+                      CONTENT_TEXT_V0: 1.0
+                      DATA_NONE_V0: 0.5
+                      INSTANCE_NONE_V0: 0.25
         '400':
           description: Invalid request (malformed ISCC)
           content:
@@ -484,14 +483,13 @@ paths:
                   units:
                     - "ISCC:AADYCMZIOY36XXGZ5B5BME7EIPPXRFKYQZ7VXKI7V55AEQQE67A33BY"
                     - "ISCC:EED7ZPIEYNACCLXXZSS2LIM6JVXDYGCG2QSMC7DCPER4MYJPJATIM4Y"
-                metric: "bitlength"
-                matches:
+                global_matches:
                   - iscc_id: "ISCC:MAIGIIFJRDGEQQAA"
-                    score: 448
-                    matches:
-                      CONTENT_TEXT_V0: 256
-                      DATA_NONE_V0: 128
-                      INSTANCE_NONE_V0: 64
+                    score: 0.97
+                    types:
+                      CONTENT_TEXT_V0: 1.0
+                      DATA_NONE_V0: 0.5
+                      INSTANCE_NONE_V0: 0.25
         '400':
           description: Invalid ISCC-CODE format
           content:
@@ -554,6 +552,7 @@ paths:
               example:
                 query:
                   text: "This is the content I want to find similar matches for..."
+                global_matches: []
                 chunk_matches:
                   - iscc_id: "ISCC:MAIGIIFJRDGEQQAA"
                     simprint: "AXvu3tp2kF8mN9qL4rT1sZ"
@@ -610,5 +609,7 @@ components:
       $ref: './IsccGlobalMatch.yaml'
     IsccSearchResult:
       $ref: './IsccSearchResult.yaml'
+    IsccChunk:
+      $ref: './IsccChunk.yaml'
     TextQuery:
       $ref: './TextQuery.yaml'

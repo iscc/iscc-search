@@ -12,7 +12,7 @@ properties:
   iscc_id:
     type: string
     description: The ISCC-ID of the asset that was added to the index (must be provided in add request)
-    pattern: "^ISCC:[A-Z2-7]{16,}$"
+    pattern: "^ISCC:[A-Z2-7]{16}$"
     example: "ISCC:MAIGIIFJRDGEQQAA"
   status:
     type: string

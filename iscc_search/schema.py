@@ -78,7 +78,7 @@ class IsccQuery(BaseModel):
         Field(
             description='ISCC-ID of a known indexed asset to use as similarity reference. The backend\nretrieves the stored units for this ID and searches for similar assets.\n\n**Use case**: "Find assets similar to ISCC:MAI..." (more-like-this query)\n\n**Precedence**: When provided, `iscc_id` takes precedence over all other query\nfields. Any provided `iscc_code`, `units`, or `simprints` are ignored.\n\n**Behavior**:\n- Backend looks up iscc_id → units in storage\n- Performs similarity search with those units\n- Returns matches excluding the query asset itself (no self-match)\n\n**Error handling**: Returns HTTP 404 if iscc_id is not found in the index.\n',
             examples=["ISCC:MAIGIIFJRDGEQQAA"],
-            pattern="^ISCC:[A-Z2-7]{16,}$",
+            pattern="^ISCC:[A-Z2-7]{16}$",
         ),
     ] = None
     iscc_code: Annotated[
@@ -130,7 +130,7 @@ class IsccAddResult(BaseModel):
         Field(
             description="The ISCC-ID of the asset that was added to the index (must be provided in add request)",
             examples=["ISCC:MAIGIIFJRDGEQQAA"],
-            pattern="^ISCC:[A-Z2-7]{16,}$",
+            pattern="^ISCC:[A-Z2-7]{16}$",
         ),
     ]
     status: Annotated[
@@ -226,6 +226,77 @@ class IsccMatchedChunk(BaseModel):
     ] = None
 
 
+class Modality(str, Enum):
+    text = "text"
+    image = "image"
+    audio = "audio"
+    video = "video"
+    mixed = "mixed"
+
+
+class IsccChunk(BaseModel):
+    iscc_id: Annotated[
+        str,
+        Field(
+            description="ISCC-ID identifying the source content (canonical string format)",
+            examples=["ISCC:MAIGIIFJRDGEQQAA"],
+            pattern="^ISCC:[A-Z2-7]{16}$",
+        ),
+    ]
+    offset: Annotated[
+        int,
+        Field(
+            description="Starting position/time/coordinates (0-indexed, interpretation depends on modality).\n\n**Text**: UTF-8 byte offset (0 to 4,294,967,295)\n- 0-indexed: first byte is at offset 0\n- Defines inclusive start of half-open interval [offset, offset+size)\n- Example: offset=0, size=77 covers bytes [0..76]\n\n**Audio/Video**: Milliseconds from start (0-indexed)\n- 0 = beginning of media\n- Half-open interval: [offset_ms, offset_ms+size_ms)\n\n**Image**: Packed coordinates (x << 16 | y) where x,y ∈ [0, 65535]\n- Origin (0,0) is top-left corner\n- x increases rightward, y increases downward\n\n**Note**: Both offset and size are required even for sequential chunks,\nas chunks may overlap or have gaps between them.\n",
+            examples=[1024],
+            ge=0,
+            le=4294967295,
+        ),
+    ]
+    size: Annotated[
+        int,
+        Field(
+            description="Extent/duration/dimensions (interpretation depends on modality).\n\n**Text**: UTF-8 byte length (0 to 4,294,967,295)\n- Number of bytes in the chunk\n- Chunk occupies half-open interval [offset, offset+size)\n- Last byte is at position (offset + size - 1)\n\n**Audio/Video**: Duration in milliseconds\n- Length of the temporal segment\n- End time is (offset + size) milliseconds\n\n**Image**: Packed dimensions (width << 16 | height) where width,height ∈ [0, 65535]\n- Rectangle extends from (x,y) to (x+width, y+height)\n- Covers width × height pixels\n\n**Note**: Both offset and size are required even for sequential chunks,\nas chunks may overlap or have gaps between them.\n",
+            examples=[512],
+            ge=0,
+            le=4294967295,
+        ),
+    ]
+    source: Annotated[
+        AnyUrl | None,
+        Field(
+            description="Optional resolvable URL to the full content from which this chunk originates.\nSupports various protocols (https://, s3://, file://, ftp://, etc.) including\nfsspec-compatible schemes.\n\n**Storage**: Asset-level metadata, stored once per ISCC-ID (not per chunk).\n**Usage**: Denormalized into chunk responses to provide context for isolated results.\n",
+            examples=[
+                "https://example.com/content.txt",
+                "s3://bucket/path/to/content.txt",
+                "file:///local/path/document.pdf",
+            ],
+        ),
+    ] = None
+    content: Annotated[
+        str | None,
+        Field(
+            description="Optional chunk content encoded as data-url (RFC 2397).\n\n**Storage**: Not stored. Populated on-demand by fetching from `source` URL and\nextracting the region defined by `offset` and `size`.\n**Usage**: Convenience field for match verification and content preview in client responses.\n",
+            examples=["data:text/plain;base64,SGVsbG8gV29ybGQh"],
+            pattern="^data:[^;]+;base64,.+$",
+        ),
+    ] = None
+    modality: Annotated[
+        Modality | None,
+        Field(
+            description="Optional content modality hint for interpreting offset/size fields.\n\n**Storage**: Asset-level metadata, inferred from ISCC-UNIT MainType/SubType.\n**Usage**: Denormalized into chunk responses to clarify offset/size semantics.\n",
+            examples=["text"],
+        ),
+    ] = None
+    track: Annotated[
+        int | None,
+        Field(
+            description="Optional track, layer, stream, or page identifier for multiplexed content.\n\n**Interpretation by media type**:\n- Video: Stream index (0=video, 1=audio, 2=subtitles, etc.) or camera angle\n- Audio: Audio channel or language track (0=stereo, 1=commentary, etc.)\n- Images: Layer index (0=background, 1=foreground, etc.) for layered formats (PSD, XCF)\n- Documents: Page number (PDF), sheet index (spreadsheet), slide number (presentation)\n- 3D: Channel type (0=geometry, 1=texture, 2=animation, etc.)\n\n**Storage**: May be asset-level (single track per ISCC-ID) or chunk-level\n(different chunks from different tracks). Storage strategy depends on use case.\n**Usage**: Denormalized into chunk responses for multi-track/multi-layer content.\n",
+            examples=[1],
+            ge=0,
+        ),
+    ] = None
+
+
 class TextQuery(BaseModel):
     text: Annotated[
         str,
@@ -243,7 +314,7 @@ class IsccEntry(BaseModel):
         Field(
             description="Globally unique digital asset identifier (ISCC-ID)",
             examples=["ISCC:MAIGIIFJRDGEQQAA"],
-            pattern="^ISCC:[A-Z2-7]{16,}$",
+            pattern="^ISCC:[A-Z2-7]{16}$",
         ),
     ] = None
     iscc_code: Annotated[
@@ -298,7 +369,7 @@ class IsccGlobalMatch(BaseModel):
         Field(
             description="The matched ISCC-ID from the index",
             examples=["ISCC:MAIGIIFJRDGEQQAA"],
-            pattern="^ISCC:[A-Z2-7]{16,}$",
+            pattern="^ISCC:[A-Z2-7]{16}$",
         ),
     ]
     score: Annotated[
@@ -358,7 +429,7 @@ class IsccChunkMatch(BaseModel):
         Field(
             description="The matched ISCC-ID from the index",
             examples=["ISCC:MAIGIHZPQR7XKLAB"],
-            pattern="^ISCC:[A-Z2-7]{16,}$",
+            pattern="^ISCC:[A-Z2-7]{16}$",
         ),
     ]
     score: Annotated[
@@ -449,13 +520,13 @@ class IsccSearchResult(BaseModel):
                 [
                     {
                         "iscc_id": "ISCC:MAIGIIFJRDGEQQAA",
-                        "score": 448,
-                        "matches": {"CONTENT_TEXT_V0": 256, "DATA_NONE_V0": 128, "INSTANCE_NONE_V0": 64},
+                        "score": 0.97,
+                        "types": {"CONTENT_TEXT_V0": 1.0, "DATA_NONE_V0": 0.5, "INSTANCE_NONE_V0": 0.25},
                     },
                     {
                         "iscc_id": "ISCC:MAIGXXFZRDGEQQBB",
-                        "score": 384,
-                        "matches": {"CONTENT_TEXT_V0": 256, "DATA_NONE_V0": 128},
+                        "score": 0.75,
+                        "types": {"CONTENT_TEXT_V0": 1.0, "DATA_NONE_V0": 0.5},
                     },
                 ]
             ],

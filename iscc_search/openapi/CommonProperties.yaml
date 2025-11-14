@@ -10,7 +10,7 @@ properties:
   iscc_id:
     type: string
     description: Globally unique digital asset identifier (ISCC-ID)
-    pattern: "^ISCC:[A-Z2-7]{16,}$"
+    pattern: "^ISCC:[A-Z2-7]{16}$"
     example: "ISCC:MAIGIIFJRDGEQQAA"
   iscc_code:
     type: string

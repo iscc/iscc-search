@@ -33,7 +33,7 @@ properties:
   iscc_id:
     type: string
     description: The matched ISCC-ID from the index
-    pattern: "^ISCC:[A-Z2-7]{16,}$"
+    pattern: "^ISCC:[A-Z2-7]{16}$"
     example: "ISCC:MAIGIHZPQR7XKLAB"
   score:
     type: number

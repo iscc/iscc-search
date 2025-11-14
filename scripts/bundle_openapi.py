@@ -9,6 +9,11 @@ import json
 from pathlib import Path
 import yaml
 from loguru import logger
+import sys
+
+# Configure logger to only show SUCCESS and ERROR levels with minimal formatting
+logger.remove()
+logger.add(sys.stderr, level="SUCCESS", format="{message}")
 
 
 def resolve_ref_pointer(data, pointer):

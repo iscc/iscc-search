@@ -181,14 +181,6 @@ def test_search_assets_basic(lmdb_index, sample_assets):
     assert result.global_matches[0].metadata.model_dump(exclude_none=True) == asset.metadata
 
 
-def test_search_assets_no_units(lmdb_index, sample_iscc_ids):
-    """Test search without units or iscc_code raises error."""
-    query = IsccQuery(iscc_id=sample_iscc_ids[0])
-
-    with pytest.raises(ValueError, match="must have 'iscc_code', 'units', or 'simprints'"):
-        lmdb_index.search_assets(query)
-
-
 def test_search_assets_empty_index(lmdb_index, sample_content_units):
     """Test search on empty index returns no matches."""
     query = IsccQuery(units=[sample_content_units[0], sample_content_units[1]])

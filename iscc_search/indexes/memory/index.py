@@ -190,6 +190,17 @@ class MemoryIndex:
         if index_name not in self._indexes:
             raise FileNotFoundError(f"Index '{index_name}' not found")
 
+        # Handle iscc_id lookup if provided (takes precedence over other fields)
+        query_iscc_id = None  # Track original query iscc_id for self-exclusion
+        if query.iscc_id:
+            query_iscc_id = query.iscc_id
+            # Look up asset by iscc_id (raises FileNotFoundError if not found -> HTTP 404)
+            asset = self.get_asset(index_name, query.iscc_id)
+            # Create new query with extracted iscc_code, units and simprints
+            from iscc_search.schema import IsccQuery
+
+            query = IsccQuery(iscc_code=asset.iscc_code, units=asset.units, simprints=asset.simprints)
+
         # Normalize query to ensure it has units (derive from iscc_code if needed)
         # This ensures consistent behavior across backends
         query = common.normalize_query(query)
@@ -210,6 +221,10 @@ class MemoryIndex:
                             metadata=asset.metadata,
                         )
                     )
+
+        # Exclude query asset from results (self-exclusion for iscc_id queries)
+        if query_iscc_id:
+            match_list = [match for match in match_list if match.iscc_id != query_iscc_id]
 
         return IsccSearchResult(
             query=query,

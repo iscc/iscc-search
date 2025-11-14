@@ -343,6 +343,17 @@ class UsearchIndex:
         :param limit: Maximum number of results
         :return: IsccSearchResult with query and list of matches (scores normalized 0.0-1.0)
         """
+        # Handle iscc_id lookup if provided (takes precedence over other fields)
+        query_iscc_id = None  # Track original query iscc_id for self-exclusion
+        if query.iscc_id:
+            query_iscc_id = query.iscc_id
+            # Look up asset by iscc_id (raises FileNotFoundError if not found -> HTTP 404)
+            asset = self.get_asset(query.iscc_id)
+            # Create new query with extracted iscc_code, units and simprints
+            from iscc_search.schema import IsccQuery
+
+            query = IsccQuery(iscc_code=asset.iscc_code, units=asset.units, simprints=asset.simprints)
+
         # Normalize query
         query = common.normalize_query(query)
 
@@ -399,6 +410,11 @@ class UsearchIndex:
 
                 scored_results.append((key, total_score, unit_scores))
 
+            # Exclude query asset from results (self-exclusion for iscc_id queries)
+            if query_iscc_id:
+                query_key = int(IsccID(query_iscc_id))
+                scored_results = [result for result in scored_results if result[0] != query_key]
+
             # Sort by total score descending
             scored_results.sort(key=lambda x: x[1], reverse=True)
 
@@ -440,6 +456,10 @@ class UsearchIndex:
                 for key, total_score, unit_scores in scored_results:
                     iscc_id = str(IsccID.from_int(key, self._realm_id))
                     matches.append(IsccGlobalMatch(iscc_id=iscc_id, score=total_score, types=unit_scores))
+
+        # Exclude query asset from chunk matches (self-exclusion for iscc_id queries)
+        if query_iscc_id:
+            chunk_matches = [match for match in chunk_matches if match.iscc_id != query_iscc_id]
 
         return IsccSearchResult(query=query, global_matches=matches, chunk_matches=chunk_matches)
 

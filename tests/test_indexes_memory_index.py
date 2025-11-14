@@ -300,20 +300,22 @@ def test_search_assets_by_iscc_code(sample_iscc_ids, sample_iscc_codes):
 
 
 def test_search_assets_by_iscc_id(sample_iscc_ids, sample_iscc_codes):
-    """Test searching assets by iscc_id with iscc_code."""
+    """Test searching assets by iscc_id uses asset's code for similarity search and excludes query asset."""
     index = MemoryIndex()
     index.create_index(IsccIndex(name="testindex"))
 
-    # Add assets with iscc_code (required for search)
-    asset = IsccEntry(iscc_id=sample_iscc_ids[0], iscc_code=sample_iscc_codes[0])
-    index.add_assets("testindex", [asset])
+    # Add two assets with same iscc_code (similar assets)
+    asset1 = IsccEntry(iscc_id=sample_iscc_ids[0], iscc_code=sample_iscc_codes[0])
+    asset2 = IsccEntry(iscc_id=sample_iscc_ids[1], iscc_code=sample_iscc_codes[0])
+    index.add_assets("testindex", [asset1, asset2])
 
-    # Search by iscc_id and iscc_code
-    query = IsccQuery(iscc_id=sample_iscc_ids[0], iscc_code=sample_iscc_codes[0])
+    # Search by iscc_id of first asset
+    query = IsccQuery(iscc_id=sample_iscc_ids[0])
     result = index.search_assets("testindex", query)
 
+    # Should find the similar asset but exclude the query asset itself (self-exclusion)
     assert len(result.global_matches) == 1
-    assert result.global_matches[0].iscc_id == sample_iscc_ids[0]
+    assert result.global_matches[0].iscc_id == sample_iscc_ids[1]
 
 
 def test_search_assets_no_matches(sample_iscc_ids, sample_iscc_codes):
@@ -447,20 +449,20 @@ def test_metadata_field(sample_iscc_ids, sample_iscc_codes):
 
 
 def test_search_assets_no_matching_iscc_id(sample_iscc_ids, sample_iscc_codes):
-    """Test searching by different iscc_code when no match exists."""
+    """Test searching by non-existent iscc_id raises FileNotFoundError."""
     index = MemoryIndex()
     index.create_index(IsccIndex(name="testindex"))
 
-    # Add an asset with one iscc_code
+    # Add an asset with one iscc_id
     asset = IsccEntry(iscc_id=sample_iscc_ids[0], iscc_code=sample_iscc_codes[0])
     index.add_assets("testindex", [asset])
 
-    # Search with different iscc_id and iscc_code
-    query = IsccQuery(iscc_id=sample_iscc_ids[1], iscc_code=sample_iscc_codes[1])
-    result = index.search_assets("testindex", query)
+    # Search with different iscc_id (not in index)
+    query = IsccQuery(iscc_id=sample_iscc_ids[1])
 
-    # Should not match (different iscc_code)
-    assert len(result.global_matches) == 0
+    # Should raise FileNotFoundError (asset lookup fails -> HTTP 404)
+    with pytest.raises(FileNotFoundError, match=f"Asset '{sample_iscc_ids[1]}' not found"):
+        index.search_assets("testindex", query)
 
 
 def test_search_assets_no_iscc_code_in_asset(sample_iscc_ids, sample_iscc_codes):

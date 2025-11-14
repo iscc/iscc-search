@@ -10,8 +10,8 @@ def test_search_post_success(test_client, sample_assets):
     assets_dict = [a.model_dump(mode="json", exclude_none=True) for a in sample_assets]
     test_client.post("/indexes/testindex/assets", json=assets_dict)
 
-    # Search using first asset as query
-    query_dict = sample_assets[0].model_dump(mode="json", exclude_none=True)
+    # Search using first asset as query (exclude iscc_id to avoid iscc_id search)
+    query_dict = sample_assets[0].model_dump(mode="json", exclude_none=True, exclude={"iscc_id"})
     response = test_client.post("/indexes/testindex/search", json=query_dict)
 
     assert response.status_code == 200
@@ -147,8 +147,8 @@ def test_search_result_structure(test_client, sample_assets):
     assets_dict = [a.model_dump(mode="json", exclude_none=True) for a in sample_assets]
     test_client.post("/indexes/testindex/assets", json=assets_dict)
 
-    # Search
-    query_dict = sample_assets[0].model_dump(mode="json", exclude_none=True)
+    # Search (exclude iscc_id to avoid iscc_id search)
+    query_dict = sample_assets[0].model_dump(mode="json", exclude_none=True, exclude={"iscc_id"})
     response = test_client.post("/indexes/testindex/search", json=query_dict)
 
     assert response.status_code == 200
@@ -174,8 +174,8 @@ def test_search_empty_index(test_client, sample_assets):
     # Create empty index
     test_client.post("/indexes", json={"name": "testindex"})
 
-    # Search empty index
-    query_dict = sample_assets[0].model_dump(mode="json", exclude_none=True)
+    # Search empty index (exclude iscc_id to avoid iscc_id lookup failure)
+    query_dict = sample_assets[0].model_dump(mode="json", exclude_none=True, exclude={"iscc_id"})
     response = test_client.post("/indexes/testindex/search", json=query_dict)
 
     assert response.status_code == 200
@@ -284,3 +284,85 @@ def test_response_excludes_unset_fields(test_client, request):
     assert "iscc_id" not in query
     assert "iscc_code" not in query
     assert "units" not in query
+
+
+def test_search_by_iscc_id_success(test_client, sample_assets):
+    """Test POST search with iscc_id parameter finds similar assets."""
+    # Create index and add multiple assets
+    test_client.post("/indexes", json={"name": "testindex"})
+    assets_dict = [a.model_dump(mode="json", exclude_none=True) for a in sample_assets]
+    test_client.post("/indexes/testindex/assets", json=assets_dict)
+
+    # Search using iscc_id from first asset
+    query_dict = {"iscc_id": sample_assets[0].iscc_id}
+    response = test_client.post("/indexes/testindex/search", json=query_dict)
+
+    assert response.status_code == 200
+    data = response.json()
+
+    # Verify response structure
+    assert "query" in data
+    assert "global_matches" in data
+
+    # Should find similar assets (excluding the query asset itself)
+    assert isinstance(data["global_matches"], list)
+
+
+def test_search_by_iscc_id_self_exclusion(test_client, sample_assets):
+    """Test that query asset is excluded from results when searching by iscc_id."""
+    # Create index and add multiple assets
+    test_client.post("/indexes", json={"name": "testindex"})
+    assets_dict = [a.model_dump(mode="json", exclude_none=True) for a in sample_assets]
+    test_client.post("/indexes/testindex/assets", json=assets_dict)
+
+    # Search using iscc_id from first asset
+    query_iscc_id = sample_assets[0].iscc_id
+    query_dict = {"iscc_id": query_iscc_id}
+    response = test_client.post("/indexes/testindex/search", json=query_dict)
+
+    assert response.status_code == 200
+    data = response.json()
+
+    # Verify query asset is NOT in results
+    result_iscc_ids = [match["iscc_id"] for match in data["global_matches"]]
+    assert query_iscc_id not in result_iscc_ids
+
+
+def test_search_by_iscc_id_not_found(test_client, sample_iscc_ids):
+    """Test POST search with iscc_id that doesn't exist returns 404."""
+    # Create empty index
+    test_client.post("/indexes", json={"name": "testindex"})
+
+    # Search for non-existent iscc_id
+    query_dict = {"iscc_id": sample_iscc_ids[0]}
+    response = test_client.post("/indexes/testindex/search", json=query_dict)
+
+    # Should return 404 as documented
+    assert response.status_code == 404
+    data = response.json()
+    assert "detail" in data
+    assert sample_iscc_ids[0] in data["detail"]
+
+
+def test_search_by_iscc_id_precedence(test_client, sample_assets, sample_iscc_codes):
+    """Test that iscc_id takes precedence over other query fields."""
+    # Create index and add assets
+    test_client.post("/indexes", json={"name": "testindex"})
+    assets_dict = [a.model_dump(mode="json", exclude_none=True) for a in sample_assets]
+    test_client.post("/indexes/testindex/assets", json=assets_dict)
+
+    # Search with iscc_id AND other fields (iscc_id should take precedence)
+    query_dict = {
+        "iscc_id": sample_assets[0].iscc_id,
+        "iscc_code": sample_iscc_codes[5],  # Different code - should be ignored
+        "units": ["ISCC:AAAUHBUDQUT3LPWR"],  # Different units - should be ignored
+    }
+    response = test_client.post("/indexes/testindex/search", json=query_dict)
+
+    assert response.status_code == 200
+    data = response.json()
+
+    # Verify query asset is excluded (self-exclusion for iscc_id)
+    query_iscc_id = sample_assets[0].iscc_id
+    result_iscc_ids = [match["iscc_id"] for match in data["global_matches"]]
+    assert query_iscc_id not in result_iscc_ids

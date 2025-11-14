@@ -1,0 +1,49 @@
+services:
+  iscc-search:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: iscc-search:latest
+    container_name: iscc-search-api
+    ports:
+      - "8000:8000"
+    volumes:
+      # Persist index data outside container
+      - iscc-data:/data
+    environment:
+      # Select backend and storage location (required)
+      # IMPORTANT: usearch backend requires single process (Dockerfile uses one worker)
+      - ISCC_SEARCH_INDEX_URI=usearch:///data
+      # Configure CORS origins (comma-separated)
+      # - ISCC_SEARCH_CORS_ORIGINS=http://localhost:3000,https://example.com
+      # Optional API authentication
+      # - ISCC_SEARCH_API_SECRET=your-secret-key
+    restart: unless-stopped
+
+    # Graceful shutdown configuration (CRITICAL for data integrity)
+    # Gives container 90s to save indexes before forced kill
+    # Must be > uvicorn's --timeout-graceful-shutdown (60s)
+    stop_grace_period: 90s
+
+    # Health check monitors application availability
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+    # Resource limits (adjust based on your index size and load)
+    # Single worker handles concurrency via async/await
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4G
+        reservations:
+          cpus: '1.0'
+          memory: 2G
+
+volumes:
+  iscc-data:
+    driver: local

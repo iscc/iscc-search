@@ -57,6 +57,7 @@ dependencies = [
     "uvicorn[standard]>=0.38.0",
     "pydantic-settings>=2.0.0",
     "httpx>=0.28.1",
+    "simsimd>=6.5.3",
 ]
 
 [project.urls]

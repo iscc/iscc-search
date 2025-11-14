@@ -562,12 +562,60 @@
               "schema": {
                 "$ref": "#/components/schemas/IsccQuery"
               },
-              "example": {
-                "iscc_code": "ISCC:KECYCMZIOY36XXGZ7S6QJQ2AEEXPOVEHZYPK6GMSFLU3WF54UPZMTPY",
-                "units": [
-                  "ISCC:AADYCMZIOY36XXGZ5B5BME7EIPPXRFKYQZ7VXKI7V55AEQQE67A33BY",
-                  "ISCC:EED7ZPIEYNACCLXXZSS2LIM6JVXDYGCG2QSMC7DCPER4MYJPJATIM4Y"
-                ]
+              "examples": {
+                "by_iscc_code": {
+                  "summary": "Search by ISCC-CODE",
+                  "description": "Search using composite ISCC-CODE (automatically decomposed into units)",
+                  "value": {
+                    "iscc_code": "ISCC:KECYCMZIOY36XXGZ7S6QJQ2AEEXPOVEHZYPK6GMSFLU3WF54UPZMTPY"
+                  }
+                },
+                "by_units": {
+                  "summary": "Search by explicit units",
+                  "description": "Fine-grained control using individual ISCC-UNITs for asset-level matching",
+                  "value": {
+                    "units": [
+                      "ISCC:AADYCMZIOY36XXGZ5B5BME7EIPPXRFKYQZ7VXKI7V55AEQQE67A33BY",
+                      "ISCC:EED7ZPIEYNACCLXXZSS2LIM6JVXDYGCG2QSMC7DCPER4MYJPJATIM4Y"
+                    ]
+                  }
+                },
+                "by_simprints": {
+                  "summary": "Search by simprints",
+                  "description": "Chunk-level search for similar content segments using simprints",
+                  "value": {
+                    "simprints": {
+                      "CONTENT_TEXT_V0": [
+                        "AXvu3tp2kF8mN9qL4rT1sZ",
+                        "B4kl9mQ1pP7xY3jH8vW2aF"
+                      ],
+                      "SEMANTIC_TEXT_V0": [
+                        "CYhq2nR8oL3pT5mK9sX4bG"
+                      ]
+                    }
+                  }
+                },
+                "by_iscc_id": {
+                  "summary": "Find similar by ISCC-ID",
+                  "description": "Search for assets similar to a known indexed asset (excludes self-match)",
+                  "value": {
+                    "iscc_id": "ISCC:MAIGIIFJRDGEQQAA"
+                  }
+                },
+                "combined": {
+                  "summary": "Combined search",
+                  "description": "Both asset-level (units) and chunk-level (simprints) matching",
+                  "value": {
+                    "units": [
+                      "ISCC:AADYCMZIOY36XXGZ5B5BME7EIPPXRFKYQZ7VXKI7V55AEQQE67A33BY"
+                    ],
+                    "simprints": {
+                      "CONTENT_TEXT_V0": [
+                        "AXvu3tp2kF8mN9qL4rT1sZ"
+                      ]
+                    }
+                  }
+                }
               }
             }
           }

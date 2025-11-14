@@ -145,13 +145,16 @@ formatters = []
 
 
 [tool.poe.tasks]
+build =  { sequence = ["build-schema", "build-openapi", "build-validate"], help = "OpenAPI build and validattion" }
 build-schema = { shell = "uv run datamodel-codegen && uv run ruff format iscc_search/schema.py", help = "Build code from openapi.yaml schemas" }
 build-openapi = { shell = "uv run python scripts/bundle_openapi.py", help = "Bundle modular OpenAPI files into openapi.json" }
-validate-openapi = { shell = "uv run openapi-spec-validator iscc_search/openapi/openapi.json", help = "Validate bundled OpenAPI specification" }
+build-validate = { shell = "uv run openapi-spec-validator iscc_search/openapi/openapi.json", help = "Validate bundled OpenAPI specification" }
+
+format = { sequence = ["format-code", "format-markdown",], help = "Format all files" }
 format-code = { shell = "uv run ruff format .", help = "Format code files" }
 format-markdown = { shell = "uv run mdformat --end-of-line lf --wrap 112 --number *.md docs", help = "Format markdown files" }
+
 precommit = { shell = "uv run prek run"}
-format = { sequence = ["format-code", "format-markdown",], help = "Format all files" }
 test = { shell = "uv run python -m pytest -n auto --tb=line --no-header -q --cov --cov-config=pyproject.toml --cov-report=xml --cov-report=term-missing", help = "Test the code with pytest" }
 check-complexity = { shell = "uv run radon cc --min C --show-complexity --average iscc_search/", help = "Check code complexity with radon" }
-all = { sequence = ["build-schema", "build-openapi", "format", "validate-openapi", "test", "check-complexity"], help = "Run all tasks" }
+all = { sequence = ["build", "format", "test", "check-complexity"], help = "Run all tasks" }

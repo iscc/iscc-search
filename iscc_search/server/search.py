@@ -92,6 +92,9 @@ def search_text(
     If iscc-sct is installed, also generates SEMANTIC_TEXT_V0 simprints.
     Returns chunk-level matches based on text similarity.
 
+    **Note**: TODO - This endpoint will be removed once iscc-web supports dedicated simprint generation.
+    Simprint generation requires heavy dependencies and should be handled by a separate service.
+
     :param name: Index name
     :param text_query: TextQuery with plain text content
     :param limit: Maximum number of results to return (default: 100)

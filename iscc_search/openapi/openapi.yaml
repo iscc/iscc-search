@@ -484,6 +484,9 @@ paths:
       description: |
         Generates simprints from the provided text and searches for similar content
         segments in the index. Returns chunk-level matches based on text similarity.
+
+        **Note**: This endpoint will be removed once iscc-web supports dedicated simprint generation.
+        Simprint generation requires heavy dependencies and should be handled by a separate service.
       operationId: searchText
       tags:
         - search

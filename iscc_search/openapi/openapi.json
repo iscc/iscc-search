@@ -740,7 +740,7 @@
     "/indexes/{name}/search/text": {
       "post": {
         "summary": "Search by plain text",
-        "description": "Generates simprints from the provided text and searches for similar content\nsegments in the index. Returns chunk-level matches based on text similarity.\n",
+        "description": "Generates simprints from the provided text and searches for similar content\nsegments in the index. Returns chunk-level matches based on text similarity.\n\n**Note**: This endpoint will be removed once iscc-web supports dedicated simprint generation.\nSimprint generation requires heavy dependencies and should be handled by a separate service.\n",
         "operationId": "searchText",
         "tags": [
           "search"

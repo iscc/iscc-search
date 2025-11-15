@@ -500,6 +500,57 @@ def test_get_config_manager_singleton():
     assert manager1 is manager2
 
 
+def test_config_manager_auto_discovery_new_index(tmp_path, monkeypatch):
+    # type: (Path, pytest.MonkeyPatch) -> None
+    """Test auto-discovery registers new index (covers lines 410-412)."""
+    import iscc_search
+
+    # Create temp config path
+    temp_config_path = tmp_path / "config.json"
+
+    # Create initial config WITHOUT the "newindex" index
+    config_data = {
+        "active_index": "default",
+        "indexes": {"default": {"type": "local", "path": "/path/default"}},
+    }
+    temp_config_path.write_text(json.dumps(config_data))
+
+    # Create mock data directory with "newindex" directory containing index.lmdb
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+    new_index_dir = data_dir / "newindex"
+    new_index_dir.mkdir(parents=True)
+    (new_index_dir / "index.lmdb").touch()
+
+    # Create a mock dirs object with custom user_data_dir
+    class MockDirs:
+        @property
+        def user_data_dir(self):
+            # type: () -> str
+            return str(data_dir)
+
+    monkeypatch.setattr(iscc_search, "dirs", MockDirs())
+
+    # Create config manager
+    from iscc_search.config import ConfigManager
+
+    manager = ConfigManager(config_path=temp_config_path)
+
+    # Load config (will auto-discover newindex)
+    manager.load()
+
+    indexes = manager.list_indexes()
+    names = [name for name, _, _ in indexes]
+
+    # Should find auto-discovered "newindex"
+    assert "newindex" in names
+
+    # Verify it's a local index with correct path
+    newindex_cfg = [cfg for name, cfg, _ in indexes if name == "newindex"][0]
+    assert newindex_cfg.type == "local"
+    assert "newindex" in newindex_cfg.path  # type: ignore
+
+
 def test_index_config_base_class_to_dict():
     # type: () -> None
     """Test IndexConfig base class to_dict fallback."""

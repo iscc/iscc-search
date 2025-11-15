@@ -53,23 +53,32 @@ def expand_pattern_to_files(pattern):
             return list(Path(".").glob(pattern))
 
 
-def parse_asset_files(files, verbose=False, simprint_bits=None):
-    # type: (list[Path], bool, int | None) -> tuple[list[IsccEntry], list[str]]
+def parse_and_index_files(files, index, index_name, batch_size=100, verbose=False, simprint_bits=None):
+    # type: (list[Path], object, str, int, bool, int | None) -> tuple[list, list[str]]
     """
-    Parse JSON files into IsccEntry objects.
+    Parse JSON files and index assets in batches using optimized simdjson.
 
-    Uses simdjson for efficient parsing. Tracks duplicate ISCC-IDs.
+    Uses streaming approach with batched indexing to minimize memory usage.
+    Leverages simdjson proxy objects and JSON pointers for efficient field extraction.
 
     :param files: List of file paths to parse
+    :param index: Index instance for direct indexing
+    :param index_name: Target index name
+    :param batch_size: Number of assets per batch
     :param verbose: Show detailed progress for each file
     :param simprint_bits: Truncate simprints to this bit length (64, 128, 192, 256)
-    :return: Tuple of (assets, errors)
+    :return: Tuple of (all_results, errors)
     """
-    assets = []
+    all_results = []  # type: list
     errors = []
     seen_iscc_ids = {}  # type: dict[str, str]  # Track ISCC-IDs to filename mapping
+
     # Reuse parser instance for optimal performance
     parser = simdjson.Parser()
+
+    # Batch accumulator
+    batch = []  # type: list[IsccEntry]
+    batch_count = 0
 
     with Progress(
         TextColumn("[progress.description]{task.description}"),
@@ -77,20 +86,23 @@ def parse_asset_files(files, verbose=False, simprint_bits=None):
         MofNCompleteColumn(),
         console=console,
     ) as progress:
-        task = progress.add_task("Parsing files...", total=len(files))
+        parse_task = progress.add_task("Parsing files...", total=len(files))
 
         for file_path in files:
             try:
-                # Use recursive=True to get plain Python dict/list and avoid proxy object reuse issues
+                # Read file as bytes (optimal for simdjson)
                 with open(file_path, "rb") as f:
-                    doc = parser.parse(f.read(), recursive=True)
+                    file_bytes = f.read()
 
-                # Map JSON fields to IsccEntry - extract to plain Python types immediately
+                # Parse with recursive=False (default) for lazy proxy objects
+                doc = parser.parse(file_bytes)
+
+                # Map JSON fields to IsccEntry using optimized extraction
                 asset_data = {}
 
-                # Handle iscc_id
-                if "iscc_id" in doc:
-                    iscc_id = str(doc["iscc_id"])
+                # Handle iscc_id - use JSON pointer for top-level access
+                try:
+                    iscc_id = str(doc.at_pointer("/iscc_id"))
                     asset_data["iscc_id"] = iscc_id
 
                     # Check for duplicate ISCC-ID
@@ -101,17 +113,23 @@ def parse_asset_files(files, verbose=False, simprint_bits=None):
                         )
                     else:
                         seen_iscc_ids[iscc_id] = file_path.name
+                except KeyError:
+                    pass  # iscc_id not present
 
                 # Handle iscc_code - try 'iscc_code' first, fall back to 'iscc'
-                if "iscc_code" in doc:
-                    asset_data["iscc_code"] = str(doc["iscc_code"])
-                elif "iscc" in doc:
-                    asset_data["iscc_code"] = str(doc["iscc"])
+                try:
+                    asset_data["iscc_code"] = str(doc.at_pointer("/iscc_code"))
+                except KeyError:
+                    try:
+                        asset_data["iscc_code"] = str(doc.at_pointer("/iscc"))
+                    except KeyError:
+                        pass  # Neither field present
 
-                # Handle units
+                # Handle units - use dict-style access on proxy
                 if "units" in doc:
-                    # Convert to Python list of strings immediately
-                    asset_data["units"] = [str(u) for u in doc["units"]]
+                    units_proxy = doc["units"]  # Get proxy Array reference
+                    asset_data["units"] = [str(u) for u in units_proxy]
+                    del units_proxy  # Delete proxy reference
 
                 # Handle metadata - collect name and source URI
                 metadata = {}
@@ -121,39 +139,60 @@ def parse_asset_files(files, verbose=False, simprint_bits=None):
                         metadata["name"] = name
 
                 # Add source URI pointing to .iscc.utf8 file
-                # Input: 9788893459754.pdf.iscc.json → Output: 9788893459754.pdf.iscc.utf8
                 source_path = file_path.with_suffix(".utf8")
-                # Convert to fsspec-compatible file URI
-                source_uri = source_path.as_uri()
-                metadata["source"] = source_uri
+                metadata["source"] = source_path.as_uri()
 
                 if metadata:
                     asset_data["metadata"] = metadata
 
-                # Handle features - transform to simprints format
+                # Handle features - iterate over proxy array without full conversion
                 if "features" in doc:
-                    # Fully extract features to plain Python types to avoid parser reuse issues
+                    features_proxy = doc["features"]  # Get proxy Array reference
                     features = []
-                    for feature in doc["features"]:
+
+                    for feature_proxy in features_proxy:
+                        # Access fields via proxy dict (converts only accessed elements)
+                        simprints_proxy = feature_proxy.get("simprints", [])
+                        offsets_proxy = feature_proxy.get("offsets", [])
+                        sizes_proxy = feature_proxy.get("sizes", [])
+
                         feature_dict = {
-                            "maintype": str(feature.get("maintype", "")),
-                            "subtype": str(feature.get("subtype", "")),
-                            "version": int(feature.get("version", 0)),
-                            "simprints": [str(s) for s in feature.get("simprints", [])],
-                            "offsets": [int(o) for o in feature.get("offsets", [])],
-                            "sizes": [int(sz) for sz in feature.get("sizes", [])],
+                            "maintype": str(feature_proxy.get("maintype", "")),
+                            "subtype": str(feature_proxy.get("subtype", "")),
+                            "version": int(feature_proxy.get("version", 0)),
+                            "simprints": [str(s) for s in simprints_proxy],
+                            "offsets": [int(o) for o in offsets_proxy],
+                            "sizes": [int(sz) for sz in sizes_proxy],
                         }
                         features.append(feature_dict)
+
+                    # Delete proxy references (only loop vars if they were defined)
+                    del features_proxy  # Always defined at line 150
+                    if features:  # Loop variables only exist if loop executed
+                        del feature_proxy, simprints_proxy, offsets_proxy, sizes_proxy
 
                     simprints = parse_simprints_from_features(features, simprint_bits=simprint_bits)
                     if simprints:
                         asset_data["simprints"] = simprints
 
                 asset = IsccEntry(**asset_data)
-                assets.append(asset)
+                batch.append(asset)
+
+                # Delete doc proxy to allow parser reuse
+                del doc
 
                 if verbose:
                     console.print(f"[green]✓[/green] {file_path.name}")
+
+                # Flush batch when full
+                if len(batch) >= batch_size:
+                    batch_count += 1
+                    if verbose:
+                        console.print(f"[cyan]Indexing batch {batch_count} ({len(batch)} assets)...[/cyan]")
+
+                    results = index.add_assets(index_name, batch)
+                    all_results.extend(results)
+                    batch.clear()
 
             except Exception as e:
                 error_msg = f"{file_path.name}: {str(e)}"
@@ -161,9 +200,19 @@ def parse_asset_files(files, verbose=False, simprint_bits=None):
                 if verbose:
                     console.print(f"[red]✗[/red] {error_msg}")
 
-            progress.update(task, advance=1)
+            progress.update(parse_task, advance=1)
 
-    return assets, errors
+        # Flush remaining assets
+        if batch:
+            batch_count += 1
+            if verbose:
+                console.print(f"[cyan]Indexing final batch {batch_count} ({len(batch)} assets)...[/cyan]")
+
+            results = index.add_assets(index_name, batch)
+            all_results.extend(results)
+            batch.clear()
+
+    return all_results, errors
 
 
 def format_add_results(results, files_count, assets_count, errors):
@@ -195,6 +244,7 @@ def add_command(
     simprint_bits: int | None = typer.Option(
         None, "--simprint-bits", "-s", help="Truncate simprints to this bit length (64, 128, 192, or 256)"
     ),
+    batch_size: int = typer.Option(100, "--batch-size", "-b", help="Number of assets to index per batch"),
     index_name: str | None = typer.Option(None, "--index", help="Index name to use (overrides active index)"),
 ):
     # type: (...) -> None
@@ -208,7 +258,7 @@ def add_command(
         iscc-search add myfolder/*.json
         iscc-search add -s 64 /path/to/assets/
         iscc-search add --simprint-bits 128 asset.iscc.json
-        iscc-search add --index production data/*.json
+        iscc-search add --batch-size 500 --index production data/*.json
     """
     from iscc_search.cli.common import get_active_index
 
@@ -241,20 +291,24 @@ def add_command(
         console.print(f"[red]No files found matching: {pattern}[/red]")
         raise typer.Exit(code=2)
 
-    # Parse JSON files and create assets
-    assets, errors = parse_asset_files(files, verbose=verbose, simprint_bits=simprint_bits)
+    # Parse JSON files and index in batches
+    with timer(f"Processing {len(files)} file(s) to '{target_index_name}'"):
+        results, errors = parse_and_index_files(
+            files=files,
+            index=index,
+            index_name=target_index_name,
+            batch_size=batch_size,
+            verbose=verbose,
+            simprint_bits=simprint_bits,
+        )
 
-    if not assets:
+    if not results:
         console.print("[red]No valid assets found[/red]")
         if errors:
             console.print("\nErrors:")
             for error in errors:
                 console.print(f"  [red]•[/red] {error}")
         raise typer.Exit(code=4)
-
-    # Add assets to index
-    with timer(f"Indexing {len(assets)} asset(s) to '{target_index_name}'"):
-        results = index.add_assets(target_index_name, assets)
 
     # Close index to save all data
     with Progress(
@@ -267,7 +321,7 @@ def add_command(
         progress.remove_task(task)
 
     # Format and output results as JSON
-    output = format_add_results(results, len(files), len(assets), errors)
+    output = format_add_results(results, len(files), len(results), errors)
     console.print_json(json.dumps(output))
 
     if errors:

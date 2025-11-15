@@ -81,6 +81,8 @@ class UsearchIndex:
             Result count controlled by limit parameter. Will be used for global searches in future.
         :param lmdb_options: Custom LMDB options (max_dbs and subdir are forced)
         """
+        # TODO: Add connectivity/expansion_add parameters (currently using usearch defaults: 16/128).
+        #       Benchmarks show connectivity=8, expansion_add=8 gives 20x faster builds with 25% smaller indexes.
         self.path = Path(path)
         self.path.mkdir(parents=True, exist_ok=True)
 

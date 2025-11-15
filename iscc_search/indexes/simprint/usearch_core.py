@@ -39,14 +39,16 @@ class UsearchSimprintIndex:
     DEFAULT_MATCH_THRESHOLD = 0.75  # Filter noise (~25% Hamming distance)
     DEFAULT_CONFIDENCE_EXPONENT = 4  # Emphasize high-confidence matches
 
-    def __init__(self, uri, ndim=128, realm_id=None, **kwargs):
-        # type: (str, int, bytes | None, ...) -> None
+    def __init__(self, uri, ndim=128, realm_id=None, connectivity=16, expansion_add=128, **kwargs):
+        # type: (str, int, bytes | None, int, int, ...) -> None
         """
         Create or open Usearch simprint index.
 
         :param uri: Index location (file path or URI)
         :param ndim: Simprint dimensions in bits (e.g., 64, 128, 256)
         :param realm_id: ISCC-ID realm identifier (2 bytes, optional)
+        :param connectivity: HNSW graph connectivity (default 16, higher=better recall)
+        :param expansion_add: Build-time search depth (default 128, lower=faster)
         :param kwargs: match_threshold, confidence_exponent for global overrides
         """
         # Parse URI to file path
@@ -64,6 +66,8 @@ class UsearchSimprintIndex:
             metric=MetricKind.Hamming,
             dtype=ScalarKind.B1,
             multi=True,  # Multiple simprints per ISCC-ID
+            connectivity=connectivity,
+            expansion_add=expansion_add,
         )
 
         # Load from disk if exists

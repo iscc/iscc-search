@@ -152,9 +152,10 @@ def bundle_openapi():
 
     logger.info(f"Writing bundled spec to {target}")
 
-    # Write bundled JSON with LF line endings
+    # Write bundled JSON with LF line endings and trailing newline
     with open(target, "w", encoding="utf-8", newline="\n") as f:
         json.dump(bundled_spec, f, indent=2, ensure_ascii=False)
+        f.write("\n")
 
     logger.success(f"✓ Successfully bundled {source.name} → {target.name}")
 

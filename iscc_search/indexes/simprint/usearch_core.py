@@ -172,7 +172,7 @@ class UsearchSimprintIndex:
             # Quality: exponentially weighted average
             weighted_sum = sum(s**confidence_exponent for s in scores)
             weight_sum = sum(s for s in scores)
-            quality = weighted_sum / weight_sum
+            quality = weighted_sum / weight_sum if weight_sum > 0 else 0.0
 
             # Combined score
             final_score = coverage * quality

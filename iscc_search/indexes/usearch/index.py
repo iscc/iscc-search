@@ -407,7 +407,7 @@ class UsearchIndex:
                 # score^2 / score = score, so this amplifies differences
                 weighted_sum = sum(score**self.CONFIDENCE_EXPONENT for score in confident_matches.values())
                 weight_sum = sum(score for score in confident_matches.values())
-                total_score = weighted_sum / weight_sum
+                total_score = weighted_sum / weight_sum if weight_sum > 0 else 0.0
 
                 scored_results.append((key, total_score, unit_scores))
 

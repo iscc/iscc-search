@@ -216,12 +216,66 @@ def test_search_raw_default_detailed_false(index):
     assert results[0].iscc_id_body == iscc_id_body
 
 
-def test_detailed_true_raises_not_implemented(index):
+def test_detailed_true_returns_chunk_matches(index):
     # type: (UsearchSimprintIndex) -> None
-    """Test that detailed=True raises NotImplementedError."""
-    simprint = create_random_simprint()
-    with pytest.raises(NotImplementedError, match="doesn't support detailed=True"):
-        index.search_raw([simprint], detailed=True)
+    """Test that detailed=True returns chunk-level match details."""
+    # Add entry with multiple simprints
+    iscc_id_body = b"\x01" * 8
+    simprint1 = create_random_simprint()
+    simprint2 = create_random_simprint()
+    simprints = [
+        SimprintRaw(simprint=simprint1, offset=0, size=1024),
+        SimprintRaw(simprint=simprint2, offset=1024, size=1024),
+    ]
+    entry = SimprintEntryRaw(iscc_id_body=iscc_id_body, simprints=simprints)
+    index.add_raw([entry])
+
+    # Search with exact match and detailed=True
+    results = index.search_raw([simprint1], detailed=True)
+
+    assert len(results) == 1
+    result = results[0]
+    assert result.iscc_id_body == iscc_id_body
+    assert result.chunks is not None
+    assert len(result.chunks) == 1  # One query simprint matched
+
+    chunk = result.chunks[0]
+    assert chunk.query == simprint1
+    assert chunk.match == simprint1  # Exact match
+    assert chunk.score == 1.0  # Perfect match
+    assert chunk.offset == 0  # Not tracked by usearch_core
+    assert chunk.size == 0  # Not tracked by usearch_core
+    assert chunk.freq == 1  # Not tracked by usearch_core
+
+
+def test_detailed_with_multiple_query_simprints(index):
+    # type: (UsearchSimprintIndex) -> None
+    """Test detailed=True with multiple query simprints."""
+    iscc_id_body = b"\x02" * 8
+    simprint1 = create_random_simprint()
+    simprint2 = create_random_simprint()
+    simprint3 = create_random_simprint()
+    simprints = [
+        SimprintRaw(simprint=simprint1, offset=0, size=1024),
+        SimprintRaw(simprint=simprint2, offset=1024, size=1024),
+    ]
+    entry = SimprintEntryRaw(iscc_id_body=iscc_id_body, simprints=simprints)
+    index.add_raw([entry])
+
+    # Search with 2 matching + 1 non-matching simprints
+    # Use threshold=0.75 to filter out weak matches
+    results = index.search_raw([simprint1, simprint2, simprint3], detailed=True, threshold=0.75)
+
+    assert len(results) == 1
+    result = results[0]
+    assert result.chunks is not None
+    # Should have 2 chunks (simprint1 and simprint2 matched, simprint3 filtered by threshold)
+    assert len(result.chunks) == 2
+
+    # Verify both matches
+    chunk_queries = {c.query for c in result.chunks}
+    assert simprint1 in chunk_queries
+    assert simprint2 in chunk_queries
 
 
 def test_contains_checks_existence(index):
@@ -405,8 +459,8 @@ def test_match_threshold_filters_low_scores(tmp_path):
         )
     ])
 
-    # Search - poor match should be filtered by match_threshold
-    results = idx.search_raw([base], limit=10, threshold=0.0, detailed=False)
+    # Search - poor match should be filtered by threshold
+    results = idx.search_raw([base], limit=10, threshold=0.75, detailed=False)
 
     # Should still find the asset but with only 1 match counted (not 2)
     assert len(results) == 1
@@ -452,7 +506,8 @@ def test_coverage_vs_quality_tradeoff(tmp_path):
         )
     ])
 
-    results = idx.search_raw(query_simprints, limit=10, threshold=0.0, detailed=False)
+    # Use threshold=0.75 to filter weak cross-matches
+    results = idx.search_raw(query_simprints, limit=10, threshold=0.75, detailed=False)
 
     # Both should be found
     assert len(results) == 2
@@ -473,25 +528,25 @@ def test_coverage_vs_quality_tradeoff(tmp_path):
 
 def test_search_with_custom_match_threshold(tmp_path):
     # type: (Path) -> None
-    """Test per-query match_threshold override."""
+    """Test per-query threshold parameter."""
     path = tmp_path / "custom_threshold.index"
     idx = UsearchSimprintIndex(str(path), ndim=128)
 
     base = create_random_simprint(128)
     asset_id = b"\x01" * 8
 
-    # Create simprint with ~80% match (25 bits different)
+    # Create simprint with ~80% match (26 bits different)
     match_80 = flip_bits(base, 26)
     idx.add_raw([
         SimprintEntryRaw(iscc_id_body=asset_id, simprints=[SimprintRaw(simprint=match_80, offset=0, size=1024)])
     ])
 
-    # With default threshold (0.75), should find match
-    results_default = idx.search_raw([base], detailed=False)
+    # With threshold 0.75, should find match (~80% > 75%)
+    results_default = idx.search_raw([base], detailed=False, threshold=0.75)
     assert len(results_default) == 1
 
-    # With stricter threshold (0.85), should not find match
-    results_strict = idx.search_raw([base], detailed=False, match_threshold=0.85)
+    # With stricter threshold (0.85), should not find match (~80% < 85%)
+    results_strict = idx.search_raw([base], detailed=False, threshold=0.85)
     assert len(results_strict) == 0
 
     idx.close()
@@ -693,5 +748,29 @@ def test_threshold_parameter(tmp_path):
     # With very high threshold, should not find it
     results_high = idx.search_raw([base], threshold=0.95, detailed=False)
     assert len(results_high) == 0
+
+    idx.close()
+
+
+def test_optimize_compacts_index(tmp_path):
+    # type: (Path) -> None
+    """Test that optimize() calls compact() on the index."""
+    path = tmp_path / "test_optimize.usearch"
+    idx = UsearchSimprintIndex(str(path), ndim=128)
+
+    # Add some entries
+    for i in range(10):
+        iscc_id_body = i.to_bytes(8, "big")
+        simprint = create_random_simprint()
+        entry = SimprintEntryRaw(
+            iscc_id_body=iscc_id_body, simprints=[SimprintRaw(simprint=simprint, offset=0, size=1024)]
+        )
+        idx.add_raw([entry])
+
+    # Call optimize - should not raise
+    idx.optimize()
+
+    # Verify index still works after optimization
+    assert len(idx) == 10
 
     idx.close()

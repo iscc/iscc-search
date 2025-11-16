@@ -34,6 +34,7 @@ class SimprintMultiIndex:
     Supported Backends:
     - "lmdb": LmdbSimprintIndex (hard-boundary, IDF scoring, single-file storage)
     - "lancedb": LancedbSimprintIndex (soft-boundary, exponential weighting, directory storage)
+    - "usearch": UsearchSimprintIndex (soft-boundary, exponential weighting, single-file storage)
 
     Architecture:
     - Root directory contains backend-specific files: SIMPRINT_{type}{ext}
@@ -48,6 +49,7 @@ class SimprintMultiIndex:
     BACKEND_MAP = {
         "lmdb": ("iscc_search.indexes.simprint.lmdb_core", "LmdbSimprintIndex", ".lmdb"),
         "lancedb": ("iscc_search.indexes.simprint.lancedb_core", "LancedbSimprintIndex", ""),
+        "usearch": ("iscc_search.indexes.simprint.usearch_core", "UsearchSimprintIndex", ".usearch"),
     }
 
     def __init__(self, uri, backend="lmdb", **kwargs):
@@ -56,7 +58,7 @@ class SimprintMultiIndex:
         Open or create a multi-type simprint index at the specified location.
 
         :param uri: Index location (path or file:// URI) - directory containing backend files
-        :param backend: Backend implementation ("lmdb" or "lancedb", default "lmdb")
+        :param backend: Backend implementation ("lmdb", "lancedb", or "usearch", default "lmdb")
         :param kwargs: Backend-specific configuration options
         """
         if backend not in self.BACKEND_MAP:
@@ -260,6 +262,7 @@ class SimprintMultiIndex:
         Optimize all type-specific indexes for better performance.
 
         For LanceDB: Builds vector indexes for fast ANN search.
+        For Usearch: Compacts index for better memory layout and performance.
         For LMDB: Currently a no-op (LMDB doesn't need optimization).
 
         Call after adding data to ensure best query performance.

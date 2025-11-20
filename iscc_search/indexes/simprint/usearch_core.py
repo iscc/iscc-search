@@ -13,7 +13,7 @@ Storage:
 Ranking:
     - Threshold filters individual simprint matches (noise rejection)
     - Multi-query aggregation with exponential confidence weighting
-    - Combined score: coverage * quality
+    - Score: exponentially weighted average of matched chunks (no coverage penalty)
     - Returns top limit results (no final score threshold)
     - Efficient: fetches only limit candidates per query simprint
 """
@@ -38,10 +38,11 @@ class UsearchSimprintIndex:
     Uses multi-query aggregation with configurable confidence weighting.
     """
 
-    # Global default constant (overridable per query)
+    # Global default constants (overridable per query)
     DEFAULT_CONFIDENCE_EXPONENT = 4  # Emphasize high-confidence matches
+    DEFAULT_COVERAGE_WEIGHT = 0.2  # Coverage influence (0=ignore, higher=more separation)
 
-    def __init__(self, uri, ndim=128, realm_id=None, connectivity=16, expansion_add=128, **kwargs):
+    def __init__(self, uri, ndim=128, realm_id=None, connectivity=8, expansion_add=16, **kwargs):
         # type: (str, int, bytes | None, int, int, ...) -> None
         """
         Create or open Usearch simprint index.
@@ -49,8 +50,8 @@ class UsearchSimprintIndex:
         :param uri: Index location (file path or URI)
         :param ndim: Simprint dimensions in bits (e.g., 64, 128, 256)
         :param realm_id: ISCC-ID realm identifier (2 bytes, optional)
-        :param connectivity: HNSW graph connectivity (default 16, higher=better recall)
-        :param expansion_add: Build-time search depth (default 128, lower=faster)
+        :param connectivity: HNSW graph connectivity (default 8, higher=better recall, slower build)
+        :param expansion_add: Build-time search depth (default 16, lower=faster bulk indexing)
         :param kwargs: match_threshold, confidence_exponent for global overrides
         """
         # Parse URI to file path
@@ -124,22 +125,24 @@ class UsearchSimprintIndex:
         Fetches top limit candidates per query simprint, filters by threshold (noise rejection),
         aggregates by asset, returns top limit results sorted by combined score.
 
-        Per-query configurable exponent via kwargs:
-        - confidence_exponent: Override DEFAULT_CONFIDENCE_EXPONENT (e.g., 6)
+        Per-query configurable parameters via kwargs:
+        - confidence_exponent: Override DEFAULT_CONFIDENCE_EXPONENT (e.g., 6 for more emphasis)
+        - coverage_weight: Override DEFAULT_COVERAGE_WEIGHT (e.g., 0.0=ignore, 0.5=more influence)
 
         :param simprints: Binary simprints to search for
         :param limit: Maximum results to return (also candidate count per simprint, default 10)
         :param threshold: Minimum individual simprint match score to consider (0.0-1.0, default 0.0, typical 0.8)
         :param detailed: If True, include chunk matches (offset/size not tracked, will be 0)
-        :return: list[SimprintMatchRaw] ordered by combined score (coverage*quality), limited to top limit results
+        :return: list[SimprintMatchRaw] ordered by quality score (exponentially weighted average), limited to top limit results
         """
         from iscc_search.indexes.simprint.models import SimprintMatchRaw, MatchedChunkRaw
 
         if not simprints:
             return []
 
-        # Use per-query override or fall back to class default
+        # Use per-query overrides or fall back to class defaults
         confidence_exponent = kwargs.get("confidence_exponent", self.DEFAULT_CONFIDENCE_EXPONENT)
+        coverage_weight = kwargs.get("coverage_weight", self.DEFAULT_COVERAGE_WEIGHT)
 
         # Convert simprints to numpy array
         query_vectors = np.stack([np.frombuffer(s, dtype=np.uint8) for s in simprints])
@@ -157,7 +160,8 @@ class UsearchSimprintIndex:
             batch_results = [batch_results]
 
         # Step 2: Aggregate by asset with individual match filtering
-        asset_scores = defaultdict(list)
+        # Track best score per query_idx per asset (naturally bounds coverage to [0,1])
+        asset_scores = defaultdict(dict)
         for query_idx in range(len(simprints)):
             matches = batch_results[query_idx]
             # Access keys and distances arrays directly
@@ -169,21 +173,32 @@ class UsearchSimprintIndex:
                 score = 1.0 - (distance / self.ndim)
                 # Filter weak matches (noise) by threshold
                 if score >= threshold:
-                    asset_scores[key].append(score)
+                    # Keep only best match per query per asset
+                    if query_idx not in asset_scores[key]:
+                        asset_scores[key][query_idx] = score
+                    else:
+                        asset_scores[key][query_idx] = max(asset_scores[key][query_idx], score)
 
         # Step 3: Calculate weighted scores
         scored_results = []
-        for key_uint64, scores in asset_scores.items():
-            # Coverage: fraction of query simprints matched
-            coverage = len(scores) / len(simprints)
+        for key_uint64, query_scores in asset_scores.items():
+            scores = list(query_scores.values())  # One score per query index
 
-            # Quality: exponentially weighted average
-            weighted_sum = sum(s**confidence_exponent for s in scores)
-            weight_sum = sum(s for s in scores)
+            # Quality: exponentially weighted average of matched chunks
+            # Each score is weighted by score^k to emphasize high-confidence matches
+            weighted_sum = sum(s ** (confidence_exponent + 1) for s in scores)  # s^k * s = s^(k+1)
+            weight_sum = sum(s**confidence_exponent for s in scores)  # sum of weights
             quality = weighted_sum / weight_sum if weight_sum > 0 else 0.0
 
-            # Combined score
-            final_score = coverage * quality
+            # Apply configurable coverage weighting to help separate true/false positives
+            # Formula: coverage^w × quality where w controls influence (0=ignore)
+            # Both terms in [0,1] so product naturally bounded to [0,1]
+            if coverage_weight > 0:
+                coverage = len(scores) / len(simprints)
+                final_score = (coverage**coverage_weight) * quality
+            else:
+                # No coverage influence - quality only
+                final_score = quality
 
             # Convert numpy.uint64 to Python int before to_bytes
             iscc_id_body = int(key_uint64).to_bytes(8, "big", signed=False)
@@ -248,6 +263,26 @@ class UsearchSimprintIndex:
                         )
 
                 result.chunks = chunks if chunks else None
+
+                # Recalculate score based on actual chunk matches
+                # Note: chunks is guaranteed non-empty because asset is in scored_results
+                # only if at least one query simprint matched >= threshold initially
+                chunk_scores = [chunk.score for chunk in chunks]
+
+                # Quality: exponentially weighted average of matched chunks
+                weighted_sum = sum(s ** (confidence_exponent + 1) for s in chunk_scores)
+                weight_sum = sum(s**confidence_exponent for s in chunk_scores)
+                quality = weighted_sum / weight_sum if weight_sum > 0 else 0.0
+
+                # Apply coverage weighting
+                if coverage_weight > 0:
+                    coverage = len(chunk_scores) / len(simprints)
+                    final_score = (coverage**coverage_weight) * quality
+                else:
+                    final_score = quality
+
+                result.score = final_score
+                result.matches = len(chunks)
 
         # Step 5: Sort and limit
         scored_results.sort(key=lambda x: (-x.score, x.iscc_id_body))

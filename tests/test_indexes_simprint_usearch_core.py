@@ -144,6 +144,30 @@ def test_search_raw_returns_matches(index):
     assert results[0].chunks is None
 
 
+def test_search_raw_with_detailed(index):
+    # type: (UsearchSimprintIndex) -> None
+    """Test that search_raw with detailed=True returns chunk information."""
+    iscc_id_body = b"\x01" * 8
+    base_simprint = create_random_simprint()
+    simprints = [SimprintRaw(simprint=base_simprint, offset=0, size=1024)]
+    entry = SimprintEntryRaw(iscc_id_body=iscc_id_body, simprints=simprints)
+
+    index.add_raw([entry])
+
+    # Search with detailed=True
+    results = index.search_raw([base_simprint], limit=10, threshold=0.0, detailed=True)
+
+    assert len(results) == 1
+    assert results[0].iscc_id_body == iscc_id_body
+    assert results[0].chunks is not None
+    assert len(results[0].chunks) == 1  # One chunk match
+    chunk = results[0].chunks[0]
+    assert chunk.score > 0.9  # Should be very high
+    assert chunk.offset == 0  # Position tracking not supported (usearch)
+    assert chunk.size == 0  # Position tracking not supported (usearch)
+    assert chunk.freq == 1  # Frequency tracking not supported (usearch)
+
+
 def test_search_empty_index_returns_empty(index):
     # type: (UsearchSimprintIndex) -> None
     """Test that searching an empty index returns empty results."""
@@ -590,18 +614,25 @@ def test_search_with_custom_confidence_exponent(tmp_path):
         )
     ])
 
-    # Search with linear weighting (exponent=1)
-    results_linear = idx.search_raw([base1, base2], detailed=False, confidence_exponent=1)
+    # Search with linear weighting (exponent=1) and no coverage influence
+    results_linear = idx.search_raw([base1, base2], detailed=False, confidence_exponent=1, coverage_weight=0.0)
 
-    # Search with exponential weighting (exponent=4)
-    results_exp = idx.search_raw([base1, base2], detailed=False, confidence_exponent=4)
+    # Search with exponential weighting (exponent=4) and no coverage influence
+    results_exp = idx.search_raw([base1, base2], detailed=False, confidence_exponent=4, coverage_weight=0.0)
 
-    # With linear (exp=1): Asset A has better average (0.9 vs 0.85), so A wins
-    # With exponential (exp=4): Asset B's perfect match gets heavily weighted, so B wins
+    # With weighted average formula (sum(s^(k+1)) / sum(s^k)), even exp=1 favors peak scores
+    # Asset B wins with both settings, but margin increases with higher exponent
+    # Linear (exp=1): B score ~0.91, A score ~0.90 (small advantage for peak)
+    # Exponential (exp=4): B score ~0.94, A score ~0.90 (large advantage for peak)
     assert len(results_linear) == 2
     assert len(results_exp) == 2
-    assert results_linear[0].iscc_id_body == asset_a_id  # A wins with linear
-    assert results_exp[0].iscc_id_body == asset_b_id  # B wins with exponential
+    assert results_linear[0].iscc_id_body == asset_b_id  # B wins (peak score advantage)
+    assert results_exp[0].iscc_id_body == asset_b_id  # B wins (peak score heavily weighted)
+
+    # Verify score gap increases with higher exponent
+    linear_gap = results_linear[0].score - results_linear[1].score
+    exp_gap = results_exp[0].score - results_exp[1].score
+    assert exp_gap > linear_gap  # Higher exponent increases score gap
 
     idx.close()
 
@@ -772,5 +803,42 @@ def test_optimize_compacts_index(tmp_path):
 
     # Verify index still works after optimization
     assert len(idx) == 10
+
+    idx.close()
+
+
+def test_detailed_search_with_zero_coverage_weight(tmp_path):
+    # type: (Path) -> None
+    """Test detailed=True with coverage_weight=0.0 uses quality-only scoring."""
+    path = tmp_path / "coverage_zero.index"
+    idx = UsearchSimprintIndex(str(path), ndim=128)
+
+    base1 = create_random_simprint(128)
+    base2 = create_random_simprint(128)
+
+    # Asset with 2 simprints
+    asset_id = b"\x01" * 8
+    idx.add_raw([
+        SimprintEntryRaw(
+            iscc_id_body=asset_id,
+            simprints=[
+                SimprintRaw(simprint=base1, offset=0, size=1024),
+                SimprintRaw(simprint=base2, offset=1024, size=1024),
+            ],
+        )
+    ])
+
+    # Search with detailed=True and coverage_weight=0.0
+    # This triggers the else branch at line 281 (final_score = quality)
+    results = idx.search_raw([base1, base2], detailed=True, coverage_weight=0.0, threshold=0.0)
+
+    assert len(results) == 1
+    assert results[0].iscc_id_body == asset_id
+    assert results[0].chunks is not None
+    assert len(results[0].chunks) == 2
+
+    # Score should be pure quality (no coverage influence)
+    # With perfect matches, quality should be 1.0
+    assert results[0].score == 1.0
 
     idx.close()

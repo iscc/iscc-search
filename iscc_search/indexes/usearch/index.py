@@ -22,7 +22,7 @@ from iscc_search.schema import IsccAddResult, IsccGlobalMatch, IsccSearchResult,
 from iscc_search.models import IsccUnit, IsccID
 from iscc_search.indexes import common
 from iscc_search.nphd import NphdIndex
-from iscc_search.indexes.simprint.lmdb_multi import LmdbSimprintIndexMulti
+from iscc_search.indexes.simprint.multi import SimprintMultiIndex
 from iscc_search.indexes.simprint.models import SimprintRaw, SimprintEntryMulti
 import iscc_core as ic
 
@@ -69,7 +69,7 @@ class UsearchIndex:
     MAX_RESIZE_RETRIES = 10  # Maximum number of resize attempts
     MAX_MAP_SIZE = 1024 * 1024 * 1024 * 1024  # 1 TB maximum map size
 
-    def __init__(self, path, realm_id=None, max_dim=256, threshold=0.0, lmdb_options=None):
+    def __init__(self, path, realm_id=None, max_dim=256, threshold=0.75, lmdb_options=None):
         # type: (str | Path, int | None, int, float, dict | None) -> None
         """
         Create or open usearch index at directory path.
@@ -81,8 +81,7 @@ class UsearchIndex:
             Result count controlled by limit parameter. Will be used for global searches in future.
         :param lmdb_options: Custom LMDB options (max_dbs and subdir are forced)
         """
-        # TODO: Add connectivity/expansion_add parameters (currently using usearch defaults: 16/128).
-        #       Benchmarks show connectivity=8, expansion_add=8 gives 20x faster builds with 25% smaller indexes.
+        # Simprint index uses optimized connectivity=8, expansion_add=16 (benchmarked for fast bulk indexing)
         self.path = Path(path)
         self.path.mkdir(parents=True, exist_ok=True)
 
@@ -90,7 +89,7 @@ class UsearchIndex:
         self.threshold = threshold  # type: float
         self._realm_id = None  # type: int | None
         self._nphd_indexes = {}  # type: dict[str, NphdIndex]
-        self._simprint_index = None  # type: LmdbSimprintIndexMulti | None
+        self._simprint_index = None  # type: SimprintMultiIndex | None
 
         # Setup LMDB
         lmdb_path = self.path / "index.lmdb"
@@ -242,7 +241,7 @@ class UsearchIndex:
                     # Update metadata with new vector count
                     self._update_nphd_metadata(unit_type, nphd_index.size)
 
-                # Add simprints to LmdbSimprintIndexMulti (if present)
+                # Add simprints to SimprintMultiIndex (if present)
                 if self._simprint_index is not None:  # pragma: no branch
                     simprint_entries = []
                     for asset in assets:
@@ -252,6 +251,7 @@ class UsearchIndex:
 
                     if simprint_entries:
                         self._simprint_index.add_raw_multi(simprint_entries)
+                        self._simprint_index.optimize()  # Build vector indexes for fast search
                         logger.debug(f"Added {len(simprint_entries)} simprint entries")
 
                 break  # Success
@@ -835,16 +835,16 @@ class UsearchIndex:
     def _load_simprint_index(self):
         # type: () -> None
         """
-        Load or create LmdbSimprintIndexMulti for chunk-level simprint indexing.
+        Load or create SimprintMultiIndex (usearch backend) for chunk-level simprint indexing.
 
-        Simprint indexes are stored as SIMPRINT_*.lmdb files in the same
+        Simprint indexes are stored as SIMPRINT_*.usearch files in the same
         directory as .usearch files (flat structure, no subdirectory).
 
         Validates realm consistency between UsearchIndex and simprint indexes.
         """
         try:
             # Use same directory as index.lmdb (flat storage)
-            self._simprint_index = LmdbSimprintIndexMulti(uri=str(self.path))
+            self._simprint_index = SimprintMultiIndex(uri=str(self.path), backend="usearch")
 
             # Verify realm consistency if both indexes have data
             if self._simprint_index.realm_id_int is not None and self._realm_id is not None:
@@ -857,6 +857,9 @@ class UsearchIndex:
             indexed_types = self._simprint_index.get_indexed_types()
             if indexed_types:
                 logger.debug(f"Loaded simprint index with types: {indexed_types}")
+                for simprint_type, backend_index in self._simprint_index.indexes.items():
+                    backend_index.index.expansion_search = 512
+                    logger.debug(f"Set expansion_search=512 for simprint type '{simprint_type}'")
         except Exception as e:
             logger.error(f"Failed to load simprint index: {e}")
             raise

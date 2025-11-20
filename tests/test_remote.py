@@ -366,8 +366,10 @@ def test_remote_index_get_nonexistent_asset(remote_client, test_server, sample_i
         remote_client.get_asset("test", sample_iscc_ids[0])
 
 
-def test_remote_index_search_assets(remote_client, test_server, sample_content_units, sample_iscc_ids):
-    # type: (RemoteIndex, TestClient, list[str], list[str]) -> None
+def test_remote_index_search_assets(
+    remote_client, test_server, sample_content_units, sample_iscc_ids, sample_iscc_codes
+):
+    # type: (RemoteIndex, TestClient, list[str], list[str], list[str]) -> None
     """Test searching for similar assets."""
     from iscc_search.schema import IsccEntry, IsccQuery, IsccSearchResult
 
@@ -375,13 +377,14 @@ def test_remote_index_search_assets(remote_client, test_server, sample_content_u
     test_server.post("/indexes", json={"name": "test"})
     asset = IsccEntry(
         iscc_id=sample_iscc_ids[0],
+        iscc_code=sample_iscc_codes[0],  # Add iscc_code for MemoryIndex matching
         units=[sample_content_units[0], sample_content_units[1]],
         metadata={"name": "Test Asset"},
     )
     test_server.post("/indexes/test/assets", json=[asset.model_dump(exclude_unset=True)])
 
-    # Search
-    query = IsccQuery(units=[sample_content_units[0], sample_content_units[1]])
+    # Search with iscc_code
+    query = IsccQuery(iscc_code=sample_iscc_codes[0])
     result = remote_client.search_assets("test", query, limit=10)
 
     assert isinstance(result, IsccSearchResult)

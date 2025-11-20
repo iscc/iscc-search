@@ -547,3 +547,23 @@ def test_get_or_create_index_with_entries_no_simprints(temp_index_path):
     assert sub_index.ndim is None  # Can't auto-detect without simprints
 
     index.close()
+
+
+def test_realm_id_int_property(temp_index_path, sample_entries):
+    # type: (Path, list[SimprintEntryMulti]) -> None
+    """Test realm_id_int property extracts realm ID from header."""
+    index = LmdbSimprintIndexMulti(str(temp_index_path))
+
+    # Before adding entries, realm_id_int should be None
+    assert index.realm_id_int is None
+
+    # Add entries to set realm_id
+    index.add_raw_multi(sample_entries)
+
+    # Extract realm ID as integer from header
+    realm_int = index.realm_id_int
+    assert realm_int is not None
+    assert isinstance(realm_int, int)
+    assert realm_int in (0, 1)  # Valid realm IDs are 0 or 1
+
+    index.close()

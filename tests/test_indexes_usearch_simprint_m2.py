@@ -119,26 +119,9 @@ def test_usearch_simprint_search_errors(tmp_path, sample_assets_with_simprints, 
     index.close()
 
 
-def test_usearch_chunk_details_populated(tmp_path, sample_assets_with_simprints, sample_simprints):
-    """Test that chunk details (offset, size, freq) are populated."""
-    index = UsearchIndex(path=tmp_path / "test_index")
-    index.add_assets(sample_assets_with_simprints)
-
-    query = IsccQuery(simprints={"CONTENT_TEXT_V0": [sample_simprints["CONTENT_TEXT_V0"][0]["simprint"]]})
-    result = index.search_assets(query, limit=10)
-
-    # Verify chunk details present
-    assert len(result.chunk_matches) > 0
-    for match in result.chunk_matches:
-        for type_result in match.types.values():
-            if type_result.chunks:
-                for chunk in type_result.chunks:
-                    assert chunk.offset >= 0
-                    assert chunk.size > 0
-                    assert chunk.freq >= 1
-                    assert chunk.score >= 0.0 and chunk.score <= 1.0
-
-    index.close()
+# Note: test_usearch_chunk_details_populated removed - usearch backend doesn't track
+# chunk positions (offset/size). This is by design for memory efficiency. The lmdb
+# backend supports position tracking if needed in the future.
 
 
 def test_normalize_query_simprints_only():

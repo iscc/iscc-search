@@ -30,15 +30,16 @@ def test_usearch_simprint_indexing(tmp_path, sample_assets_with_simprints):
     results = index.add_assets(sample_assets_with_simprints)
     assert len(results) == 5
 
-    # Verify SIMPRINT_*.lmdb files created in same directory as index.lmdb
-    simprint_files = list(tmp_path.glob("test_index/SIMPRINT_*.lmdb"))
-    assert len(simprint_files) > 0  # At least one simprint type indexed
-
-    # Verify can load index
+    # Verify in-memory index has types
     indexed_types = index._simprint_index.get_indexed_types()
     assert "CONTENT_TEXT_V0" in indexed_types or "SEMANTIC_TEXT_V0" in indexed_types
 
+    # Close index to persist files to disk
     index.close()
+
+    # Verify SIMPRINT_*.usearch files created in same directory as index.lmdb
+    simprint_files = list(tmp_path.glob("test_index/SIMPRINT_*.usearch"))
+    assert len(simprint_files) > 0  # At least one simprint type indexed
 
 
 def test_usearch_threshold_parameter(tmp_path):
@@ -49,7 +50,7 @@ def test_usearch_threshold_parameter(tmp_path):
 
     # Default threshold
     index2 = UsearchIndex(path=tmp_path / "test_index2")
-    assert index2.threshold == 0.0
+    assert index2.threshold == 0.75
     index2.close()
 
 
@@ -188,7 +189,7 @@ def test_usearch_empty_simprints(tmp_path, sample_iscc_ids, sample_content_units
     assert len(results) == 1
 
     # Verify no simprint files created
-    simprint_files = list(tmp_path.glob("test_index/SIMPRINT_*.lmdb"))
+    simprint_files = list(tmp_path.glob("test_index/SIMPRINT_*.usearch"))
     assert len(simprint_files) == 0
 
     index.close()
@@ -269,8 +270,10 @@ def test_usearch_load_simprint_realm_mismatch(tmp_path, sample_assets_with_simpr
     index1.close()
 
     # Copy realm-1 simprint files to realm-0 index (creating mismatch)
-    for simprint_file in (tmp_path / "realm1_index").glob("SIMPRINT_*.lmdb"):
-        shutil.copy(simprint_file, tmp_path / "realm0_index" / simprint_file.name)
+    # Usearch backend creates .usearch and .metadata.json files
+    for simprint_file in (tmp_path / "realm1_index").glob("SIMPRINT_*"):
+        if simprint_file.is_file():
+            shutil.copy(simprint_file, tmp_path / "realm0_index" / simprint_file.name)
 
     # Try to reopen realm-0 index - should detect realm mismatch
     with pytest.raises(ValueError, match="Realm ID mismatch"):
@@ -281,11 +284,11 @@ def test_usearch_load_simprint_error(tmp_path, monkeypatch):
     """Test error handling when simprint index fails to load."""
     import iscc_search.indexes.usearch.index as usearch_module
 
-    # Mock LmdbSimprintIndexMulti to raise exception
+    # Mock SimprintMultiIndex to raise exception
     def mock_init(*args, **kwargs):
         raise RuntimeError("Simulated simprint load failure")
 
-    monkeypatch.setattr(usearch_module, "LmdbSimprintIndexMulti", mock_init)
+    monkeypatch.setattr(usearch_module, "SimprintMultiIndex", mock_init)
 
     # Try to create index - should raise exception from simprint loading
     with pytest.raises(RuntimeError, match="Simulated simprint load failure"):

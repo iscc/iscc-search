@@ -58,6 +58,7 @@ dependencies = [
     "pydantic-settings>=2.0.0",
     "httpx>=0.28.1",
     "simsimd>=6.5.3",
+    "iscc-sct>=0.1.3",
 ]
 
 [project.urls]
@@ -89,9 +90,7 @@ dev = [
     "pytest-xdist>=3.8.0",
     "radon>=6.0.1",
     "openapi-spec-validator>=0.7.2",
-]
-semantic = [
-    "iscc-sct>=0.1.3",
+    "psycopg[binary]>=3.2.12",
 ]
 
 [build-system]

@@ -5,6 +5,42 @@ import pytest
 from fastapi.testclient import TestClient
 
 
+@pytest.fixture(scope="session", autouse=True)
+def isolate_tests_from_user_data(tmp_path_factory):
+    # type: (pytest.TempPathFactory) -> None
+    """
+    Ensure tests never touch user's actual data directory.
+
+    This session-scoped fixture runs automatically before all tests and overrides
+    the default index URI to use a temporary directory. This prevents tests from
+    accidentally loading or modifying user's operational indexes.
+
+    :param tmp_path_factory: Pytest factory for creating temp directories
+    """
+    import iscc_search.settings
+    import os
+
+    # Create isolated temp directory for test session
+    test_data_dir = tmp_path_factory.mktemp("test_data")
+
+    # Save original settings
+    original_index_uri = iscc_search.settings.search_settings.index_uri
+
+    # Override default to use temp directory (unless explicitly set by test)
+    # This protects against tests that forget to set index_uri
+    default_test_uri = f"usearch:///{test_data_dir.as_posix()}"
+    iscc_search.settings.search_settings.index_uri = default_test_uri
+
+    # Also set environment variable as fallback
+    os.environ.setdefault("ISCC_SEARCH_INDEX_URI", default_test_uri)
+
+    yield
+
+    # Restore original settings after all tests
+    iscc_search.settings.search_settings.index_uri = original_index_uri
+    os.environ.pop("ISCC_SEARCH_INDEX_URI", None)
+
+
 @pytest.fixture
 def sample_iscc_ids():
     # type: () -> list[str]

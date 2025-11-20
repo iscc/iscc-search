@@ -21,7 +21,7 @@ def test_server():
     import os
 
     # Configure for memory index
-    os.environ["ISCC_SEARCH_INDEX_LOCATION"] = "memory://"
+    os.environ["ISCC_SEARCH_INDEX_URI"] = "memory://"
 
     from iscc_search.server import app
 
@@ -30,7 +30,7 @@ def test_server():
         yield client
 
     # Cleanup environment
-    os.environ.pop("ISCC_SEARCH_INDEX_LOCATION", None)
+    os.environ.pop("ISCC_SEARCH_INDEX_URI", None)
 
 
 @pytest.fixture

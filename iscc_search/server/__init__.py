@@ -1,5 +1,6 @@
 """FastAPI server for ISCC-Search API."""
 
+import sys
 import typing  # noqa: F401
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -7,8 +8,19 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
+from loguru import logger
 from iscc_search.settings import get_index, search_settings
 from iscc_search.protocols.index import IsccIndexProtocol  # noqa: F401
+
+
+# Configure loguru for production logging
+logger.remove()  # Remove default handler
+logger.add(
+    sys.stdout,
+    format="{time:YYYY-MM-DD HH:mm:ss.SSS} | {level: <7} | {name}:{function}:{line} - {message}",
+    level="INFO",
+    colorize=False,  # Disable colors for clean Docker logs
+)
 
 
 @asynccontextmanager

@@ -41,7 +41,7 @@ WORKDIR /app
 # This excludes source code, build files, and other artifacts
 COPY --from=builder /app/.venv /app/.venv
 
-# Copy application code
+# Copy application code (includes log_config.json)
 COPY --from=builder /app/iscc_search /app/iscc_search
 
 # Copy OpenAPI schema files (needed by the app)
@@ -63,7 +63,9 @@ ENV ISCC_SEARCH_INDEX_URI=usearch:///data
 # - Single worker only: usearch indexes have no multi-process coordination
 # - Graceful shutdown: 60s timeout allows large indexes to save cleanly
 # - Concurrency: FastAPI async/await handles concurrent connections with single worker
+# - Log config: Custom logging with timestamps for better production visibility
 CMD ["uvicorn", "iscc_search.server:app", \
      "--host", "0.0.0.0", \
      "--port", "8000", \
-     "--timeout-graceful-shutdown", "60"]
+     "--timeout-graceful-shutdown", "60", \
+     "--log-config", "/app/iscc_search/log_config.json"]

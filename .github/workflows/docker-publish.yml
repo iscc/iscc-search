@@ -21,6 +21,18 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Cache iscc-sct model
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/share/iscc-sct
+          key: iscc-sct-model-${{ hashFiles('**/pyproject.toml') }}
+          restore-keys: |
+            iscc-sct-model-
+
+      - name: Pre-download iscc-sct model
+        run: |
+          uv run python -c "import iscc_sct.code_semantic_text as sct; sct.model()"
+
       - name: Run tests
         run: uv run poe test
 

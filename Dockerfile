@@ -30,6 +30,11 @@ COPY . .
 # This creates compiled bytecode and optimized install
 RUN uv sync --locked --no-editable --no-dev
 
+# Pre-download iscc-sct model weights during build
+# This ensures the model is available immediately on container start
+# Model is downloaded to ~/.local/share/iscc-sct/ during build
+RUN .venv/bin/python -c "import iscc_sct.code_semantic_text as sct; sct.model()"
+
 
 # Stage 2: Runtime - minimal production image
 FROM python:3.12-slim
@@ -46,6 +51,9 @@ COPY --from=builder /app/iscc_search /app/iscc_search
 
 # Copy OpenAPI schema files (needed by the app)
 COPY --from=builder /app/iscc_search/openapi /app/iscc_search/openapi
+
+# Copy pre-downloaded iscc-sct model from builder
+COPY --from=builder /root/.local/share/iscc-sct /root/.local/share/iscc-sct
 
 # Add virtual environment to PATH
 ENV PATH="/app/.venv/bin:$PATH"

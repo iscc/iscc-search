@@ -460,7 +460,7 @@ class LancedbSimprintIndex:
     def _init_table(self):
         # type: () -> None
         """Initialize or open the LanceDB table."""
-        table_names = self.db.table_names()
+        table_names = self.db.list_tables().tables
 
         if self._TABLE_NAME in table_names:
             # Open existing table

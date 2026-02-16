@@ -155,20 +155,20 @@ def test_nphd_index_init_custom_max_dim():
 
 
 def test_nphd_index_init_rejects_ndim():
-    """Test that NphdIndex raises assertion error when ndim is provided."""
-    with pytest.raises(AssertionError, match="`ndim` is calculated from `max_dim`"):
+    """Test that NphdIndex raises TypeError when ndim is provided."""
+    with pytest.raises(TypeError, match="`ndim` is calculated from `max_dim`"):
         NphdIndex(ndim=100)
 
 
 def test_nphd_index_init_rejects_metric():
-    """Test that NphdIndex raises assertion error when metric is provided."""
-    with pytest.raises(AssertionError, match="`metric` is set automatically"):
+    """Test that NphdIndex raises TypeError when metric is provided."""
+    with pytest.raises(TypeError, match="`metric` is set automatically"):
         NphdIndex(metric="hamming")
 
 
 def test_nphd_index_init_rejects_dtype():
-    """Test that NphdIndex raises assertion error when dtype is provided."""
-    with pytest.raises(AssertionError, match="`dtype` is set automatically"):
+    """Test that NphdIndex raises TypeError when dtype is provided."""
+    with pytest.raises(TypeError, match="`dtype` is set automatically"):
         NphdIndex(dtype="float32")
 
 

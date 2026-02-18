@@ -4,7 +4,7 @@
 from __future__ import annotations
 from pydantic import AnyUrl, BaseModel, ConfigDict, Field, RootModel
 from typing import Annotated, Any
-from enum import Enum
+from enum import StrEnum
 
 
 class HttpError(BaseModel):
@@ -119,7 +119,7 @@ class IsccQuery(BaseModel):
     ] = None
 
 
-class Status(str, Enum):
+class Status(StrEnum):
     created = "created"
     updated = "updated"
 
@@ -226,7 +226,7 @@ class IsccMatchedChunk(BaseModel):
     ] = None
 
 
-class Modality(str, Enum):
+class Modality(StrEnum):
     text = "text"
     image = "image"
     audio = "audio"
@@ -533,5 +533,6 @@ class IsccSearchResult(BaseModel):
         ),
     ]
     chunk_matches: Annotated[
-        list[IsccChunkMatch], Field(description="Segment-level simprint matches, ordered by relevance (best first)")
-    ] = []
+        list[IsccChunkMatch],
+        Field(default_factory=list, description="Segment-level simprint matches, ordered by relevance (best first)"),
+    ]

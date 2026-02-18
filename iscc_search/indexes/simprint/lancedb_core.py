@@ -242,7 +242,8 @@ class LancedbSimprintIndex:
         # Results include 'query_index' field mapping each result to its query vector
         try:
             results = (
-                self.table.search(batch_query)
+                self.table
+                .search(batch_query)
                 .distance_type("hamming")
                 .nprobes(nprobes)
                 .refine_factor(2)

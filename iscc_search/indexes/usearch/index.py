@@ -3,15 +3,16 @@ Usearch-backed single index implementation with LMDB metadata storage.
 
 Hybrid architecture combining:
 - LMDB: Asset storage, metadata, INSTANCE exact-matching (dupsort)
-- NphdIndex: Similarity search for META, CONTENT, DATA units
+- ShardedNphdIndex: Similarity search for META, CONTENT, DATA units (bounded RAM, auto-sharding)
 
 Directory structure:
 - index.lmdb: LMDB environment with __metadata__, __assets__, __instance__ databases
-- {unit_type}.usearch: NphdIndex files for similarity units (lazy-created)
+- {unit_type}/: ShardedNphdIndex directories for similarity units (lazy-created)
 
-Key strategy: ISCC-ID body as uint64 consistently across LMDB and NphdIndex.
+Key strategy: ISCC-ID body as uint64 consistently across LMDB and ShardedNphdIndex.
 """
 
+import shutil
 import struct
 import time
 from pathlib import Path
@@ -23,7 +24,7 @@ from loguru import logger
 from iscc_search.schema import IsccAddResult, IsccGlobalMatch, IsccSearchResult, Status
 from iscc_search.models import IsccUnit, IsccID
 from iscc_search.indexes import common
-from iscc_search.nphd import NphdIndex
+from iscc_usearch import ShardedNphdIndex
 from iscc_search.indexes.simprint.multi import SimprintMultiIndex
 from iscc_search.indexes.simprint.models import SimprintRaw, SimprintEntryMulti
 import iscc_core as ic
@@ -42,8 +43,9 @@ class UsearchIndex:
     - __assets__: uint64 key → IsccEntry JSON bytes
     - __instance__: instance_code digest → [iscc_id_body uint64, ...] (dupsort/dupfixed/integerdup)
 
-    NphdIndex files:
-    - {unit_type}.usearch: One file per similarity unit type (META, CONTENT, DATA)
+    ShardedNphdIndex directories:
+    - {unit_type}/: One directory per similarity unit type (META, CONTENT, DATA)
+      Contains shard files and bloom filter managed by ShardedNphdIndex.
 
     All keys use ISCC-ID body as uint64 for consistency between LMDB and usearch.
     """
@@ -76,9 +78,9 @@ class UsearchIndex:
         """
         Create or open usearch index at directory path.
 
-        :param path: Path to index directory (contains index.lmdb + .usearch files)
+        :param path: Path to index directory (contains index.lmdb + per-type shard directories)
         :param realm_id: ISCC realm ID for new indexes (0 or 1). If None, inferred from first asset.
-        :param max_dim: Maximum dimensions for NphdIndex (any multiple of 8 bits up to 256)
+        :param max_dim: Maximum dimensions for ShardedNphdIndex (any multiple of 8 bits up to 256)
         :param threshold: Similarity threshold for simprint search (0.0-1.0, default 0.0 returns all).
             Result count controlled by limit parameter. Will be used for global searches in future.
         :param lmdb_options: Custom LMDB options (max_dbs and subdir are forced)
@@ -90,7 +92,7 @@ class UsearchIndex:
         self.max_dim = max_dim
         self.threshold = threshold  # type: float
         self._realm_id = None  # type: int | None
-        self._nphd_indexes = {}  # type: dict[str, NphdIndex]
+        self._nphd_indexes = {}  # type: dict[str, ShardedNphdIndex]
         self._simprint_index = None  # type: SimprintMultiIndex | None
 
         # Setup LMDB
@@ -108,7 +110,7 @@ class UsearchIndex:
         # Initialize or load metadata
         self._init_metadata(realm_id)
 
-        # Load existing NphdIndex files
+        # Load existing ShardedNphdIndex directories
         self._load_nphd_indexes()
 
         # Load existing simprint index
@@ -120,11 +122,11 @@ class UsearchIndex:
         Add assets to index.
 
         Stores assets in LMDB, INSTANCE units in dupsort database,
-        and similarity units in NphdIndex files.
+        and similarity units in ShardedNphdIndex directories.
 
-        Consistency model: LMDB commits before NphdIndex operations. If NphdIndex
-        operations fail, assets are in LMDB (source of truth) but not in similarity
-        search. This is acceptable as NphdIndex can be rebuilt from LMDB. True
+        Consistency model: LMDB commits before ShardedNphdIndex operations. If derived
+        index operations fail, assets are in LMDB (source of truth) but not in similarity
+        search. This is acceptable as derived indexes can be rebuilt from LMDB. True
         two-phase commit would add significant complexity for rare failure scenarios.
 
         :param assets: List of IsccEntry instances to add
@@ -166,7 +168,7 @@ class UsearchIndex:
                         txn.put(b"realm_id", struct.pack(">I", self._realm_id), db=metadata_db)
                         logger.info(f"Inferred realm_id={self._realm_id} from first asset")
 
-                    # Prepare vectors for batch add to NphdIndex
+                    # Prepare vectors for batch add to ShardedNphdIndex
                     nphd_batches = {}  # type: dict[str, tuple[list[int], list[np.ndarray]]]
 
                     for asset in assets:
@@ -209,7 +211,7 @@ class UsearchIndex:
                                     cursor = txn.cursor(instance_db)
                                     cursor.put(unit_body, key_bytes, dupdata=False)
                                 else:
-                                    # Batch for NphdIndex (similarity matching)
+                                    # Batch for ShardedNphdIndex (similarity matching)
                                     if unit_type not in nphd_batches:
                                         nphd_batches[unit_type] = ([], [])
                                     nphd_batches[unit_type][0].append(key)
@@ -218,8 +220,8 @@ class UsearchIndex:
                         results.append(IsccAddResult(iscc_id=asset.iscc_id, status=status))
 
                 # LMDB transaction commits here (exits context manager)
-                # NphdIndex operations below are NOT atomic with LMDB - see docstring
-                # Batch add to NphdIndex (outside transaction)
+                # Derived index operations below are NOT atomic with LMDB - see docstring
+                # Batch add to ShardedNphdIndex (outside transaction)
                 for unit_type, (keys, vectors) in nphd_batches.items():
                     nphd_index = self._get_or_create_nphd_index(unit_type)
 
@@ -271,7 +273,7 @@ class UsearchIndex:
 
                 # Clear state for retry
                 results = []
-                # Reset NphdIndexes - they have vectors from failed transaction
+                # Reset ShardedNphdIndexes - they have vectors from failed transaction
                 self._nphd_indexes = {}
                 old_size = self.map_size
 
@@ -327,7 +329,7 @@ class UsearchIndex:
         """
         Search for similar assets using NPHD metric.
 
-        Combines exact INSTANCE matching (LMDB) with similarity matching (NphdIndex).
+        Combines exact INSTANCE matching (LMDB) with similarity matching (ShardedNphdIndex).
 
         **Per-unit scoring** (normalized 0.0-1.0):
         - INSTANCE units: Binary (1.0 = match, 0.0 = no match). Any prefix match scores 1.0
@@ -384,7 +386,7 @@ class UsearchIndex:
                             aggregated[key] = {}
                         aggregated[key][unit_type] = score
                 else:
-                    # Similarity matching via NphdIndex
+                    # Similarity matching via ShardedNphdIndex
                     if unit_type in self._nphd_indexes:
                         matches_dict = self._search_similarity_unit(unit_type, unit_body, limit)
                         for key, score in matches_dict.items():
@@ -469,30 +471,28 @@ class UsearchIndex:
     def flush(self):
         # type: () -> None
         """
-        Save all NphdIndex files to disk.
+        Save all ShardedNphdIndex instances to disk.
 
         Explicit flush for power users who want control over persistence.
-        NphdIndexes are automatically saved on close(), so flush() is only
+        Indexes are automatically saved on close(), so flush() is only
         needed for durability guarantees during long-running sessions.
         """
         for unit_type, nphd_index in self._nphd_indexes.items():
-            usearch_file = self.path / f"{unit_type}.usearch"
-            nphd_index.save(str(usearch_file))
+            nphd_index.save()
             # Update metadata with current vector count
             self._update_nphd_metadata(unit_type, nphd_index.size)
-            logger.debug(f"Flushed NphdIndex for unit_type '{unit_type}'")
+            logger.debug(f"Flushed ShardedNphdIndex for unit_type '{unit_type}'")
 
     def close(self):
         # type: () -> None
-        """Close LMDB environment and NphdIndex files, saving all indexes."""
-        # Save all NphdIndex instances before closing
+        """Close LMDB environment and ShardedNphdIndex instances, saving all indexes."""
+        # Save all ShardedNphdIndex instances before closing
         for unit_type, nphd_index in self._nphd_indexes.items():
-            usearch_file = self.path / f"{unit_type}.usearch"
-            nphd_index.save(str(usearch_file))
+            nphd_index.save()
             # Update metadata with current vector count
             self._update_nphd_metadata(unit_type, nphd_index.size)
-            logger.debug(f"Saved NphdIndex for unit_type '{unit_type}'")
-            # Release file handles for memory-mapped indexes
+            logger.debug(f"Saved ShardedNphdIndex for unit_type '{unit_type}'")
+            # Release view shards, active shard, bloom filter
             nphd_index.reset()
 
         self._nphd_indexes.clear()
@@ -713,12 +713,12 @@ class UsearchIndex:
     def _update_nphd_metadata(self, unit_type, vector_count):
         # type: (str, int) -> None
         """
-        Update NphdIndex metadata in LMDB.
+        Update ShardedNphdIndex metadata in LMDB.
 
         Tracks expected vector count for sync detection on next load.
 
         :param unit_type: Unit type identifier
-        :param vector_count: Current number of vectors in NphdIndex
+        :param vector_count: Current number of vectors in ShardedNphdIndex
         """
         with self.env.begin(write=True) as txn:
             metadata_db = self.env.open_db(b"__metadata__", txn=txn)
@@ -728,7 +728,7 @@ class UsearchIndex:
     def _get_nphd_metadata(self, unit_type):
         # type: (str) -> int | None
         """
-        Get expected NphdIndex vector count from LMDB metadata.
+        Get expected ShardedNphdIndex vector count from LMDB metadata.
 
         :param unit_type: Unit type identifier
         :return: Expected vector count, or None if not tracked
@@ -779,26 +779,19 @@ class UsearchIndex:
     def _load_nphd_indexes(self):
         # type: () -> None
         """
-        Load existing NphdIndex files with auto-rebuild on sync mismatch.
+        Load existing ShardedNphdIndex directories with auto-rebuild on sync mismatch.
 
-        Compares actual vector count in .usearch file with expected count
-        in LMDB metadata. Triggers full rebuild from LMDB if out of sync.
-        Also rebuilds missing .usearch files for unit_types tracked in metadata
-        (crash recovery for unflushed indexes).
+        Loads indexes for all unit_types tracked in LMDB metadata. ShardedNphdIndex
+        auto-loads existing shards from its directory at construction time.
+        Triggers full rebuild from LMDB if vector count is out of sync.
+        Also rebuilds missing directories for tracked unit_types (crash recovery).
         """
-        # Track which unit_types we've loaded from disk
-        loaded_unit_types = set()  # type: set[str]
+        tracked_unit_types = self._get_all_tracked_unit_types()
 
-        for usearch_file in self.path.glob("*.usearch"):
-            unit_type = usearch_file.stem  # Filename without extension
-            loaded_unit_types.add(unit_type)
+        for unit_type in tracked_unit_types:
+            shard_dir = self.path / unit_type
             try:
-                # Note: restore() gets max_dim from saved metadata, don't pass it
-                nphd_index = NphdIndex.restore(str(usearch_file))
-                if nphd_index is None:  # pragma: no cover
-                    logger.warning(f"Failed to load NphdIndex '{usearch_file}': invalid metadata")
-                    self._rebuild_nphd_index(unit_type)
-                    continue
+                nphd_index = ShardedNphdIndex(max_dim=self.max_dim, path=shard_dir)
 
                 # Check if index is in sync with LMDB
                 expected_count = self._get_nphd_metadata(unit_type)
@@ -806,32 +799,18 @@ class UsearchIndex:
 
                 if expected_count is not None and expected_count != actual_count:
                     logger.warning(
-                        f"NphdIndex '{unit_type}' out of sync: "
+                        f"ShardedNphdIndex '{unit_type}' out of sync: "
                         f"expected {expected_count} vectors, found {actual_count}. "
                         f"Rebuilding from LMDB..."
                     )
-                    # Close the loaded index and rebuild
                     nphd_index.reset()
                     self._rebuild_nphd_index(unit_type)
                 else:
                     self._nphd_indexes[unit_type] = nphd_index
-                    logger.debug(f"Loaded NphdIndex for unit_type '{unit_type}' ({actual_count} vectors)")
+                    logger.debug(f"Loaded ShardedNphdIndex for unit_type '{unit_type}' ({actual_count} vectors)")
 
             except Exception as e:  # pragma: no cover
-                logger.warning(f"Failed to load NphdIndex '{usearch_file}': {e}. Rebuilding...")
-                self._rebuild_nphd_index(unit_type)
-
-        # Check for orphaned metadata (tracked unit_types without .usearch files)
-        # This handles crash recovery when vectors were added but never flushed
-        tracked_unit_types = self._get_all_tracked_unit_types()
-        missing_unit_types = tracked_unit_types - loaded_unit_types
-
-        if missing_unit_types:
-            logger.warning(
-                f"Found {len(missing_unit_types)} unit_type(s) in metadata without .usearch files: "
-                f"{sorted(missing_unit_types)}. Rebuilding from LMDB (crash recovery)..."
-            )
-            for unit_type in missing_unit_types:
+                logger.warning(f"Failed to load ShardedNphdIndex '{unit_type}': {e}. Rebuilding...")
                 self._rebuild_nphd_index(unit_type)
 
     def _load_simprint_index(self):
@@ -840,7 +819,7 @@ class UsearchIndex:
         Load or create SimprintMultiIndex (usearch backend) for chunk-level simprint indexing.
 
         Simprint indexes are stored as SIMPRINT_*.usearch files in the same
-        directory as .usearch files (flat structure, no subdirectory).
+        directory as per-type shard directories (flat structure).
 
         Validates realm consistency between UsearchIndex and simprint indexes.
         """
@@ -896,21 +875,21 @@ class UsearchIndex:
     def _rebuild_nphd_index(self, unit_type):
         # type: (str) -> None
         """
-        Rebuild NphdIndex from LMDB asset data.
+        Rebuild ShardedNphdIndex from LMDB asset data.
 
         Full rebuild: iterates all assets, extracts vectors for unit_type,
-        and creates fresh NphdIndex. Automatically saves and updates metadata.
+        and creates fresh ShardedNphdIndex. Automatically saves and updates metadata.
 
         :param unit_type: Unit type identifier to rebuild
         """
         import time as time_module
 
         start_time = time_module.time()
-        logger.info(f"Rebuilding NphdIndex for unit_type '{unit_type}'...")
+        logger.info(f"Rebuilding ShardedNphdIndex for unit_type '{unit_type}'...")
 
         # Collect all vectors for this unit_type from LMDB
         keys = []  # type: list[int]
-        vectors = []  # type: list[bytes]
+        vectors = []  # type: list[np.ndarray]
 
         with self.env.begin() as txn:
             assets_db = self.env.open_db(b"__assets__", txn=txn)
@@ -933,13 +912,17 @@ class UsearchIndex:
             logger.info(f"No vectors found for unit_type '{unit_type}' - skipping rebuild")
             return
 
-        # Create new NphdIndex and add all vectors
-        nphd_index = NphdIndex(max_dim=self.max_dim)
+        # Remove stale/corrupt shard directory before creating fresh index
+        shard_dir = self.path / unit_type
+        if shard_dir.exists():
+            shutil.rmtree(shard_dir)
+
+        # Create fresh ShardedNphdIndex and add all vectors
+        nphd_index = ShardedNphdIndex(max_dim=self.max_dim, path=shard_dir)
         nphd_index.add(keys, vectors)
 
         # Save to disk
-        usearch_file = self.path / f"{unit_type}.usearch"
-        nphd_index.save(str(usearch_file))
+        nphd_index.save()
 
         # Update metadata
         self._update_nphd_metadata(unit_type, nphd_index.size)
@@ -948,15 +931,15 @@ class UsearchIndex:
         self._nphd_indexes[unit_type] = nphd_index
 
         elapsed = time_module.time() - start_time
-        logger.info(f"Rebuilt NphdIndex for unit_type '{unit_type}': {len(keys)} vectors in {elapsed:.2f}s")
+        logger.info(f"Rebuilt ShardedNphdIndex for unit_type '{unit_type}': {len(keys)} vectors in {elapsed:.2f}s")
 
     def _get_or_create_nphd_index(self, unit_type):
-        # type: (str) -> NphdIndex
-        """Get or create NphdIndex for unit_type."""
+        # type: (str) -> ShardedNphdIndex
+        """Get or create ShardedNphdIndex for unit_type."""
         if unit_type not in self._nphd_indexes:  # pragma: no branch
-            nphd_index = NphdIndex(max_dim=self.max_dim)
+            nphd_index = ShardedNphdIndex(max_dim=self.max_dim, path=self.path / unit_type)
             self._nphd_indexes[unit_type] = nphd_index
-            logger.debug(f"Created new NphdIndex for unit_type '{unit_type}'")
+            logger.debug(f"Created new ShardedNphdIndex for unit_type '{unit_type}'")
 
         return self._nphd_indexes[unit_type]
 
@@ -1026,7 +1009,7 @@ class UsearchIndex:
     def _search_similarity_unit(self, unit_type, vector, limit):
         # type: (str, bytes, int) -> dict[int, float]
         """
-        Search similarity unit in NphdIndex.
+        Search similarity unit in ShardedNphdIndex.
 
         :param unit_type: Unit type identifier
         :param vector: Unit body bytes
@@ -1035,9 +1018,9 @@ class UsearchIndex:
         """
         nphd_index = self._nphd_indexes[unit_type]
 
-        # Search usearch - NphdIndex.search expects single vector or list
-        # For single vector, wrap in list if needed
-        matches = nphd_index.search([np.frombuffer(vector, dtype=np.uint8)], count=limit)
+        # ShardedNphdIndex.search expects numpy array (handles padding internally)
+        query = np.frombuffer(vector, dtype=np.uint8)
+        matches = nphd_index.search(query, count=limit)
 
         # Convert distances to scores: score = 1.0 - distance
         results = {}  # type: dict[int, float]

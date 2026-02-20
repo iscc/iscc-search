@@ -16,6 +16,8 @@ import struct
 import time
 from pathlib import Path
 from typing import TYPE_CHECKING
+
+import numpy as np
 import lmdb
 from loguru import logger
 from iscc_search.schema import IsccAddResult, IsccGlobalMatch, IsccSearchResult, Status
@@ -165,7 +167,7 @@ class UsearchIndex:
                         logger.info(f"Inferred realm_id={self._realm_id} from first asset")
 
                     # Prepare vectors for batch add to NphdIndex
-                    nphd_batches = {}  # type: dict[str, tuple[list[int], list[bytes]]]
+                    nphd_batches = {}  # type: dict[str, tuple[list[int], list[np.ndarray]]]
 
                     for asset in assets:
                         # Validate iscc_id present
@@ -211,7 +213,7 @@ class UsearchIndex:
                                     if unit_type not in nphd_batches:
                                         nphd_batches[unit_type] = ([], [])
                                     nphd_batches[unit_type][0].append(key)
-                                    nphd_batches[unit_type][1].append(unit_body)
+                                    nphd_batches[unit_type][1].append(np.frombuffer(unit_body, dtype=np.uint8))
 
                         results.append(IsccAddResult(iscc_id=asset.iscc_id, status=status))
 
@@ -226,7 +228,7 @@ class UsearchIndex:
                     # TODO Review Duplicate Key Handling
                     if len(keys) != len(set(keys)):
                         # Build dict with key -> (last) vector mapping
-                        unique_items = {}  # type: dict[int, bytes]
+                        unique_items = {}  # type: dict[int, np.ndarray]
                         for key, vector in zip(keys, vectors):
                             unique_items[key] = vector
                         # Rebuild lists from deduplicated items
@@ -925,7 +927,7 @@ class UsearchIndex:
                     if unit.unit_type == unit_type:
                         key = struct.unpack(">Q", key_bytes)[0]
                         keys.append(key)
-                        vectors.append(unit.body)
+                        vectors.append(np.frombuffer(unit.body, dtype=np.uint8))
 
         if not keys:
             logger.info(f"No vectors found for unit_type '{unit_type}' - skipping rebuild")
@@ -1035,7 +1037,7 @@ class UsearchIndex:
 
         # Search usearch - NphdIndex.search expects single vector or list
         # For single vector, wrap in list if needed
-        matches = nphd_index.search([vector], count=limit)
+        matches = nphd_index.search([np.frombuffer(vector, dtype=np.uint8)], count=limit)
 
         # Convert distances to scores: score = 1.0 - distance
         results = {}  # type: dict[int, float]

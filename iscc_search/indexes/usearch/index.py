@@ -29,8 +29,6 @@ from iscc_search.schema import IsccAddResult, IsccGlobalMatch, IsccSearchResult,
 from iscc_search.models import IsccUnit, IsccID
 from iscc_search.indexes import common
 from iscc_usearch import ShardedNphdIndex
-from iscc_search.indexes.simprint.multi import SimprintMultiIndex
-from iscc_search.indexes.simprint.models import SimprintRaw, SimprintEntryMulti
 from iscc_search.indexes.simprint.usearch_core import UsearchSimprintIndex
 from iscc_search.indexes.simprint import lmdb_ops
 import iscc_core as ic
@@ -99,7 +97,6 @@ class UsearchIndex:
         self.threshold = threshold  # type: float
         self._realm_id = None  # type: int | None
         self._nphd_indexes = {}  # type: dict[str, ShardedNphdIndex]
-        self._simprint_index = None  # type: SimprintMultiIndex | None
         self._simprint_indexes = {}  # type: dict[str, UsearchSimprintIndex]
         self._sp_data_dbs = {}  # type: dict[str, lmdb._Database]
         self._sp_assets_dbs = {}  # type: dict[str, lmdb._Database]
@@ -122,9 +119,6 @@ class UsearchIndex:
 
         # Load existing ShardedNphdIndex directories
         self._load_nphd_indexes()
-
-        # Load existing simprint index
-        self._load_simprint_index()
 
         # Load existing LMDB simprint databases
         self._load_sp_databases()
@@ -236,7 +230,7 @@ class UsearchIndex:
                                     nphd_batches[unit_type][0].append(key)
                                     nphd_batches[unit_type][1].append(np.frombuffer(unit_body, dtype=np.uint8))
 
-                        # Dual-write simprints to LMDB (alongside SimprintMultiIndex)
+                        # Write simprints to LMDB (source of truth)
                         if asset.simprints and asset.iscc_id:
                             iscc_id_body = IsccID(asset.iscc_id).body
                             for sp_type, sp_list in asset.simprints.items():
@@ -283,19 +277,6 @@ class UsearchIndex:
                     nphd_index.add(keys, vectors)
                     # Update metadata with new vector count
                     self._update_nphd_metadata(unit_type, nphd_index.size)
-
-                # Add simprints to SimprintMultiIndex (if present)
-                if self._simprint_index is not None:  # pragma: no branch
-                    simprint_entries = []
-                    for asset in assets:
-                        entry = self._asset_to_simprint_entry(asset)
-                        if entry is not None:
-                            simprint_entries.append(entry)
-
-                    if simprint_entries:
-                        self._simprint_index.add_raw_multi(simprint_entries)
-                        self._simprint_index.optimize()  # Build vector indexes for fast search
-                        logger.debug(f"Added {len(simprint_entries)} simprint entries")
 
                 # Update derived ShardedIndex128 simprint indexes
                 # Remove stale keys first (from updated assets), then add new vectors
@@ -400,7 +381,7 @@ class UsearchIndex:
 
         :param query: Query with units
         :param limit: Maximum number of results
-        :param exact: If True, use LMDB exact search for simprints instead of SimprintMultiIndex
+        :param exact: If True, use LMDB exact search for simprints instead of approximate search
         :return: IsccSearchResult with query and list of matches (scores normalized 0.0-1.0)
         """
         # Handle iscc_id lookup if provided (takes precedence over other fields)
@@ -419,7 +400,7 @@ class UsearchIndex:
 
         # Search simprints for chunk-level matches (can work without units)
         chunk_matches = []  # type: list[IsccChunkMatch]
-        has_simprint_index = self._simprint_index is not None or self._simprint_indexes
+        has_simprint_index = bool(self._simprint_indexes) or bool(self._sp_data_dbs)
         if has_simprint_index and query.simprints:
             chunk_matches = self._search_simprints(query, limit, exact=exact)
 
@@ -564,14 +545,6 @@ class UsearchIndex:
             logger.debug(f"Closed UsearchSimprintIndex for type '{sp_type}'")
 
         self._simprint_indexes.clear()
-
-        # Close old simprint index (SimprintMultiIndex, removed in Session 6)
-        if self._simprint_index is not None:  # pragma: no branch
-            try:
-                self._simprint_index.close()
-                logger.debug("Closed simprint index")
-            except Exception as e:  # pragma: no cover
-                logger.error(f"Failed to close simprint index: {e}")
 
         # Close LMDB
         self.env.close()
@@ -1143,65 +1116,6 @@ class UsearchIndex:
             except Exception as e:  # pragma: no cover
                 logger.warning(f"Failed to load ShardedNphdIndex '{unit_type}': {e}. Rebuilding...")
                 self._rebuild_nphd_index(unit_type)
-
-    def _load_simprint_index(self):
-        # type: () -> None
-        """
-        Load or create SimprintMultiIndex (usearch backend) for chunk-level simprint indexing.
-
-        Simprint indexes are stored as SIMPRINT_*.usearch files in the same
-        directory as per-type shard directories (flat structure).
-
-        Validates realm consistency between UsearchIndex and simprint indexes.
-        """
-        try:
-            # Use same directory as index.lmdb (flat storage)
-            self._simprint_index = SimprintMultiIndex(uri=str(self.path), backend="usearch")
-
-            # Verify realm consistency if both indexes have data
-            if self._simprint_index.realm_id_int is not None and self._realm_id is not None:
-                if self._realm_id != self._simprint_index.realm_id_int:
-                    raise ValueError(
-                        f"Realm ID mismatch: UsearchIndex has realm={self._realm_id}, "
-                        f"simprint index has realm={self._simprint_index.realm_id_int}"
-                    )
-
-            indexed_types = self._simprint_index.get_indexed_types()
-            if indexed_types:
-                logger.debug(f"Loaded simprint index with types: {indexed_types}")
-                for simprint_type, backend_index in self._simprint_index.indexes.items():
-                    backend_index.index.expansion_search = 512
-                    logger.debug(f"Set expansion_search=512 for simprint type '{simprint_type}'")
-        except Exception as e:
-            logger.error(f"Failed to load simprint index: {e}")
-            raise
-
-    def _asset_to_simprint_entry(self, asset):
-        # type: (IsccEntry) -> SimprintEntryMulti | None
-        """
-        Convert IsccEntry to SimprintEntryMulti for simprint indexing.
-
-        Converts schema format (base64 strings) to protocol format (bytes).
-        Returns None if asset has no simprints.
-
-        :param asset: IsccEntry with optional simprints field
-        :return: SimprintEntryMulti or None if no simprints
-        """
-        if not asset.simprints or not asset.iscc_id:
-            return None
-
-        # Decode ISCC-ID to binary (10 bytes: 2-byte header + 8-byte body)
-        iscc_id_bytes = ic.decode_base32(asset.iscc_id.split(":")[-1])
-
-        # Convert simprints from schema format (base64 str) to raw format (bytes)
-        simprints_raw = {}  # type: dict[str, list[SimprintRaw]]
-        for simprint_type, simprint_list in asset.simprints.items():
-            simprints_raw[simprint_type] = [
-                SimprintRaw(simprint=ic.decode_base64(sp.simprint), offset=sp.offset, size=sp.size)
-                for sp in simprint_list
-            ]
-
-        return SimprintEntryMulti(iscc_id=iscc_id_bytes, simprints=simprints_raw)
 
     def _rebuild_nphd_index(self, unit_type):
         # type: (str) -> None

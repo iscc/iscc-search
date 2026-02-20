@@ -231,7 +231,7 @@ def _calculate_coverage_quality_score(matches, doc_frequencies, num_queried):
     - Coverage: fraction of unique query simprints matched (0.0 to 1.0)
     - Quality: min-max normalized inverse frequency (0.0 to 1.0)
 
-    Reuses the same algorithm as LmdbSimprintIndex._calculate_idf_score.
+    Uses coverage x quality scoring algorithm.
 
     :param matches: List of (query_simprint, match_simprint, offset, size) tuples
     :param doc_frequencies: Document frequency for each simprint

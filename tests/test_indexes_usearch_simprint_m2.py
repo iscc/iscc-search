@@ -98,23 +98,23 @@ def test_usearch_simprint_metadata_enrichment(tmp_path, sample_assets_with_simpr
     index.close()
 
 
-def test_usearch_simprint_search_errors(tmp_path, sample_assets_with_simprints, sample_simprints, monkeypatch):
-    """Test graceful error handling for simprint search failures."""
+def test_usearch_simprint_search_rebuilds_on_demand(
+    tmp_path, sample_assets_with_simprints, sample_simprints, monkeypatch
+):
+    """Test on-demand rebuild when derived simprint indexes are missing."""
     index = UsearchIndex(path=tmp_path / "test_index")
     index.add_assets(sample_assets_with_simprints)
 
-    # Mock search_raw_multi to raise exception
-    def mock_search(*args, **kwargs):
-        raise RuntimeError("Simulated simprint search failure")
+    # Clear derived simprint indexes to simulate missing/corrupted state
+    index._simprint_indexes.clear()
 
-    monkeypatch.setattr(index._simprint_index, "search_raw_multi", mock_search)
-
-    # Search should return empty chunk_matches on error
+    # Search triggers on-demand rebuild from LMDB and returns results
     query = IsccQuery(simprints={"CONTENT_TEXT_V0": [sample_simprints["CONTENT_TEXT_V0"][0]["simprint"]]})
     result = index.search_assets(query, limit=10)
 
-    # Should return empty chunk_matches, not crash
-    assert len(result.chunk_matches) == 0
+    # On-demand rebuild should restore the index and return matches
+    assert len(result.chunk_matches) > 0
+    assert "CONTENT_TEXT_V0" in index._simprint_indexes
 
     index.close()
 

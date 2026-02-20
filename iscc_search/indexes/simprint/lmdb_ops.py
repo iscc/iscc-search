@@ -2,14 +2,21 @@
 Pure stateless functions for LMDB simprint operations.
 
 Provides pack/unpack for 16-byte chunk pointers, IDF calculation,
-document frequency counting, and exact (hard-boundary) simprint search
-using LMDB cursors. All functions operate on raw LMDB transactions and
-database handles without managing LMDB lifecycle.
+document frequency counting, exact (hard-boundary) simprint search,
+and rebuild iteration for derived usearch indexes.
+All functions operate on raw LMDB transactions and database handles
+without managing LMDB lifecycle.
 """
 
 import math
 import struct
 from collections import defaultdict
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Generator  # noqa: F401
+
+import numpy as np
 
 from iscc_search.indexes.simprint.models import MatchedChunkRaw, SimprintMatchRaw
 
@@ -62,20 +69,20 @@ def calculate_idf(freq, total_assets):
     """
     Calculate Inverse Document Frequency for a simprint.
 
-    Uses standard IDF formula: log(total_assets / (1 + freq)).
-    Provided for future IDF-weighted scoring (Session 5).
+    Uses smooth IDF formula: log(1 + total_assets / (1 + freq)).
+    Always non-negative (minimum 0.0 when total_assets=0).
 
     :param freq: Document frequency (number of assets containing simprint)
     :param total_assets: Total number of assets in the index
-    :return: IDF weight (0.0 if total_assets <= 0)
+    :return: IDF weight (always >= 0.0)
     """
     if total_assets <= 0:
         return 0.0
-    return math.log(total_assets / (1 + freq))
+    return math.log(1 + total_assets / (1 + freq))
 
 
 def delete_asset_simprints(txn, db, iscc_id_body):
-    # type: (object, object, bytes) -> int
+    # type: (object, object, bytes) -> list[bytes]
     """
     Delete all simprint entries for a given asset from a dupsort data database.
 
@@ -86,19 +93,19 @@ def delete_asset_simprints(txn, db, iscc_id_body):
     :param txn: LMDB write transaction
     :param db: LMDB database handle (dupsort with 16-byte fixed values)
     :param iscc_id_body: 8-byte ISCC-ID body identifying the asset
-    :return: Number of deleted entries
+    :return: List of deleted composite keys (16-byte chunk pointers)
     """
     cursor = txn.cursor(db)
-    deleted = 0
+    deleted_keys = []  # type: list[bytes]
     has_item = cursor.first()
     while has_item:
         value = cursor.value()
         if value[:8] == iscc_id_body:
+            deleted_keys.append(bytes(value))
             has_item = cursor.delete()
-            deleted += 1
         else:
             has_item = cursor.next()
-    return deleted
+    return deleted_keys
 
 
 def count_doc_freq(txn, db, simprint_key, dup_limit=1000):
@@ -264,3 +271,45 @@ def _calculate_coverage_quality_score(matches, doc_frequencies, num_queried):
             quality = sum((inv - min_inv) / (max_inv - min_inv) for inv in inverse_freqs) / len(inverse_freqs)
 
     return coverage * quality
+
+
+REBUILD_BATCH_SIZE = 100_000  # Batch size for memory-efficient rebuild
+
+
+def iter_simprint_vectors(txn, db, batch_size=REBUILD_BATCH_SIZE):
+    # type: (object, object, int) -> Generator[tuple[list[bytes], list[np.ndarray]], None, None]
+    """
+    Yield (composite_keys, vectors) batches from LMDB for ShardedIndex128 rebuild.
+
+    Iterates the simprint database and yields batches of composite keys (ChunkPointer values)
+    paired with their simprint vectors for incremental insertion into ShardedIndex128.
+
+    :param txn: LMDB read transaction
+    :param db: LMDB simprint database handle (dupsort with 16-byte fixed values)
+    :param batch_size: Maximum entries per yielded batch
+    :return: Generator yielding (keys, vectors) tuples
+    """
+    keys = []  # type: list[bytes]
+    vectors = []  # type: list[np.ndarray]
+    cursor = txn.cursor(db)
+
+    if not cursor.first():
+        return
+
+    while True:
+        simprint_bytes = bytes(cursor.key())
+        # Iterate all duplicate values for this key
+        for value in cursor.iternext_dup(keys=False, values=True):
+            chunk_pointer = bytes(value)
+            keys.append(chunk_pointer)
+            vectors.append(np.frombuffer(simprint_bytes, dtype=np.uint8))
+            if len(keys) >= batch_size:
+                yield keys, vectors
+                keys = []
+                vectors = []
+        # Move to next distinct key
+        if not cursor.next_nodup():
+            break
+
+    if keys:
+        yield keys, vectors

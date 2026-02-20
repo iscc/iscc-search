@@ -87,16 +87,17 @@ def test_unpack_invalid_length():
 
 
 def test_calculate_idf_normal():
-    """IDF with typical values."""
+    """IDF with typical values (smooth formula)."""
     result = calculate_idf(freq=10, total_assets=1000)
-    expected = math.log(1000 / (1 + 10))
+    expected = math.log(1 + 1000 / (1 + 10))
     assert result == pytest.approx(expected)
+    assert result > 0.0  # Always non-negative
 
 
 def test_calculate_idf_zero_freq():
     """IDF with zero document frequency."""
     result = calculate_idf(freq=0, total_assets=100)
-    expected = math.log(100 / 1)
+    expected = math.log(1 + 100 / 1)
     assert result == pytest.approx(expected)
 
 
@@ -128,32 +129,35 @@ def lmdb_sp_env(tmp_path):
 
 
 def test_delete_asset_simprints_empty_db(lmdb_sp_env):
-    """Delete from empty database returns 0."""
+    """Delete from empty database returns empty list."""
     env, db = lmdb_sp_env
     body = b"\x01" * 8
     with env.begin(write=True) as txn:
-        assert delete_asset_simprints(txn, db, body) == 0
+        assert delete_asset_simprints(txn, db, body) == []
 
 
 def test_delete_asset_simprints_removes_target(lmdb_sp_env):
-    """Delete removes all entries for target asset, preserves others."""
+    """Delete removes all entries for target asset, returns deleted keys, preserves others."""
     env, db = lmdb_sp_env
     body_a = b"\x01" * 8
     body_b = b"\x02" * 8
     sp1 = b"\xaa" * 8
     sp2 = b"\xbb" * 8
+    ptr_a1 = pack_chunk_pointer(body_a, 0, 100)
+    ptr_a2 = pack_chunk_pointer(body_a, 200, 300)
 
     with env.begin(write=True) as txn:
         # Asset A has sp1 and sp2
-        txn.put(sp1, pack_chunk_pointer(body_a, 0, 100), db=db)
-        txn.put(sp2, pack_chunk_pointer(body_a, 200, 300), db=db)
+        txn.put(sp1, ptr_a1, db=db)
+        txn.put(sp2, ptr_a2, db=db)
         # Asset B has sp1
         txn.put(sp1, pack_chunk_pointer(body_b, 0, 150), db=db)
 
     # Delete asset A entries
     with env.begin(write=True) as txn:
         deleted = delete_asset_simprints(txn, db, body_a)
-        assert deleted == 2
+        assert len(deleted) == 2
+        assert set(deleted) == {ptr_a1, ptr_a2}
 
     # Verify only asset B's entry remains
     with env.begin() as txn:
@@ -164,7 +168,7 @@ def test_delete_asset_simprints_removes_target(lmdb_sp_env):
 
 
 def test_delete_asset_simprints_no_match(lmdb_sp_env):
-    """Delete with non-matching body returns 0, preserves all entries."""
+    """Delete with non-matching body returns empty list, preserves all entries."""
     env, db = lmdb_sp_env
     body_a = b"\x01" * 8
     body_missing = b"\xff" * 8
@@ -174,7 +178,7 @@ def test_delete_asset_simprints_no_match(lmdb_sp_env):
         txn.put(sp, pack_chunk_pointer(body_a, 0, 100), db=db)
 
     with env.begin(write=True) as txn:
-        assert delete_asset_simprints(txn, db, body_missing) == 0
+        assert delete_asset_simprints(txn, db, body_missing) == []
 
     with env.begin() as txn:
         assert txn.stat(db=db)["entries"] == 1

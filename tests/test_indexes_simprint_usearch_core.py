@@ -3,7 +3,7 @@
 import random
 import pytest
 import numpy as np
-from iscc_search.indexes.simprint.usearch_core import UsearchSimprintIndex
+from iscc_search.indexes.simprint._legacy_usearch_core import UsearchSimprintIndex
 from iscc_search.indexes.simprint.models import SimprintRaw, SimprintEntryRaw
 
 

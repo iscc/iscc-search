@@ -1,335 +1,252 @@
 """
-Usearch-based soft-boundary simprint index with exponential confidence weighting.
+Derived ShardedIndex128 for approximate simprint similarity search.
 
-Implements SimprintIndexRaw protocol for asset-level similarity search using pure Usearch
-with multi-query aggregation and configurable confidence weighting.
+Persistence and asset dedup are handled by the main LMDB (unified architecture).
+This class manages only the derived ShardedIndex128 for approximate search.
+Scoring uses IDF-weighted averaging per the OpenAPI spec (IsccChunkMatch.yaml).
 
 Storage:
-    - Pure Usearch with multi=True (multiple simprints per asset)
-    - Keys: ISCC-ID body as uint64
-    - Vectors: Binary simprints
-    - No metadata store (asset-level only, no chunk offset/size tracking)
+    - ShardedIndex128 with composite 128-bit keys: iscc_id_body(8) + offset(4) + size(4)
+    - Binary vectors (Hamming metric, B1 scalar type)
+    - Sharded HNSW with bloom filter and tombstone-based deletion
 
 Ranking:
-    - Threshold filters individual simprint matches (noise rejection)
-    - Multi-query aggregation with exponential confidence weighting
-    - Score: exponentially weighted average of matched chunks (no coverage penalty)
-    - Returns top limit results (no final score threshold)
-    - Efficient: fetches only limit candidates per query simprint
+    - Fixed 20x oversampling to ensure enough distinct assets
+    - IDF-weighted asset-level scoring: sum(idf_i * sim_i) / sum(all_idf_i)
+    - Unmatched query simprints contribute idf * 0.0 (penalizes low coverage)
+    - doc_freq_fn callback provides true document frequency via LMDB
 """
 
-import json
+import struct
 from collections import defaultdict
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 import numpy as np
-from usearch.index import Index, MetricKind, ScalarKind
+from iscc_usearch import ShardedIndex128
+
+from iscc_search.indexes.simprint import lmdb_ops
 
 if TYPE_CHECKING:
-    from iscc_search.indexes.simprint.models import SimprintEntryRaw, SimprintMatchRaw  # noqa: F401
+    from collections.abc import Callable  # noqa: F401
+
+    from iscc_search.indexes.simprint.models import SimprintMatchRaw, MatchedChunkRaw  # noqa: F401
 
 
 class UsearchSimprintIndex:
     """
-    Usearch-based soft-boundary simprint index with exponential confidence weighting.
+    Derived ShardedIndex128 for approximate simprint search.
 
-    Implements SimprintIndexRaw protocol for asset-level similarity search.
-    Uses multi-query aggregation with configurable confidence weighting.
+    Persistence and asset dedup are handled by the main LMDB (unified architecture).
+    This class manages only the derived ShardedIndex128 for approximate search.
+    Scoring uses IDF-weighted averaging per the OpenAPI spec (IsccChunkMatch.yaml).
     """
 
-    # Global default constants (overridable per query)
-    DEFAULT_CONFIDENCE_EXPONENT = 4  # Emphasize high-confidence matches
-    DEFAULT_COVERAGE_WEIGHT = 0.2  # Coverage influence (0=ignore, higher=more separation)
+    OVERSAMPLE_FACTOR = 20  # Fixed 20x oversampling for distinct asset diversity
 
-    def __init__(self, uri, ndim=128, realm_id=None, connectivity=8, expansion_add=16, **kwargs):
-        # type: (str, int, bytes | None, int, int, ...) -> None
+    def __init__(self, path, ndim=128, expansion_search=512, connectivity=8, expansion_add=16):
+        # type: (str | Path, int, int, int, int) -> None
         """
-        Create or open Usearch simprint index.
+        Create or open derived simprint index.
 
-        :param uri: Index location (file path or URI)
+        :param path: Directory path for ShardedIndex128 shard storage
         :param ndim: Simprint dimensions in bits (e.g., 64, 128, 256)
-        :param realm_id: ISCC-ID realm identifier (2 bytes, optional)
-        :param connectivity: HNSW graph connectivity (default 8, higher=better recall, slower build)
-        :param expansion_add: Build-time search depth (default 16, lower=faster bulk indexing)
-        :param kwargs: match_threshold, confidence_exponent for global overrides
+        :param expansion_search: Search depth for HNSW queries
+        :param connectivity: HNSW graph connectivity parameter
+        :param expansion_add: Build-time search depth
         """
-        # Parse URI to file path
-        if uri.startswith("file://"):
-            self.path = Path(uri[7:])
-        else:
-            self.path = Path(uri)
-
-        # Try loading metadata from disk (for existing indexes)
-        metadata_path = self.path.with_suffix(self.path.suffix + ".metadata.json")
-        if metadata_path.exists():
-            with open(metadata_path) as f:
-                metadata = json.load(f)
-                realm_id = bytes.fromhex(metadata["realm_id"]) if metadata.get("realm_id") else realm_id
-                ndim = metadata.get("ndim", ndim)
-
+        self.path = Path(path)
         self.ndim = ndim
-        self.realm_id = realm_id
-
-        # Create Usearch Index with multi=True, metric=Hamming, dtype=B1
-        self.index = Index(
-            ndim=ndim,  # Bits (e.g., 128)
-            metric=MetricKind.Hamming,
-            dtype=ScalarKind.B1,
-            multi=True,  # Multiple simprints per ISCC-ID
+        self._index = ShardedIndex128(
+            ndim=ndim,
+            metric="hamming",
+            dtype="b1",
+            path=self.path,
+            expansion_search=expansion_search,
             connectivity=connectivity,
             expansion_add=expansion_add,
         )
 
-        # Load from disk if exists
-        if self.path.exists():
-            self.index = Index.restore(str(self.path), view=False)
-
-    def add_raw(self, entries):
-        # type: (list[SimprintEntryRaw]) -> None
+    def add_raw(self, composite_keys, vectors):
+        # type: (list[bytes], list[np.ndarray]) -> None
         """
-        Add simprint entries with batch operations.
+        Add vectors with composite 128-bit keys to derived index.
 
-        Note: Unlike the protocol's add-once semantics, this implementation
-        allows adding multiple simprints for the same ISCC-ID (multi=True).
+        Asset dedup is handled by the caller (main LMDB registry).
+        Uses add_once() as safety net against duplicate composite keys.
+        Does NOT call save() - caller is responsible for explicit flush.
 
-        :param entries: list[SimprintEntryRaw]
+        :param composite_keys: 16-byte composite keys (iscc_id_body + offset + size)
+        :param vectors: Binary simprint vectors as numpy uint8 arrays
         """
-        if not entries:
+        if not composite_keys:
             return
+        vectors_array = np.stack(vectors)
+        self._index.add_once(composite_keys, vectors_array)
 
-        keys = []
-        vectors = []
-
-        for entry in entries:
-            # Convert ISCC-ID body to uint64 key
-            key = int.from_bytes(entry.iscc_id_body, "big", signed=False)
-
-            # Add all simprints for this asset
-            for simprint in entry.simprints:
-                keys.append(key)
-                # Convert bytes to numpy array
-                vectors.append(np.frombuffer(simprint.simprint, dtype=np.uint8))
-
-        # Batch add to Usearch
-        if keys:
-            # Stack vectors into 2D array
-            vectors_array = np.stack(vectors)
-            self.index.add(np.array(keys, dtype=np.uint64), vectors_array)
-
-    def search_raw(self, simprints, limit=10, threshold=0.0, detailed=False, **kwargs):
-        # type: (list[bytes], int, float, bool, ...) -> list[SimprintMatchRaw]
+    def remove(self, composite_keys):
+        # type: (list[bytes]) -> None
         """
-        Search with exponential confidence weighting.
+        Remove vectors by composite keys from derived index.
 
-        Fetches top limit candidates per query simprint, filters by threshold (noise rejection),
-        aggregates by asset, returns top limit results sorted by combined score.
+        :param composite_keys: 16-byte composite keys to remove
+        """
+        if not composite_keys:
+            return
+        self._index.remove(composite_keys)
 
-        Per-query configurable parameters via kwargs:
-        - confidence_exponent: Override DEFAULT_CONFIDENCE_EXPONENT (e.g., 6 for more emphasis)
-        - coverage_weight: Override DEFAULT_COVERAGE_WEIGHT (e.g., 0.0=ignore, 0.5=more influence)
+    def search_raw(self, simprints, limit=10, threshold=0.0, detailed=False, doc_freq_fn=None, total_assets=0):
+        # type: (list[bytes], int, float, bool, Callable[[bytes], int] | None, int) -> list[SimprintMatchRaw]
+        """
+        Search with fixed oversampling and IDF-weighted asset-level scoring.
+
+        For each query simprint, searches ShardedIndex128 with OVERSAMPLE_FACTOR * limit
+        candidates, groups results by asset (key[:8]), computes best-per-query-per-asset,
+        then calculates IDF-weighted score across all query simprints.
 
         :param simprints: Binary simprints to search for
-        :param limit: Maximum results to return (also candidate count per simprint, default 10)
-        :param threshold: Minimum individual simprint match score to consider (0.0-1.0, default 0.0, typical 0.8)
-        :param detailed: If True, include chunk matches (offset/size not tracked, will be 0)
-        :return: list[SimprintMatchRaw] ordered by quality score (exponentially weighted average), limited to top limit results
+        :param limit: Maximum results to return
+        :param threshold: Minimum individual simprint match score (0.0-1.0)
+        :param detailed: If True, include chunk matches with stored simprint bytes
+        :param doc_freq_fn: Callable(simprint_bytes) -> int for true document frequency.
+            Required for IDF scoring. If None, all frequencies default to 1.
+        :param total_assets: Total assets in the index (for IDF calculation)
+        :return: list[SimprintMatchRaw] ordered by IDF-weighted score
         """
         from iscc_search.indexes.simprint.models import SimprintMatchRaw, MatchedChunkRaw
 
-        if not simprints:
+        if not simprints or len(self._index) == 0:
             return []
 
-        # Use per-query overrides or fall back to class defaults
-        confidence_exponent = kwargs.get("confidence_exponent", self.DEFAULT_CONFIDENCE_EXPONENT)
-        coverage_weight = kwargs.get("coverage_weight", self.DEFAULT_COVERAGE_WEIGHT)
-
-        # Convert simprints to numpy array
+        # Convert simprints to numpy array for batch search
         query_vectors = np.stack([np.frombuffer(s, dtype=np.uint8) for s in simprints])
 
-        # Step 1: Batch search - fetch top candidates per query simprint
-        # Only fetch what we need - bad matches are filtered by threshold anyway
-        batch_results = self.index.search(
-            query_vectors,
-            count=limit,
-        )
+        # Search with oversampling to get enough distinct assets
+        count = max(1, limit * self.OVERSAMPLE_FACTOR)
+        batch_results = self._index.search(query_vectors, count=count)
 
-        # Handle single query case (returns Matches) vs batch (returns BatchMatches)
-        # When there's only 1 query, usearch returns Matches directly
+        # Handle single query case (returns Matches, not BatchMatches)
         if len(simprints) == 1:
             batch_results = [batch_results]
 
-        # Step 2: Aggregate by asset with individual match filtering
-        # Track best score per query_idx per asset (naturally bounds coverage to [0,1])
-        asset_scores = defaultdict(dict)
+        # Group chunk results by asset, track best score per query per asset
+        # asset_chunks: asset_id -> {query_idx: (offset, size, score, composite_key)}
+        asset_best = defaultdict(dict)  # type: dict[bytes, dict[int, tuple[int, int, float, bytes]]]
+
         for query_idx in range(len(simprints)):
             matches = batch_results[query_idx]
-            # Access keys and distances arrays directly
             for i in range(len(matches.keys)):
-                key = matches.keys[i]
-                distance = matches.distances[i]
-                # Normalize Hamming distance (raw bit count) to 0-1 score
-                # distance is bit count, ndim is total bits
+                raw_key = bytes(matches.keys[i])
+                distance = float(matches.distances[i])
+
+                # Normalize Hamming distance to similarity score
                 score = 1.0 - (distance / self.ndim)
-                # Filter weak matches (noise) by threshold
-                if score >= threshold:
-                    # Keep only best match per query per asset
-                    if query_idx not in asset_scores[key]:
-                        asset_scores[key][query_idx] = score
-                    else:
-                        asset_scores[key][query_idx] = max(asset_scores[key][query_idx], score)
+                if score < threshold:
+                    continue
 
-        # Step 3: Calculate weighted scores
-        scored_results = []
-        for key_uint64, query_scores in asset_scores.items():
-            scores = list(query_scores.values())  # One score per query index
+                # Decompose composite key
+                asset_id = raw_key[:8]
+                offset, size = struct.unpack("!II", raw_key[8:16])
 
-            # Quality: exponentially weighted average of matched chunks
-            # Each score is weighted by score^k to emphasize high-confidence matches
-            weighted_sum = sum(s ** (confidence_exponent + 1) for s in scores)  # s^k * s = s^(k+1)
-            weight_sum = sum(s**confidence_exponent for s in scores)  # sum of weights
-            quality = weighted_sum / weight_sum if weight_sum > 0 else 0.0
+                # Keep best match per query per asset (store composite key for vector lookup)
+                if query_idx not in asset_best[asset_id]:
+                    asset_best[asset_id][query_idx] = (offset, size, score, raw_key)
+                elif score > asset_best[asset_id][query_idx][2]:  # pragma: no cover
+                    # Defensive: HNSW search returns sorted results, so this branch
+                    # is only reachable if results arrive in non-sorted order
+                    asset_best[asset_id][query_idx] = (offset, size, score, raw_key)
 
-            # Apply configurable coverage weighting to help separate true/false positives
-            # Formula: coverage^w × quality where w controls influence (0=ignore)
-            # Both terms in [0,1] so product naturally bounded to [0,1]
-            if coverage_weight > 0:
-                coverage = len(scores) / len(simprints)
-                final_score = (coverage**coverage_weight) * quality
-            else:
-                # No coverage influence - quality only
-                final_score = quality
+        if not asset_best:
+            return []
 
-            # Convert numpy.uint64 to Python int before to_bytes
-            iscc_id_body = int(key_uint64).to_bytes(8, "big", signed=False)
+        # Cache doc frequencies to avoid redundant LMDB lookups
+        freq_cache = {}  # type: dict[bytes, int]
+
+        def get_freq(sp_key):
+            # type: (bytes) -> int
+            if sp_key not in freq_cache:
+                if doc_freq_fn is not None:
+                    freq_cache[sp_key] = doc_freq_fn(sp_key)
+                else:
+                    freq_cache[sp_key] = 1
+            return freq_cache[sp_key]
+
+        # IDF-weighted scoring per asset
+        scored_results = []  # type: list[SimprintMatchRaw]
+        for asset_id, best_per_query in asset_best.items():
+            # Calculate IDF-weighted score using matched (stored) simprint for freq lookup
+            total_idf = 0.0
+            weighted_sim = 0.0
+
+            for query_idx, (offset, size, sim, composite_key) in best_per_query.items():
+                stored_vector = self._index.get(composite_key)
+                match_bytes = stored_vector.tobytes() if stored_vector is not None else simprints[query_idx]
+                freq = get_freq(match_bytes)
+                idf = lmdb_ops.calculate_idf(freq, total_assets)
+                total_idf += idf
+                weighted_sim += idf * sim
+
+            # Unmatched query simprints: look up actual IDF for each
+            matched_indices = set(best_per_query.keys())
+            for qi in range(len(simprints)):
+                if qi not in matched_indices:
+                    freq = get_freq(simprints[qi])
+                    idf = lmdb_ops.calculate_idf(freq, total_assets)
+                    total_idf += idf
+
+            asset_score = weighted_sim / total_idf if total_idf > 0 else 0.0
+
+            # Build chunk details if requested
+            chunks = None
+            if detailed:
+                chunks = []
+                for query_idx, (offset, size, sim, composite_key) in best_per_query.items():
+                    stored_vector = self._index.get(composite_key)
+                    match_bytes = stored_vector.tobytes() if stored_vector is not None else simprints[query_idx]
+                    freq = get_freq(match_bytes)
+                    chunks.append(
+                        MatchedChunkRaw(
+                            query=simprints[query_idx],
+                            match=match_bytes,
+                            score=sim,
+                            offset=offset,
+                            size=size,
+                            freq=freq,
+                        )
+                    )
+
             scored_results.append(
                 SimprintMatchRaw(
-                    iscc_id_body=iscc_id_body,
-                    score=final_score,
+                    iscc_id_body=asset_id,
+                    score=asset_score,
                     queried=len(simprints),
-                    matches=len(scores),
-                    chunks=None,
+                    matches=len(best_per_query),
+                    chunks=chunks,
                 )
             )
 
-        # Step 4: Build detailed chunk matches if requested
-        if detailed:
-            for result in scored_results:
-                key_uint64 = int.from_bytes(result.iscc_id_body, "big", signed=False)
-
-                # Retrieve all stored simprints for this asset (returns 2D array for multi=True)
-                stored_vectors_2d = self.index.get(key_uint64)
-
-                # Handle missing key (shouldn't happen for matched assets)
-                if stored_vectors_2d is None:  # pragma: no cover
-                    result.chunks = None
-                    continue
-
-                # Match each query simprint to best stored simprint using vectorized ops
-                chunks = []
-                for query_sp in simprints:
-                    query_vec = np.frombuffer(query_sp, dtype=np.uint8)
-
-                    # Vectorized XOR: query (1D) vs all stored vectors (2D)
-                    # Broadcasting: (1, ndim_bytes) XOR (n_vectors, ndim_bytes)
-                    xor_results = np.bitwise_xor(query_vec, stored_vectors_2d)
-
-                    # Unpack bits and sum per row to get hamming distances
-                    # Shape: (n_vectors, ndim_bytes) -> (n_vectors, ndim_bytes*8) -> (n_vectors,)
-                    distances = np.unpackbits(xor_results, axis=1).sum(axis=1)
-
-                    # Convert to scores (vectorized)
-                    scores = 1.0 - (distances / self.ndim)
-
-                    # Find best match above threshold
-                    valid_mask = scores >= threshold
-                    if valid_mask.any():
-                        # Find best score among valid matches only
-                        valid_scores = scores[valid_mask]
-                        valid_indices = np.where(valid_mask)[0]
-                        best_valid_idx = np.argmax(valid_scores)
-                        best_idx = valid_indices[best_valid_idx]
-                        best_score = scores[best_idx]
-
-                        chunks.append(
-                            MatchedChunkRaw(
-                                query=query_sp,
-                                match=stored_vectors_2d[best_idx].tobytes(),
-                                score=float(best_score),
-                                offset=0,  # Position tracking not supported
-                                size=0,  # Position tracking not supported
-                                freq=1,  # Frequency tracking not supported
-                            )
-                        )
-
-                result.chunks = chunks if chunks else None
-
-                # Recalculate score based on actual chunk matches
-                # Note: chunks is guaranteed non-empty because asset is in scored_results
-                # only if at least one query simprint matched >= threshold initially
-                chunk_scores = [chunk.score for chunk in chunks]
-
-                # Quality: exponentially weighted average of matched chunks
-                weighted_sum = sum(s ** (confidence_exponent + 1) for s in chunk_scores)
-                weight_sum = sum(s**confidence_exponent for s in chunk_scores)
-                quality = weighted_sum / weight_sum if weight_sum > 0 else 0.0
-
-                # Apply coverage weighting
-                if coverage_weight > 0:
-                    coverage = len(chunk_scores) / len(simprints)
-                    final_score = (coverage**coverage_weight) * quality
-                else:
-                    final_score = quality
-
-                result.score = final_score
-                result.matches = len(chunks)
-
-        # Step 5: Sort and limit
+        # Sort by score descending, then by asset ID for stability
         scored_results.sort(key=lambda x: (-x.score, x.iscc_id_body))
         return scored_results[:limit]
 
-    def __contains__(self, iscc_id_body):
-        # type: (bytes) -> bool
-        """Check if ISCC-ID exists using usearch's native contains."""
-        key = int.from_bytes(iscc_id_body, "big", signed=False)
-        return key in self.index
-
-    def __len__(self):
+    @property
+    def size(self):
         # type: () -> int
-        """Return number of unique assets by counting unique keys in index."""
-        return len(set(self.index.keys))
+        """Return number of vectors in the index."""
+        return len(self._index)
+
+    def save(self):
+        # type: () -> None
+        """Save derived index to disk."""
+        self._index.save()
+
+    def reset(self):
+        # type: () -> None
+        """Release all in-memory resources."""
+        self._index.reset()
 
     def close(self):
         # type: () -> None
-        """Save index and metadata to disk and release resources."""
-        self.index.save(str(self.path))
-
-        # Save metadata separately (usearch doesn't support custom metadata)
-        metadata_path = self.path.with_suffix(self.path.suffix + ".metadata.json")
-        metadata = {
-            "realm_id": self.realm_id.hex() if self.realm_id else None,
-            "ndim": self.ndim,
-        }
-        with open(metadata_path, "w") as f:
-            json.dump(metadata, f)
-
-    def optimize(self):
-        # type: () -> None
-        """
-        Compact index for better performance after bulk adds.
-
-        Calls usearch's compact() method if available to optimize memory
-        layout and query performance.
-        """
-        if hasattr(self.index, "compact"):  # pragma: no cover
-            self.index.compact()  # pragma: no cover
-
-    def __enter__(self):
-        # type: () -> UsearchSimprintIndex
-        """Context manager entry."""
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        # type: (type | None, Exception | None, object | None) -> None
-        """Context manager exit - save and close."""
-        self.close()
+        """Save and release resources."""
+        self.save()
+        self.reset()

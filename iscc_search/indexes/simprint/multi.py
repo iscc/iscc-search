@@ -49,7 +49,7 @@ class SimprintMultiIndex:
     BACKEND_MAP = {
         "lmdb": ("iscc_search.indexes.simprint.lmdb_core", "LmdbSimprintIndex", ".lmdb"),
         "lancedb": ("iscc_search.indexes.simprint.lancedb_core", "LancedbSimprintIndex", ""),
-        "usearch": ("iscc_search.indexes.simprint.usearch_core", "UsearchSimprintIndex", ".usearch"),
+        "usearch": ("iscc_search.indexes.simprint._legacy_usearch_core", "UsearchSimprintIndex", ".usearch"),
     }
 
     def __init__(self, uri, backend="lmdb", **kwargs):

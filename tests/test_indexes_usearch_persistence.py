@@ -126,7 +126,7 @@ def test_usearch_index_auto_rebuild_on_count_mismatch(tmp_path, sample_iscc_ids)
     import lmdb
     import struct
 
-    env = lmdb.open(str(index_path / "index.lmdb"), subdir=False, max_dbs=3)
+    env = lmdb.open(str(index_path / "index.lmdb"), subdir=False, max_dbs=32)
     with env.begin(write=True) as txn:
         metadata_db = env.open_db(b"__metadata__", txn=txn)
         key = b"nphd_count:CONTENT_TEXT_V0"

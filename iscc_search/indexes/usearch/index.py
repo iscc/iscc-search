@@ -12,6 +12,7 @@ Directory structure:
 Key strategy: ISCC-ID body as uint64 consistently across LMDB and ShardedNphdIndex.
 """
 
+import json
 import shutil
 import struct
 import time
@@ -27,6 +28,7 @@ from iscc_search.indexes import common
 from iscc_usearch import ShardedNphdIndex
 from iscc_search.indexes.simprint.multi import SimprintMultiIndex
 from iscc_search.indexes.simprint.models import SimprintRaw, SimprintEntryMulti
+from iscc_search.indexes.simprint import lmdb_ops
 import iscc_core as ic
 
 if TYPE_CHECKING:
@@ -94,6 +96,8 @@ class UsearchIndex:
         self._realm_id = None  # type: int | None
         self._nphd_indexes = {}  # type: dict[str, ShardedNphdIndex]
         self._simprint_index = None  # type: SimprintMultiIndex | None
+        self._sp_data_dbs = {}  # type: dict[str, lmdb._Database]
+        self._sp_assets_dbs = {}  # type: dict[str, lmdb._Database]
 
         # Setup LMDB
         lmdb_path = self.path / "index.lmdb"
@@ -102,7 +106,8 @@ class UsearchIndex:
             options.update(lmdb_options)
 
         # Force critical parameters
-        options["max_dbs"] = 3  # __metadata__, __assets__, __instance__
+        min_max_dbs = 32  # __metadata__, __assets__, __instance__ + up to ~14 simprint types (2 DBs each)
+        options["max_dbs"] = max(options.get("max_dbs", 0), min_max_dbs)
         options["subdir"] = False  # Path points to file
 
         self.env = lmdb.open(str(lmdb_path), **options)
@@ -115,6 +120,9 @@ class UsearchIndex:
 
         # Load existing simprint index
         self._load_simprint_index()
+
+        # Load existing LMDB simprint databases
+        self._load_sp_databases()
 
     def add_assets(self, assets):
         # type: (list[IsccEntry]) -> list[IsccAddResult]
@@ -216,6 +224,20 @@ class UsearchIndex:
                                         nphd_batches[unit_type] = ([], [])
                                     nphd_batches[unit_type][0].append(key)
                                     nphd_batches[unit_type][1].append(np.frombuffer(unit_body, dtype=np.uint8))
+
+                        # Dual-write simprints to LMDB (alongside SimprintMultiIndex)
+                        if asset.simprints and asset.iscc_id:
+                            iscc_id_body = IsccID(asset.iscc_id).body
+                            for sp_type, sp_list in asset.simprints.items():
+                                data_db, sp_assets_db = self._open_sp_databases_in_txn(txn, sp_type)
+                                if txn.get(iscc_id_body, db=sp_assets_db) is not None:
+                                    # Update: delete old simprint entries before re-indexing
+                                    lmdb_ops.delete_asset_simprints(txn, data_db, iscc_id_body)
+                                txn.put(iscc_id_body, b"", db=sp_assets_db)
+                                for sp_obj in sp_list:
+                                    sp_bytes = ic.decode_base64(sp_obj.simprint)
+                                    chunk_ptr = lmdb_ops.pack_chunk_pointer(iscc_id_body, sp_obj.offset, sp_obj.size)
+                                    txn.put(sp_bytes, chunk_ptr, dupdata=False, db=data_db)
 
                         results.append(IsccAddResult(iscc_id=asset.iscc_id, status=status))
 
@@ -324,8 +346,8 @@ class UsearchIndex:
 
         return common.deserialize_asset(asset_bytes)
 
-    def search_assets(self, query, limit=100):
-        # type: (IsccQuery, int) -> IsccSearchResult
+    def search_assets(self, query, limit=100, exact=False):
+        # type: (IsccQuery, int, bool) -> IsccSearchResult
         """
         Search for similar assets using NPHD metric.
 
@@ -346,6 +368,7 @@ class UsearchIndex:
 
         :param query: Query with units
         :param limit: Maximum number of results
+        :param exact: If True, use LMDB exact search for simprints instead of SimprintMultiIndex
         :return: IsccSearchResult with query and list of matches (scores normalized 0.0-1.0)
         """
         # Handle iscc_id lookup if provided (takes precedence over other fields)
@@ -365,7 +388,7 @@ class UsearchIndex:
         # Search simprints for chunk-level matches (can work without units)
         chunk_matches = []  # type: list[IsccChunkMatch]
         if self._simprint_index is not None and query.simprints:
-            chunk_matches = self._search_simprints(query, limit)
+            chunk_matches = self._search_simprints(query, limit, exact=exact)
 
         # Search units for global matches (only if units present)
         matches = []  # type: list[IsccGlobalMatch]
@@ -525,18 +548,20 @@ class UsearchIndex:
         """Get current LMDB map_size."""
         return self.env.info()["map_size"]
 
-    def _search_simprints(self, query, limit):
-        # type: (IsccQuery, int) -> list[IsccChunkMatch]
+    def _search_simprints(self, query, limit, exact=False):
+        # type: (IsccQuery, int, bool) -> list[IsccChunkMatch]
         """
         Search simprints and convert results to IsccChunkMatch format.
 
-        Performs simprint search, enriches with metadata from LMDB, and converts
-        protocol-layer results to schema-layer format.
+        Routes to exact LMDB search or SimprintMultiIndex based on `exact` flag.
 
         :param query: Query with simprints field
         :param limit: Maximum number of chunk matches to return
+        :param exact: If True, use LMDB exact search instead of SimprintMultiIndex
         :return: List of IsccChunkMatch objects with metadata enrichment
         """
+        if exact:
+            return self._search_simprints_exact(query, limit)
 
         # Convert query simprints from base64 strings to bytes
         simprints_bytes = {}  # type: dict[str, list[bytes]]
@@ -644,6 +669,198 @@ class UsearchIndex:
         return IsccChunkMatch(
             iscc_id=iscc_id_str, score=raw_match.score, types=types_converted, source=source, metadata=metadata
         )
+
+    def _load_sp_databases(self):
+        # type: () -> None
+        """
+        Load existing LMDB simprint database handles from metadata.
+
+        Reads sp_types from __metadata__ and opens cached database handles
+        for each known simprint type.
+        """
+        sp_types = self._get_sp_types()
+        if not sp_types:
+            return
+
+        with self.env.begin(write=True) as txn:
+            for sp_type in sp_types:
+                data_db_name = f"__sp_{sp_type}__".encode()
+                assets_db_name = f"__sp_assets_{sp_type}__".encode()
+
+                data_db = self.env.open_db(
+                    data_db_name,
+                    txn=txn,
+                    dupsort=True,
+                    dupfixed=True,
+                )
+                assets_db = self.env.open_db(assets_db_name, txn=txn)
+
+                self._sp_data_dbs[sp_type] = data_db
+                self._sp_assets_dbs[sp_type] = assets_db
+
+        logger.debug(f"Loaded LMDB simprint databases for types: {sp_types}")
+
+    def _open_sp_databases_in_txn(self, txn, sp_type):
+        # type: (lmdb.Transaction, str) -> tuple[lmdb._Database, lmdb._Database]
+        """
+        Open or get cached LMDB simprint database handles within a write transaction.
+
+        If this is a new type, opens the databases and registers the type in metadata.
+
+        :param txn: Active LMDB write transaction
+        :param sp_type: Simprint type identifier (e.g., "CONTENT_TEXT_V0")
+        :return: (data_db, sp_assets_db) database handles
+        """
+        if sp_type in self._sp_data_dbs:
+            return self._sp_data_dbs[sp_type], self._sp_assets_dbs[sp_type]
+
+        data_db_name = f"__sp_{sp_type}__".encode()
+        assets_db_name = f"__sp_assets_{sp_type}__".encode()
+
+        data_db = self.env.open_db(
+            data_db_name,
+            txn=txn,
+            dupsort=True,
+            dupfixed=True,
+        )
+        assets_db = self.env.open_db(assets_db_name, txn=txn)
+
+        self._sp_data_dbs[sp_type] = data_db
+        self._sp_assets_dbs[sp_type] = assets_db
+
+        # Register new type in metadata
+        metadata_db = self.env.open_db(b"__metadata__", txn=txn)
+        sp_types = self._get_sp_types_from_txn(txn, metadata_db)
+        if sp_type not in sp_types:
+            sp_types.append(sp_type)
+            txn.put(b"sp_types", json.dumps(sp_types).encode(), db=metadata_db)
+            logger.debug(f"Registered new simprint type in LMDB: {sp_type}")
+
+        return data_db, assets_db
+
+    def _get_sp_types(self):
+        # type: () -> list[str]
+        """
+        Read sp_types JSON list from __metadata__.
+
+        :return: List of registered simprint type identifiers
+        """
+        try:
+            with self.env.begin() as txn:
+                metadata_db = self.env.open_db(b"__metadata__", txn=txn)
+                return self._get_sp_types_from_txn(txn, metadata_db)
+        except lmdb.ReadonlyError:  # pragma: no cover
+            return []
+
+    def _get_sp_types_from_txn(self, txn, metadata_db):
+        # type: (lmdb.Transaction, lmdb._Database) -> list[str]
+        """
+        Read sp_types JSON list from __metadata__ within an existing transaction.
+
+        :param txn: Active LMDB transaction
+        :param metadata_db: Metadata database handle
+        :return: List of registered simprint type identifiers
+        """
+        raw = txn.get(b"sp_types", db=metadata_db)
+        if raw is None:
+            return []
+        return json.loads(raw.decode())
+
+    def _search_simprints_exact(self, query, limit):
+        # type: (IsccQuery, int) -> list[IsccChunkMatch]
+        """
+        Exact LMDB simprint search with per-type lookup and cross-type aggregation.
+
+        For each simprint type in the query, performs hard-boundary search via
+        lmdb_ops.search_simprints_exact. Groups results by asset, computes
+        overall score as mean of per-type scores, and enriches with metadata.
+
+        :param query: Query with simprints field
+        :param limit: Maximum number of chunk matches to return
+        :return: List of IsccChunkMatch objects with metadata enrichment
+        """
+        from iscc_search.indexes.simprint.models import SimprintMatchMulti, TypeMatchResult
+
+        # Per-type search and aggregation
+        # asset_type_results: iscc_id_body -> {sp_type: TypeMatchResult}
+        asset_type_results = {}  # type: dict[bytes, dict[str, TypeMatchResult]]
+
+        with self.env.begin() as txn:
+            for sp_type, simprint_objs in query.simprints.items():
+                if sp_type not in self._sp_data_dbs:
+                    continue
+
+                data_db = self._sp_data_dbs[sp_type]
+
+                # Count total assets for this type
+                if sp_type in self._sp_assets_dbs:
+                    total_assets = txn.stat(db=self._sp_assets_dbs[sp_type])["entries"]
+                else:
+                    total_assets = 0
+
+                # Convert query simprints from Simprint RootModel objects to bytes
+                query_sp_bytes = [ic.decode_base64(s.root if hasattr(s, "root") else s) for s in simprint_objs]
+
+                raw_matches = lmdb_ops.search_simprints_exact(
+                    txn=txn,
+                    db=data_db,
+                    query_simprints=query_sp_bytes,
+                    total_assets=total_assets,
+                    limit=limit * 2,  # Over-fetch per type, trim after aggregation
+                    threshold=self.threshold,
+                    detailed=True,
+                )
+
+                for raw_match in raw_matches:
+                    body = raw_match.iscc_id_body
+                    if body not in asset_type_results:
+                        asset_type_results[body] = {}
+
+                    # Convert SimprintMatchRaw chunks to MatchedChunkRaw (already in correct format)
+                    asset_type_results[body][sp_type] = TypeMatchResult(
+                        score=raw_match.score,
+                        queried=raw_match.queried,
+                        matches=raw_match.matches,
+                        chunks=raw_match.chunks,
+                    )
+
+        if not asset_type_results:
+            return []
+
+        # Build SimprintMatchMulti objects (overall score = mean of type scores)
+        multi_matches = []  # type: list[SimprintMatchMulti]
+        for iscc_id_body, type_results in asset_type_results.items():
+            asset_score = sum(tr.score for tr in type_results.values()) / len(type_results)
+
+            # Reconstruct full ISCC-ID (2-byte header + 8-byte body)
+            iscc_id_obj = IsccID.from_body(iscc_id_body, self._realm_id)
+            iscc_id_bytes = ic.decode_base32(str(iscc_id_obj).split(":")[-1])
+
+            multi_matches.append(
+                SimprintMatchMulti(
+                    iscc_id=iscc_id_bytes,
+                    score=asset_score,
+                    types=type_results,
+                )
+            )
+
+        multi_matches.sort(key=lambda x: (-x.score, x.iscc_id))
+        multi_matches = multi_matches[:limit]
+
+        # Convert to IsccChunkMatch with metadata enrichment (reuse existing converter)
+        chunk_matches = []  # type: list[IsccChunkMatch]
+        try:
+            with self.env.begin() as txn:
+                assets_db = self.env.open_db(b"__assets__", txn=txn)
+                for raw_match in multi_matches:
+                    chunk_match = self._convert_simprint_match(raw_match, assets_db, txn)
+                    chunk_matches.append(chunk_match)
+        except lmdb.ReadonlyError:  # pragma: no cover
+            for raw_match in multi_matches:
+                chunk_match = self._convert_simprint_match(raw_match, None, None)
+                chunk_matches.append(chunk_match)
+
+        return chunk_matches
 
     def __del__(self):  # pragma: no cover
         # type: () -> None

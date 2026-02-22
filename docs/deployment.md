@@ -61,11 +61,12 @@ stop_grace_period: 90s  # Must be > uvicorn timeout
 
 ### Environment Variables
 
-| Variable                   | Default           | Required | Description             |
-| -------------------------- | ----------------- | -------- | ----------------------- |
-| `ISCC_SEARCH_INDEX_URI`    | `usearch:///data` | No       | Backend URI             |
-| `ISCC_SEARCH_CORS_ORIGINS` | `*`               | No       | Comma-separated origins |
-| `ISCC_SEARCH_API_SECRET`   | None              | No       | API authentication      |
+| Variable                     | Default           | Required | Description                                 |
+| ---------------------------- | ----------------- | -------- | ------------------------------------------- |
+| `ISCC_SEARCH_INDEX_URI`      | `usearch:///data` | No       | Backend URI                                 |
+| `ISCC_SEARCH_CORS_ORIGINS`   | `*`               | No       | Comma-separated origins                     |
+| `ISCC_SEARCH_API_SECRET`     | None              | No       | API authentication                          |
+| `ISCC_SEARCH_FLUSH_INTERVAL` | `0`               | No       | Auto-flush after N mutations (0 = disabled) |
 
 **Example:**
 

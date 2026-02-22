@@ -58,6 +58,26 @@ def test_usearch_simprint_index_init(tmp_path):
     idx.close()
 
 
+def test_usearch_simprint_index_dirty(tmp_path):
+    """dirty property tracks unsaved key mutations."""
+    sp_dir = tmp_path / "sp_dirty"
+    idx = UsearchSimprintIndex(path=sp_dir, ndim=64)
+    assert idx.dirty == 0
+
+    sp_bytes = b"\xaa" * 8
+    asset_id = b"\x00" * 8
+    key = lmdb_ops.pack_chunk_pointer(asset_id, 0, 100)
+    vector = np.frombuffer(sp_bytes, dtype=np.uint8)
+
+    idx.add_raw([key], [vector])
+    assert idx.dirty > 0
+
+    idx.save()
+    assert idx.dirty == 0
+
+    idx.close()
+
+
 def test_usearch_simprint_index_add_and_search(tmp_path):
     """Add vectors with composite keys and search."""
     sp_dir = tmp_path / "sp_add"
@@ -742,6 +762,59 @@ def test_flush_saves_simprint_indexes(tmp_path, sample_iscc_ids):
     idx.close()
 
 
+def test_flush_skips_clean_simprint_indexes(tmp_path, sample_iscc_ids):
+    """flush() skips simprint sub-indexes with dirty == 0."""
+    index_path = tmp_path / "sp_flush_clean"
+    sp_bytes = b"\xab" * 16
+    sp_type = "CONTENT_TEXT_V0"
+
+    instance_unit = f"ISCC:{ic.Code.rnd(ic.MT.INSTANCE, bits=128)}"
+    content_unit = ic.gen_text_code_v0("Flush clean simprint test")["iscc"]
+
+    idx = UsearchIndex(index_path, realm_id=0, max_dim=256)
+    asset = IsccEntry(
+        iscc_id=sample_iscc_ids[0],
+        units=[instance_unit, content_unit],
+        simprints=_make_entry_simprints(sp_type, [(sp_bytes, 0, 100)]),
+    )
+    idx.add_assets([asset])
+    idx.flush()
+
+    # Second flush should skip clean simprint index
+    assert idx._simprint_indexes[sp_type].dirty == 0
+    idx.flush()
+
+    # Index still works
+    query = IsccQuery(simprints=_make_query_simprints(sp_type, [sp_bytes]))
+    result = idx.search_assets(query, limit=10)
+    assert len(result.chunk_matches) > 0
+
+    idx.close()
+
+
+def test_auto_flush_triggers_simprint_indexes(tmp_path, sample_iscc_ids):
+    """Auto-flush triggers for simprint sub-indexes when dirty >= flush_interval."""
+    index_path = tmp_path / "sp_auto_flush"
+    sp_bytes = b"\xab" * 16
+    sp_type = "CONTENT_TEXT_V0"
+
+    instance_unit = f"ISCC:{ic.Code.rnd(ic.MT.INSTANCE, bits=128)}"
+    content_unit = ic.gen_text_code_v0("Auto-flush simprint test")["iscc"]
+
+    idx = UsearchIndex(index_path, realm_id=0, max_dim=256, flush_interval=1)
+    asset = IsccEntry(
+        iscc_id=sample_iscc_ids[0],
+        units=[instance_unit, content_unit],
+        simprints=_make_entry_simprints(sp_type, [(sp_bytes, 0, 100)]),
+    )
+    idx.add_assets([asset])
+
+    # Simprint index should have been auto-flushed (dirty reset to 0)
+    assert idx._simprint_indexes[sp_type].dirty == 0
+
+    idx.close()
+
+
 def test_detect_sp_ndim(tmp_path, sample_iscc_ids):
     """_detect_sp_ndim reads simprint size from LMDB data."""
     index_path = tmp_path / "sp_ndim"
@@ -898,7 +971,8 @@ def test_simprint_sync_mismatch_triggers_rebuild(tmp_path, sample_iscc_ids):
     )
     idx.add_assets([asset])
 
-    # Corrupt the metadata to create a mismatch
+    # Flush to make indexes clean, then corrupt metadata
+    idx.flush()
     idx._update_sp_metadata(sp_type, 999)  # Wrong count
     idx.close()
 

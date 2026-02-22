@@ -290,6 +290,16 @@ class UsearchIndex:
                         self._simprint_indexes[sp_type].remove(deleted_keys)
                         self._update_sp_metadata(sp_type, self._simprint_indexes[sp_type].size)
 
+                # Auto-flush sub-indexes that exceed flush_interval
+                flush_interval = self._opts.flush_interval
+                if flush_interval > 0:
+                    for nphd_index in self._nphd_indexes.values():
+                        if nphd_index.dirty >= flush_interval:
+                            nphd_index.save()
+                    for sp_index in self._simprint_indexes.values():
+                        if sp_index.dirty >= flush_interval:
+                            sp_index.save()
+
                 break  # Success
 
             except lmdb.MapFullError:  # pragma: no cover
@@ -507,41 +517,46 @@ class UsearchIndex:
     def flush(self):
         # type: () -> None
         """
-        Save all derived indexes (ShardedNphdIndex and UsearchSimprintIndex) to disk.
+        Save dirty derived indexes (ShardedNphdIndex and UsearchSimprintIndex) to disk.
 
-        Explicit flush for power users who want control over persistence.
+        Skips sub-indexes with dirty == 0 to avoid unnecessary I/O.
         Indexes are automatically saved on close(), so flush() is only
         needed for durability guarantees during long-running sessions.
         """
         for unit_type, nphd_index in self._nphd_indexes.items():
+            if nphd_index.dirty == 0:
+                continue
             nphd_index.save()
-            # Update metadata with current vector count
             self._update_nphd_metadata(unit_type, nphd_index.size)
             logger.debug(f"Flushed ShardedNphdIndex for unit_type '{unit_type}'")
 
         for sp_type, sp_index in self._simprint_indexes.items():
+            if sp_index.dirty == 0:
+                continue
             sp_index.save()
             self._update_sp_metadata(sp_type, sp_index.size)
             logger.debug(f"Flushed UsearchSimprintIndex for type '{sp_type}'")
 
     def close(self):
         # type: () -> None
-        """Close LMDB environment and all derived indexes, saving state."""
-        # Save all ShardedNphdIndex instances before closing
+        """Close LMDB environment and all derived indexes, saving dirty state."""
+        # Save dirty ShardedNphdIndex instances before closing
         for unit_type, nphd_index in self._nphd_indexes.items():
-            nphd_index.save()
-            # Update metadata with current vector count
-            self._update_nphd_metadata(unit_type, nphd_index.size)
-            logger.debug(f"Saved ShardedNphdIndex for unit_type '{unit_type}'")
-            # Release view shards, active shard, bloom filter
+            if nphd_index.dirty > 0:
+                nphd_index.save()
+                self._update_nphd_metadata(unit_type, nphd_index.size)
+                logger.debug(f"Saved ShardedNphdIndex for unit_type '{unit_type}'")
             nphd_index.reset()
 
         self._nphd_indexes.clear()
 
-        # Save and close derived simprint indexes (ShardedIndex128)
+        # Save dirty derived simprint indexes (ShardedIndex128)
         for sp_type, sp_index in self._simprint_indexes.items():
-            sp_index.close()
-            logger.debug(f"Closed UsearchSimprintIndex for type '{sp_type}'")
+            if sp_index.dirty > 0:
+                sp_index.save()
+                self._update_sp_metadata(sp_type, sp_index.size)
+                logger.debug(f"Saved UsearchSimprintIndex for type '{sp_type}'")
+            sp_index.reset()
 
         self._simprint_indexes.clear()
 

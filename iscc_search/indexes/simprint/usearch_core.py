@@ -241,6 +241,12 @@ class UsearchSimprintIndex:
         return scored_results[:limit]
 
     @property
+    def dirty(self):
+        # type: () -> int
+        """Number of unsaved key mutations."""
+        return self._index.dirty
+
+    @property
     def size(self):
         # type: () -> int
         """Return number of vectors in the index."""

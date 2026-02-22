@@ -384,6 +384,139 @@ def test_usearch_index_get_all_tracked_unit_types(tmp_path, sample_iscc_ids):
     idx.close()
 
 
+def test_flush_skips_clean_sub_indexes(tmp_path, sample_iscc_ids):
+    """flush() skips sub-indexes with dirty == 0."""
+    index_path = tmp_path / "flush_clean"
+
+    idx = UsearchIndex(index_path, realm_id=0, max_dim=256)
+    content_unit = ic.gen_text_code_v0("Test flush clean")["iscc"]
+    instance_unit = f"ISCC:{ic.Code.rnd(ic.MT.INSTANCE, bits=128)}"
+    asset = IsccEntry(
+        iscc_id=sample_iscc_ids[0],
+        units=[instance_unit, content_unit],
+    )
+    idx.add_assets([asset])
+
+    # First flush saves dirty indexes
+    idx.flush()
+
+    # Second flush should skip (all clean now)
+    # Verify no error and indexes still usable
+    idx.flush()
+
+    query = IsccQuery(units=[instance_unit, content_unit])
+    result = idx.search_assets(query, limit=10)
+    assert len(result.global_matches) == 1
+
+    idx.close()
+
+
+def test_close_skips_clean_saves_but_resets(tmp_path, sample_iscc_ids):
+    """close() skips save on clean sub-indexes but still resets them."""
+    index_path = tmp_path / "close_clean"
+
+    idx = UsearchIndex(index_path, realm_id=0, max_dim=256)
+    content_unit = ic.gen_text_code_v0("Test close clean")["iscc"]
+    instance_unit = f"ISCC:{ic.Code.rnd(ic.MT.INSTANCE, bits=128)}"
+    asset = IsccEntry(
+        iscc_id=sample_iscc_ids[0],
+        units=[instance_unit, content_unit],
+    )
+    idx.add_assets([asset])
+
+    # Flush to make indexes clean
+    idx.flush()
+
+    # Close should skip save (clean) but still reset and close LMDB
+    idx.close()
+
+    # Reopen and verify data persists (was saved by flush)
+    idx2 = UsearchIndex(index_path, realm_id=0, max_dim=256)
+    query = IsccQuery(units=[instance_unit, content_unit])
+    result = idx2.search_assets(query, limit=10)
+    assert len(result.global_matches) == 1
+
+    idx2.close()
+
+
+def test_auto_flush_triggers_on_threshold(tmp_path, sample_iscc_ids):
+    """Auto-flush triggers when dirty >= flush_interval."""
+    index_path = tmp_path / "auto_flush"
+
+    idx = UsearchIndex(index_path, realm_id=0, max_dim=256, flush_interval=1)
+    content_unit = ic.gen_text_code_v0("Test auto flush")["iscc"]
+    instance_unit = f"ISCC:{ic.Code.rnd(ic.MT.INSTANCE, bits=128)}"
+    asset = IsccEntry(
+        iscc_id=sample_iscc_ids[0],
+        units=[instance_unit, content_unit],
+    )
+    idx.add_assets([asset])
+
+    # After add_assets with flush_interval=1, sub-indexes should have been auto-flushed
+    nphd_index = idx._nphd_indexes["CONTENT_TEXT_V0"]
+    assert nphd_index.dirty == 0  # Was auto-flushed
+
+    # Shard files should exist on disk
+    shard_dir = index_path / "CONTENT_TEXT_V0"
+    shard_files = list(shard_dir.glob("shard_*.usearch")) if shard_dir.exists() else []
+    assert len(shard_files) > 0
+
+    idx.close()
+
+
+def test_auto_flush_below_threshold_skips(tmp_path, sample_iscc_ids):
+    """Auto-flush does not trigger when dirty < flush_interval."""
+    from iscc_search.schema import IsccSimprint
+
+    index_path = tmp_path / "auto_flush_below"
+    sp_type = "CONTENT_TEXT_V0"
+    sp_bytes = b"\xab" * 16
+
+    idx = UsearchIndex(index_path, realm_id=0, max_dim=256, flush_interval=1000)
+    content_unit = ic.gen_text_code_v0("Test auto flush below threshold")["iscc"]
+    instance_unit = f"ISCC:{ic.Code.rnd(ic.MT.INSTANCE, bits=128)}"
+    simprints = {sp_type: [IsccSimprint(simprint=ic.encode_base64(sp_bytes), offset=0, size=100)]}
+    asset = IsccEntry(
+        iscc_id=sample_iscc_ids[0],
+        units=[instance_unit, content_unit],
+        simprints=simprints,
+    )
+    idx.add_assets([asset])
+
+    # dirty < 1000 so auto-flush should NOT trigger for either index type
+    nphd_index = idx._nphd_indexes["CONTENT_TEXT_V0"]
+    assert nphd_index.dirty > 0
+    sp_index = idx._simprint_indexes[sp_type]
+    assert sp_index.dirty > 0
+
+    idx.close()
+
+
+def test_auto_flush_disabled_when_zero(tmp_path, sample_iscc_ids):
+    """Auto-flush does not trigger when flush_interval=0."""
+    index_path = tmp_path / "auto_flush_disabled"
+
+    idx = UsearchIndex(index_path, realm_id=0, max_dim=256, flush_interval=0)
+    content_unit = ic.gen_text_code_v0("Test auto flush disabled")["iscc"]
+    instance_unit = f"ISCC:{ic.Code.rnd(ic.MT.INSTANCE, bits=128)}"
+    asset = IsccEntry(
+        iscc_id=sample_iscc_ids[0],
+        units=[instance_unit, content_unit],
+    )
+    idx.add_assets([asset])
+
+    # Sub-indexes should still be dirty (not auto-flushed)
+    nphd_index = idx._nphd_indexes["CONTENT_TEXT_V0"]
+    assert nphd_index.dirty > 0
+
+    # No shard files on disk yet
+    shard_dir = index_path / "CONTENT_TEXT_V0"
+    shard_files = list(shard_dir.glob("shard_*.usearch")) if shard_dir.exists() else []
+    assert len(shard_files) == 0
+
+    idx.close()
+
+
 def test_usearch_index_crash_recovery_multiple_missing_dirs(tmp_path, sample_iscc_ids):
     """
     Test crash recovery with multiple missing shard directories.

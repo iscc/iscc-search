@@ -176,7 +176,7 @@ class UsearchIndex:
                         logger.info(f"Inferred realm_id={self._realm_id} from first asset")
 
                     # Prepare vectors for batch add to ShardedNphdIndex
-                    nphd_batches = {}  # type: dict[str, tuple[list[int], list[np.ndarray]]]
+                    nphd_batches = {}  # type: dict[str, tuple[list[int], list[bytes]]]
                     # Prepare vectors for batch add to derived ShardedIndex128 simprint indexes
                     sp_batches = {}  # type: dict[str, tuple[list[bytes], list[np.ndarray]]]
                     sp_deleted_keys = {}  # type: dict[str, list[bytes]]
@@ -225,7 +225,7 @@ class UsearchIndex:
                                     if unit_type not in nphd_batches:
                                         nphd_batches[unit_type] = ([], [])
                                     nphd_batches[unit_type][0].append(key)
-                                    nphd_batches[unit_type][1].append(np.frombuffer(unit_body, dtype=np.uint8))
+                                    nphd_batches[unit_type][1].append(unit_body)
 
                         # Write simprints to LMDB (source of truth)
                         if asset.simprints and asset.iscc_id:
@@ -1140,7 +1140,7 @@ class UsearchIndex:
 
         # Collect all vectors for this unit_type from LMDB
         keys = []  # type: list[int]
-        vectors = []  # type: list[np.ndarray]
+        vectors = []  # type: list[bytes]
 
         with self.env.begin() as txn:
             assets_db = self.env.open_db(b"__assets__", txn=txn)
@@ -1157,7 +1157,7 @@ class UsearchIndex:
                     if unit.unit_type == unit_type:
                         key = struct.unpack(">Q", key_bytes)[0]
                         keys.append(key)
-                        vectors.append(np.frombuffer(unit.body, dtype=np.uint8))
+                        vectors.append(unit.body)
 
         if not keys:
             logger.info(f"No vectors found for unit_type '{unit_type}' - skipping rebuild")
@@ -1479,7 +1479,6 @@ class UsearchIndex:
         """
         nphd_index = self._nphd_indexes[unit_type]
 
-        # ShardedNphdIndex.search expects numpy array (handles padding internally)
         query = np.frombuffer(vector, dtype=np.uint8)
         matches = nphd_index.search(query, count=limit)
 

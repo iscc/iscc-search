@@ -941,7 +941,6 @@ dependencies = [
     { name = "simsimd" },
     { name = "tqdm" },
     { name = "typer" },
-    { name = "usearch-iscc" },
     { name = "uvicorn", extra = ["standard"] },
 ]
 
@@ -976,7 +975,7 @@ requires-dist = [
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "iscc-core", specifier = ">=1.2.1" },
     { name = "iscc-sct", specifier = ">=0.1.3" },
-    { name = "iscc-usearch", specifier = ">=0.5.0" },
+    { name = "iscc-usearch", specifier = ">=0.6.0" },
     { name = "lancedb", specifier = ">=0.25.3" },
     { name = "lmdb", specifier = ">=1.7.5" },
     { name = "loguru", specifier = ">=0.7.3" },
@@ -991,7 +990,6 @@ requires-dist = [
     { name = "simsimd", specifier = ">=6.5.3" },
     { name = "tqdm", specifier = ">=4.67.1" },
     { name = "typer", specifier = ">=0.20.0" },
-    { name = "usearch-iscc", specifier = ">=2.24" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.38.0" },
 ]
 
@@ -1021,16 +1019,16 @@ dev = [
 
 [[package]]
 name = "iscc-usearch"
-version = "0.5.0"
+version = "0.6.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "fastbloom-rs" },
     { name = "loguru" },
     { name = "usearch-iscc" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/24/97/f464e627a2a5ec42f48e67d42998634ed717b3737a7f44743d9f74cb916c/iscc_usearch-0.5.0.tar.gz", hash = "sha256:452a1b083f3255458b22287ff6f5c9e883b4afddd6384ef9b2c7d33eb79d497f", size = 38523, upload-time = "2026-02-20T12:06:15.05Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/4a/63/d6076022f362f43a1670d50fa7c2889129302c5f2fddc652f90c0230e547/iscc_usearch-0.6.0.tar.gz", hash = "sha256:c8238d43c4727c4e1321c834150701e3606e8f35af1f8399ea0feb65469a0a98", size = 39608, upload-time = "2026-02-22T10:31:17.973Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/09/1c/1bfb6dbee671f301b34363f54783b2dd4e9932da87ec2507b1c7fcaf3842/iscc_usearch-0.5.0-py3-none-any.whl", hash = "sha256:f38e6db40a8b790d7a543368da84ea320bf8a248aded3250f45e46bc47b6bbf6", size = 42546, upload-time = "2026-02-20T12:06:13.291Z" },
+    { url = "https://files.pythonhosted.org/packages/e9/1f/38acd69e63a63c5e6552d70b61a68779dcd8b95ef706e048464de97763fe/iscc_usearch-0.6.0-py3-none-any.whl", hash = "sha256:de0163c6e18e11c6f86efd328f9d38a38d52e06b25c147dee874b0a0ea905147", size = 43771, upload-time = "2026-02-22T10:31:16.649Z" },
 ]
 
 [[package]]

@@ -234,3 +234,9 @@ project architecture, desing, maintainability, testability, or implementation.
 
 If you need a quick overview of the project structure, read the MAP from .claude/map.md to get a high-level
 overview of all directories, files, functions, and classes.
+
+## Command Execution
+
+- Never prefix commands with `cd <project-dir> &&`. The working directory is already the project root.
+- Run commands directly (e.g., `gh issue list ...`, `uv run pytest`, not `cd /path && gh issue list ...`).
+- Use absolute paths for files outside the project if needed.

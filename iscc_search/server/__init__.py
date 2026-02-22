@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from loguru import logger
-from iscc_search.settings import get_index, search_settings
+from iscc_search.options import get_index, search_opts
 from iscc_search.protocols.index import IsccIndexProtocol  # noqa: F401
 
 
@@ -69,7 +69,7 @@ app = FastAPI(
 # Configure CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=search_settings.cors_origins,
+    allow_origins=search_opts.cors_origins,
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],

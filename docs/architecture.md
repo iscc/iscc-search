@@ -148,7 +148,7 @@ iscc_search/
 ├── __init__.py
 │
 ├── protocol.py              # IsccIndexProtocol definition
-├── settings.py              # Pydantic settings and index factory
+├── options.py              # Pydantic settings and index factory
 ├── models.py                # Existing data models (IsccEntry, etc.)
 ├── schema.py                # Generated Pydantic models from OpenAPI
 │
@@ -222,9 +222,9 @@ Defines `IsccIndexProtocol` as a runtime-checkable Protocol with methods:
 
 All methods are synchronous. Backends may use threading/connection pools internally.
 
-### Settings and Configuration (`settings.py`)
+### Settings and Configuration (`options.py`)
 
-**SearchSettings**: Pydantic settings class with:
+**SearchOptions**: Pydantic settings class with:
 
 - `index_uri` - Location for index data (path or DSN), defaults to OS user data directory
 - Environment variable support (`ISCC_SEARCH_` prefix)
@@ -379,7 +379,7 @@ uvicorn iscc_search.server.app:app --host 0.0.0.0 --port 8000
 ### Phase 1: Foundation ✓ **COMPLETED**
 
 - Protocol definition (`IsccIndexProtocol`)
-- Settings and configuration (`SearchSettings`, `get_index()`)
+- Settings and configuration (`SearchOptions`, `get_index()`)
 - Schema models from OpenAPI specification
 - Index factory with URI parsing
 

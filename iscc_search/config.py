@@ -14,7 +14,7 @@ indexes (local and remote) and switch between them using an "active" index conce
 
 **CONFIGURATION SOURCE**: Persistent JSON file at ~/.iscc-search/config.json
 
-**NOT FOR**: Server deployment configuration. See iscc_search.settings for that.
+**NOT FOR**: Server deployment configuration. See iscc_search.options for that.
 
 ---
 

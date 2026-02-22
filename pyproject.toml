@@ -38,6 +38,7 @@ dependencies = [
     "iscc-sct>=0.1.3",
     "lancedb>=0.25.3",
     "psycopg[binary]>=3.2.12",
+    "python-dotenv>=1.2.1",
 ]
 
 [project.urls]

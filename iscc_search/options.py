@@ -1,27 +1,16 @@
-"""
-Server runtime settings for ISCC-Search API.
+"""Configuration options for ISCC-Search.
 
-**PURPOSE**: Configure the FastAPI server deployment via environment variables.
-
-**SCOPE**: Single index backend per server deployment. This is used exclusively
-by the API server (iscc-search serve) to configure runtime behavior.
-
-**USAGE**:
-- Deploying the API server with uvicorn
-- Configuring server behavior (CORS, authentication)
-- Setting which index backend to use (memory://, lmdb://, usearch://)
-
-**CONFIGURATION SOURCE**: Environment variables with ISCC_SEARCH_ prefix
-
-**NOT FOR**: CLI multi-index workflows. See iscc_search.config for that.
-
----
+Provides configuration management using Pydantic settings with support for:
+- Environment variables with ISCC_SEARCH_ prefix
+- .env file loading
+- Runtime settings override
+- Type validation and defaults
 
 **RELATIONSHIP WITH config.py**:
 
 iscc-search has TWO independent configuration systems:
 
-1. **settings.py (this file)** - Server deployment configuration
+1. **options.py (this file)** - Server deployment configuration
    - Consumer: API server (iscc-search serve)
    - Source: Environment variables (ISCC_SEARCH_*)
    - Scope: Single index per deployment
@@ -34,64 +23,64 @@ iscc-search has TWO independent configuration systems:
    - Pattern: Git-like workflow (add/list/use/remove)
 
 These systems are SEPARATE and serve different purposes. The serve command uses
-settings.py while CLI data commands use config.py.
-
----
-
-Provides configuration management using Pydantic settings with support for:
-- Environment variables with ISCC_SEARCH_ prefix
-- .env file loading
-- Runtime settings override
-- Type validation and defaults
+options.py while CLI data commands use config.py.
 """
 
 from pathlib import Path
 from urllib.parse import urlparse
+from dotenv import load_dotenv
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 import iscc_search
 
+load_dotenv()
 
 __all__ = [
-    "SearchSettings",
-    "search_settings",
+    "SearchOptions",
+    "search_opts",
     "get_index",
 ]
 
 
-class SearchSettings(BaseSettings):
+class SearchOptions(BaseSettings):
     """
-    Application settings for ISCC-Search.
+    Application options for ISCC-Search.
 
-    Settings can be configured via:
+    Options can be configured via:
     - Environment variables (prefixed with ISCC_SEARCH_)
     - .env file in the working directory
     - Direct instantiation with parameters
     - Runtime override using the override() method
-
-    Attributes:
-        index_uri: URI specifying index backend and location. Supported schemes:
-                   - memory:// → In-memory index (no persistence)
-                   - lmdb:///path → LMDB index at directory path
-                   - usearch:///path → Usearch index with HNSW + LMDB (high-performance)
-                   - postgres:///connection → PostgreSQL index (planned)
-        api_secret: Optional API secret for authentication (if unset, API is public)
-        cors_origins: List of allowed CORS origins (default: ["*"] for all origins)
     """
 
     index_uri: str = Field(
         f"usearch:///{Path(iscc_search.dirs.user_data_dir).as_posix()}",
-        description="URI specifying index backend (memory://, lmdb://, usearch://, postgres://)",
+        description="ISCC_SEARCH_INDEX_URI - URI specifying index backend (memory://, lmdb://, usearch://, postgres://)",
     )
 
     api_secret: str | None = Field(
         None,
-        description="Optional API secret for authentication (if unset, API is public)",
+        description="ISCC_SEARCH_API_SECRET - Optional API secret for authentication (if unset, API is public)",
     )
 
     cors_origins: list[str] = Field(
         ["*"],
-        description="CORS allowed origins (comma-separated in env var, or '*' for all)",
+        description="ISCC_SEARCH_CORS_ORIGINS - CORS allowed origins (comma-separated in env var, or '*' for all)",
+    )
+
+    host: str = Field(
+        "0.0.0.0",
+        description="ISCC_SEARCH_HOST - Host to bind server to",
+    )
+
+    port: int = Field(
+        8000,
+        description="ISCC_SEARCH_PORT - Port to bind server to",
+    )
+
+    workers: int | None = Field(
+        None,
+        description="ISCC_SEARCH_WORKERS - Number of worker processes (production only)",
     )
 
     @field_validator("cors_origins", mode="before")
@@ -113,37 +102,37 @@ class SearchSettings(BaseSettings):
 
     model_config = SettingsConfigDict(
         env_prefix="ISCC_SEARCH_",
+        env_file=".env",
         env_file_encoding="utf-8",
-        case_sensitive=True,
         extra="ignore",
         validate_assignment=True,
     )
 
     def override(self, update=None):
-        # type: (dict|None) -> SearchSettings
+        # type: (dict|None) -> SearchOptions
         """
-        Returns an updated and validated deep copy of the current settings instance.
+        Return an updated and validated deep copy of the current options instance.
 
         :param update: Dictionary of field names and values to override.
-        :return: New SearchSettings instance with updated and validated fields.
+        :return: New SearchOptions instance with updated and validated fields.
         """
 
         update = update or {}  # sets {} if update is None
 
-        settings = self.model_copy(deep=True)
+        options = self.model_copy(deep=True)
         # We need update fields individually so validation gets triggered
         for field, value in update.items():
-            setattr(settings, field, value)
-        return settings
+            setattr(options, field, value)
+        return options
 
 
-search_settings = SearchSettings()
+search_opts = SearchOptions()
 
 
 def get_index():
     # type: () -> IsccIndexProtocol
     """
-    Factory function to create index from settings.
+    Factory function to create index from options.
 
     Parses index_uri to determine index type and returns appropriate
     implementation. Supported URI schemes:
@@ -161,7 +150,7 @@ def get_index():
     from iscc_search.protocols.index import IsccIndexProtocol  # noqa: F401
     import sys
 
-    uri = search_settings.index_uri
+    uri = search_opts.index_uri
 
     # Handle memory:// scheme (no path needed)
     if uri == "memory://" or uri.startswith("memory://"):

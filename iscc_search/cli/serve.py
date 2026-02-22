@@ -7,15 +7,18 @@ Handles starting the ISCC-Search REST API server.
 import typer
 
 from iscc_search.cli.common import console
+from iscc_search.options import search_opts
 
 __all__ = ["serve_command"]
 
 
 def serve_command(
-    host: str = typer.Option("0.0.0.0", "--host", "-h", help="Host to bind server to"),
-    port: int = typer.Option(8000, "--port", "-p", help="Port to bind server to"),
+    host: str = typer.Option(search_opts.host, "--host", "-h", help="Host to bind server to"),
+    port: int = typer.Option(search_opts.port, "--port", "-p", help="Port to bind server to"),
     dev: bool = typer.Option(False, "--dev", "-d", help="Run in development mode with auto-reload"),
-    workers: int = typer.Option(None, "--workers", "-w", help="Number of worker processes (production only)"),
+    workers: int = typer.Option(
+        search_opts.workers, "--workers", "-w", help="Number of worker processes (production only)"
+    ),
 ):
     # type: (...) -> None
     """

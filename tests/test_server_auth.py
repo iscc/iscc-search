@@ -3,7 +3,7 @@
 import typing  # noqa: F401
 import pytest
 from fastapi.testclient import TestClient
-import iscc_search.settings
+import iscc_search.options
 from iscc_search.server import app
 
 
@@ -12,20 +12,20 @@ def client_public():
     # type: () -> typing.Generator[TestClient, None, None]
     """Create TestClient with no authentication (public mode)."""
     # Save original settings
-    original_uri = iscc_search.settings.search_settings.index_uri
-    original_secret = iscc_search.settings.search_settings.api_secret
+    original_uri = iscc_search.options.search_opts.index_uri
+    original_secret = iscc_search.options.search_opts.api_secret
 
     try:
         # Configure for public mode
-        iscc_search.settings.search_settings.index_uri = "memory://"
-        iscc_search.settings.search_settings.api_secret = None
+        iscc_search.options.search_opts.index_uri = "memory://"
+        iscc_search.options.search_opts.api_secret = None
 
         with TestClient(app) as client:
             yield client
     finally:
         # Restore original settings
-        iscc_search.settings.search_settings.index_uri = original_uri
-        iscc_search.settings.search_settings.api_secret = original_secret
+        iscc_search.options.search_opts.index_uri = original_uri
+        iscc_search.options.search_opts.api_secret = original_secret
 
 
 @pytest.fixture
@@ -33,20 +33,20 @@ def client_protected():
     # type: () -> typing.Generator[TestClient, None, None]
     """Create TestClient with authentication enabled (protected mode)."""
     # Save original settings
-    original_uri = iscc_search.settings.search_settings.index_uri
-    original_secret = iscc_search.settings.search_settings.api_secret
+    original_uri = iscc_search.options.search_opts.index_uri
+    original_secret = iscc_search.options.search_opts.api_secret
 
     try:
         # Configure for protected mode
-        iscc_search.settings.search_settings.index_uri = "memory://"
-        iscc_search.settings.search_settings.api_secret = "test-secret-key-12345"
+        iscc_search.options.search_opts.index_uri = "memory://"
+        iscc_search.options.search_opts.api_secret = "test-secret-key-12345"
 
         with TestClient(app) as client:
             yield client
     finally:
         # Restore original settings
-        iscc_search.settings.search_settings.index_uri = original_uri
-        iscc_search.settings.search_settings.api_secret = original_secret
+        iscc_search.options.search_opts.index_uri = original_uri
+        iscc_search.options.search_opts.api_secret = original_secret
 
 
 def test_public_mode_no_auth_required(client_public):

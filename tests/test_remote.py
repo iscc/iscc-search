@@ -18,12 +18,12 @@ def test_server():
     Note: Memory index persists across tests within same pytest session.
     Tests should use unique index names or clean up after themselves.
     """
-    import iscc_search.settings
+    import iscc_search.options
 
     # Override settings directly (os.environ alone is insufficient because
-    # search_settings is already instantiated by session-scoped conftest fixture)
-    original_uri = iscc_search.settings.search_settings.index_uri
-    iscc_search.settings.search_settings.index_uri = "memory://"
+    # search_opts is already instantiated by session-scoped conftest fixture)
+    original_uri = iscc_search.options.search_opts.index_uri
+    iscc_search.options.search_opts.index_uri = "memory://"
 
     from iscc_search.server import app
 
@@ -32,7 +32,7 @@ def test_server():
         yield client
 
     # Restore original settings
-    iscc_search.settings.search_settings.index_uri = original_uri
+    iscc_search.options.search_opts.index_uri = original_uri
 
 
 @pytest.fixture

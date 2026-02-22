@@ -18,18 +18,18 @@ def client():
 
     :return: FastAPI TestClient instance
     """
-    import iscc_search.settings
+    import iscc_search.options
 
     # Save original URI and set to memory://
-    original_uri = iscc_search.settings.search_settings.index_uri
-    iscc_search.settings.search_settings.index_uri = "memory://"
+    original_uri = iscc_search.options.search_opts.index_uri
+    iscc_search.options.search_opts.index_uri = "memory://"
 
     try:
         with TestClient(app) as client:
             yield client
     finally:
         # Restore original URI
-        iscc_search.settings.search_settings.index_uri = original_uri
+        iscc_search.options.search_opts.index_uri = original_uri
 
 
 def test_app_instance():
@@ -140,11 +140,11 @@ if __name__ == '__main__':
 def test_lifespan_shutdown():
     """Test that lifespan context manager properly closes index on shutdown."""
     from iscc_search.indexes.memory import MemoryIndex
-    import iscc_search.settings
+    import iscc_search.options
 
     # Save and override URI to use memory://
-    original_uri = iscc_search.settings.search_settings.index_uri
-    iscc_search.settings.search_settings.index_uri = "memory://"
+    original_uri = iscc_search.options.search_opts.index_uri
+    iscc_search.options.search_opts.index_uri = "memory://"
 
     try:
         # Use TestClient context manager to trigger lifespan events
@@ -163,7 +163,7 @@ def test_lifespan_shutdown():
         mock_index.close.assert_called_once()
     finally:
         # Restore original URI
-        iscc_search.settings.search_settings.index_uri = original_uri
+        iscc_search.options.search_opts.index_uri = original_uri
 
 
 def test_cors_headers_default(client):
@@ -194,16 +194,16 @@ def test_cors_preflight_request(client):
 
 def test_cors_with_custom_origins():
     """Test CORS with custom allowed origins."""
-    import iscc_search.settings
+    import iscc_search.options
 
     # Save original values
-    original_uri = iscc_search.settings.search_settings.index_uri
-    original_cors = iscc_search.settings.search_settings.cors_origins
+    original_uri = iscc_search.options.search_opts.index_uri
+    original_cors = iscc_search.options.search_opts.cors_origins
 
     try:
         # Override settings
-        iscc_search.settings.search_settings.index_uri = "memory://"
-        iscc_search.settings.search_settings.cors_origins = [
+        iscc_search.options.search_opts.index_uri = "memory://"
+        iscc_search.options.search_opts.cors_origins = [
             "https://example.com",
             "https://app.example.com",
         ]
@@ -228,8 +228,8 @@ def test_cors_with_custom_origins():
             ]
     finally:
         # Restore original values
-        iscc_search.settings.search_settings.index_uri = original_uri
-        iscc_search.settings.search_settings.cors_origins = original_cors
+        iscc_search.options.search_opts.index_uri = original_uri
+        iscc_search.options.search_opts.cors_origins = original_cors
         # Reload module to restore original state
         import iscc_search.server
 

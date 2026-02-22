@@ -18,11 +18,11 @@ indexes (local and remote) and switch between them using an "active" index conce
 
 ---
 
-**RELATIONSHIP WITH settings.py**:
+**RELATIONSHIP WITH options.py**:
 
 iscc-search has TWO independent configuration systems:
 
-1. **settings.py** - Server deployment configuration
+1. **options.py** - Server deployment configuration
    - Consumer: API server (iscc-search serve)
    - Source: Environment variables (ISCC_SEARCH_*)
    - Scope: Single index per deployment
@@ -35,7 +35,7 @@ iscc-search has TWO independent configuration systems:
    - Pattern: Git-like workflow (add/list/use/remove)
 
 These systems are SEPARATE and serve different purposes. The serve command uses
-settings.py while CLI data commands use config.py.
+options.py while CLI data commands use config.py.
 
 ---
 

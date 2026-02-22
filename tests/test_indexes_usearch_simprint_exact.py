@@ -93,7 +93,7 @@ def test_simprint_update_replaces_old(tmp_path, sample_iscc_ids):
     instance_unit = f"ISCC:{ic.Code.rnd(ic.MT.INSTANCE, bits=128)}"
     content_unit = ic.gen_text_code_v0("Update test content")["iscc"]
 
-    idx = UsearchIndex(index_path, realm_id=0, max_dim=256, threshold=0.0)
+    idx = UsearchIndex(index_path, realm_id=0, max_dim=256, match_threshold_simprints=0.0)
 
     # Add asset with old simprint
     asset_v1 = IsccEntry(
@@ -347,7 +347,7 @@ def test_exact_search_multiple_assets(tmp_path, sample_iscc_ids):
     instance_unit = f"ISCC:{ic.Code.rnd(ic.MT.INSTANCE, bits=128)}"
     content_unit = ic.gen_text_code_v0("Multi asset test")["iscc"]
 
-    idx = UsearchIndex(index_path, realm_id=0, max_dim=256, threshold=0.0)
+    idx = UsearchIndex(index_path, realm_id=0, max_dim=256, match_threshold_simprints=0.0)
 
     # Asset 0: matches both simprints
     asset0 = IsccEntry(

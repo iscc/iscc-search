@@ -83,6 +83,91 @@ class SearchOptions(BaseSettings):
         description="ISCC_SEARCH_WORKERS - Number of worker processes (production only)",
     )
 
+    # Shard sizes (in MB)
+    shard_size_units: int = Field(
+        1024,
+        ge=1,
+        description="ISCC_SEARCH_SHARD_SIZE_UNITS - Maximum shard file size for unit indexes in MB",
+    )
+
+    shard_size_simprints: int = Field(
+        1024,
+        ge=1,
+        description="ISCC_SEARCH_SHARD_SIZE_SIMPRINTS - Maximum shard file size for simprint indexes in MB",
+    )
+
+    # HNSW parameters for unit indexes
+    hnsw_expansion_add_units: int = Field(
+        128,
+        ge=1,
+        description="ISCC_SEARCH_HNSW_EXPANSION_ADD_UNITS - Build-time search depth for unit HNSW indexes",
+    )
+
+    hnsw_expansion_search_units: int = Field(
+        64,
+        ge=1,
+        description="ISCC_SEARCH_HNSW_EXPANSION_SEARCH_UNITS - Query-time search depth for unit HNSW indexes",
+    )
+
+    hnsw_connectivity_units: int = Field(
+        16,
+        ge=1,
+        description="ISCC_SEARCH_HNSW_CONNECTIVITY_UNITS - Graph connectivity (M) for unit HNSW indexes",
+    )
+
+    # HNSW parameters for simprint indexes
+    hnsw_expansion_add_simprints: int = Field(
+        16,
+        ge=1,
+        description="ISCC_SEARCH_HNSW_EXPANSION_ADD_SIMPRINTS - Build-time search depth for simprint HNSW indexes",
+    )
+
+    hnsw_expansion_search_simprints: int = Field(
+        512,
+        ge=1,
+        description="ISCC_SEARCH_HNSW_EXPANSION_SEARCH_SIMPRINTS - Query-time search depth for simprint HNSW indexes",
+    )
+
+    hnsw_connectivity_simprints: int = Field(
+        8,
+        ge=1,
+        description="ISCC_SEARCH_HNSW_CONNECTIVITY_SIMPRINTS - Graph connectivity (M) for simprint HNSW indexes",
+    )
+
+    # Match thresholds
+    match_threshold_units: float = Field(
+        0.75,
+        ge=0.0,
+        le=1.0,
+        description="ISCC_SEARCH_MATCH_THRESHOLD_UNITS - Minimum score for unit similarity matches (0.0-1.0)",
+    )
+
+    match_threshold_simprints: float = Field(
+        0.75,
+        ge=0.0,
+        le=1.0,
+        description="ISCC_SEARCH_MATCH_THRESHOLD_SIMPRINTS - Minimum score for simprint matches (0.0-1.0)",
+    )
+
+    # Scoring
+    confidence_exponent: int = Field(
+        4,
+        ge=1,
+        description="ISCC_SEARCH_CONFIDENCE_EXPONENT - Exponent for confidence-weighted score aggregation",
+    )
+
+    oversampling_factor: int = Field(
+        20,
+        ge=1,
+        description="ISCC_SEARCH_OVERSAMPLING_FACTOR - Oversampling multiplier for simprint search diversity",
+    )
+
+    # Logging
+    log_level: str = Field(
+        "info",
+        description="ISCC_SEARCH_LOG_LEVEL - Log level for the server (debug, info, warning, error, critical)",
+    )
+
     @field_validator("cors_origins", mode="before")
     @classmethod
     def parse_cors_origins(cls, v):

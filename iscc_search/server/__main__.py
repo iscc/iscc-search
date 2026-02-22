@@ -2,6 +2,8 @@
 
 import uvicorn
 
+from iscc_search.options import search_opts
+
 
 def main():
     # type: () -> None
@@ -12,10 +14,10 @@ def main():
     """
     uvicorn.run(
         "iscc_search.server:app",
-        host="0.0.0.0",
-        port=8000,
+        host=search_opts.host,
+        port=search_opts.port,
         reload=True,
-        log_level="info",
+        log_level=search_opts.log_level,
     )
 
 

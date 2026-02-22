@@ -25,14 +25,14 @@ def test_usearch_simprint_indexing(tmp_path, sample_assets_with_simprints):
 
 
 def test_usearch_threshold_parameter(tmp_path):
-    """Test threshold parameter is stored."""
-    index = UsearchIndex(path=tmp_path / "test_index", threshold=0.9)
-    assert index.threshold == 0.9
+    """Test match_threshold_simprints is stored via options."""
+    index = UsearchIndex(path=tmp_path / "test_index", match_threshold_simprints=0.9)
+    assert index._opts.match_threshold_simprints == 0.9
     index.close()
 
     # Default threshold
     index2 = UsearchIndex(path=tmp_path / "test_index2")
-    assert index2.threshold == 0.75
+    assert index2._opts.match_threshold_simprints == 0.75
     index2.close()
 
 

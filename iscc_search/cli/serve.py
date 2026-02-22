@@ -44,7 +44,7 @@ def serve_command(
         "app": "iscc_search.server:app",
         "host": host,
         "port": port,
-        "log_level": "debug" if dev else "info",
+        "log_level": "debug" if dev else search_opts.log_level,
     }
 
     if dev:

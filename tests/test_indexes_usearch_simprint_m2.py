@@ -143,7 +143,7 @@ def test_normalize_query_simprints_only():
 def test_usearch_threshold_parameter_in_search(tmp_path, sample_assets_with_simprints, sample_simprints):
     """Test that threshold parameter affects search results."""
     # High threshold (0.95) - strict matching
-    index_strict = UsearchIndex(path=tmp_path / "test_strict", threshold=0.95)
+    index_strict = UsearchIndex(path=tmp_path / "test_strict", match_threshold_simprints=0.95)
     index_strict.add_assets(sample_assets_with_simprints)
 
     query = IsccQuery(simprints={"CONTENT_TEXT_V0": [sample_simprints["CONTENT_TEXT_V0"][0]["simprint"]]})
@@ -153,7 +153,7 @@ def test_usearch_threshold_parameter_in_search(tmp_path, sample_assets_with_simp
     index_strict.close()
 
     # Low threshold (0.5) - permissive matching
-    index_permissive = UsearchIndex(path=tmp_path / "test_permissive", threshold=0.5)
+    index_permissive = UsearchIndex(path=tmp_path / "test_permissive", match_threshold_simprints=0.5)
     index_permissive.add_assets(sample_assets_with_simprints)
 
     result_permissive = index_permissive.search_assets(query, limit=10)

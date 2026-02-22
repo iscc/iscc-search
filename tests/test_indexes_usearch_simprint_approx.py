@@ -490,7 +490,7 @@ def test_approximate_search_with_multiple_assets(tmp_path, sample_iscc_ids):
     instance_unit = f"ISCC:{ic.Code.rnd(ic.MT.INSTANCE, bits=128)}"
     content_unit = ic.gen_text_code_v0("Multi-asset test")["iscc"]
 
-    idx = UsearchIndex(index_path, realm_id=0, max_dim=256, threshold=0.0)
+    idx = UsearchIndex(index_path, realm_id=0, max_dim=256, match_threshold_simprints=0.0)
 
     # Asset 1: exact match
     sp_exact = b"\xaa" * 16
@@ -651,7 +651,7 @@ def test_multi_type_approximate_search(tmp_path, sample_iscc_ids):
     instance_unit = f"ISCC:{ic.Code.rnd(ic.MT.INSTANCE, bits=128)}"
     content_unit = ic.gen_text_code_v0("Multi-type test")["iscc"]
 
-    idx = UsearchIndex(index_path, realm_id=0, max_dim=256, threshold=0.0)
+    idx = UsearchIndex(index_path, realm_id=0, max_dim=256, match_threshold_simprints=0.0)
 
     sp1 = b"\xaa" * 16
     sp2 = b"\xbb" * 16
@@ -695,7 +695,7 @@ def test_approximate_search_self_exclusion(tmp_path, sample_iscc_ids):
     instance_unit = f"ISCC:{ic.Code.rnd(ic.MT.INSTANCE, bits=128)}"
     content_unit = ic.gen_text_code_v0("Self-exclusion test")["iscc"]
 
-    idx = UsearchIndex(index_path, realm_id=0, max_dim=256, threshold=0.0)
+    idx = UsearchIndex(index_path, realm_id=0, max_dim=256, match_threshold_simprints=0.0)
 
     # Add two assets with the same simprint
     for i in range(2):

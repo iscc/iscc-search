@@ -54,10 +54,6 @@ class UsearchIndex:
     All keys use ISCC-ID body as uint64 for consistency between LMDB and usearch.
     """
 
-    # Scoring configuration
-    MATCH_THRESHOLD = 0.75  # Minimum score to consider (filters noise, ~25% hamming distance)
-    CONFIDENCE_EXPONENT = 4  # Emphasizes high-confidence matches (biquadratic weighting)
-
     DEFAULT_LMDB_OPTIONS = {
         "readonly": False,
         "metasync": False,
@@ -77,24 +73,25 @@ class UsearchIndex:
     MAX_RESIZE_RETRIES = 10  # Maximum number of resize attempts
     MAX_MAP_SIZE = 1024 * 1024 * 1024 * 1024  # 1 TB maximum map size
 
-    def __init__(self, path, realm_id=None, max_dim=256, threshold=0.75, lmdb_options=None):
-        # type: (str | Path, int | None, int, float, dict | None) -> None
+    def __init__(self, path, realm_id=None, max_dim=256, lmdb_options=None, **options):
+        # type: (str | Path, int | None, int, dict | None, Any) -> None
         """
         Create or open usearch index at directory path.
 
         :param path: Path to index directory (contains index.lmdb + per-type shard directories)
         :param realm_id: ISCC realm ID for new indexes (0 or 1). If None, inferred from first asset.
         :param max_dim: Maximum dimensions for ShardedNphdIndex (any multiple of 8 bits up to 256)
-        :param threshold: Similarity threshold for simprint search (0.0-1.0, default 0.0 returns all).
-            Result count controlled by limit parameter. Will be used for global searches in future.
         :param lmdb_options: Custom LMDB options (max_dbs and subdir are forced)
+        :param options: Override options from search_opts (e.g. match_threshold_units=0.8)
         """
-        # Simprint index uses optimized connectivity=8, expansion_add=16 (benchmarked for fast bulk indexing)
+        from iscc_search.options import search_opts
+
+        opts = search_opts.override(options)
         self.path = Path(path)
         self.path.mkdir(parents=True, exist_ok=True)
 
         self.max_dim = max_dim
-        self.threshold = threshold  # type: float
+        self._opts = opts
         self._realm_id = None  # type: int | None
         self._nphd_indexes = {}  # type: dict[str, ShardedNphdIndex]
         self._simprint_indexes = {}  # type: dict[str, UsearchSimprintIndex]
@@ -373,8 +370,8 @@ class UsearchIndex:
           of query bits scores 1.0 regardless of unit length (64/128/192/256 bits).
 
         **Score aggregation**: Confidence-weighted averaging with noise filtering:
-        1. Filter out low-confidence matches below MATCH_THRESHOLD (default 0.75)
-        2. Apply confidence weighting: score^CONFIDENCE_EXPONENT (default 2)
+        1. Filter out low-confidence matches below match_threshold_units (default 0.75)
+        2. Apply confidence weighting: score^confidence_exponent (default 4)
         3. Calculate weighted average: sum(score^2) / sum(score)
         This emphasizes high-confidence matches and filters noise. A perfect match (1.0)
         on one type ranks higher than multiple mediocre matches.
@@ -437,7 +434,9 @@ class UsearchIndex:
             for key, unit_scores in aggregated.items():
                 # Filter out low-confidence matches (below threshold)
                 confident_matches = {
-                    unit_type: score for unit_type, score in unit_scores.items() if score >= self.MATCH_THRESHOLD
+                    unit_type: score
+                    for unit_type, score in unit_scores.items()
+                    if score >= self._opts.match_threshold_units
                 }
 
                 # Skip if no confident matches
@@ -446,7 +445,7 @@ class UsearchIndex:
 
                 # Confidence-weighted average (high scores count more)
                 # score^2 / score = score, so this amplifies differences
-                weighted_sum = sum(score**self.CONFIDENCE_EXPONENT for score in confident_matches.values())
+                weighted_sum = sum(score**self._opts.confidence_exponent for score in confident_matches.values())
                 weight_sum = sum(score for score in confident_matches.values())
                 total_score = weighted_sum / weight_sum if weight_sum > 0 else 0.0
 
@@ -784,7 +783,7 @@ class UsearchIndex:
                     query_simprints=query_sp_bytes,
                     total_assets=total_assets,
                     limit=limit * 2,  # Over-fetch per type, trim after aggregation
-                    threshold=self.threshold,
+                    threshold=self._opts.match_threshold_simprints,
                     detailed=True,
                 )
 
@@ -888,7 +887,7 @@ class UsearchIndex:
             raw_matches = sp_index.search_raw(
                 simprints=query_sp_bytes,
                 limit=limit * 2,  # Over-fetch per type, trim after aggregation
-                threshold=self.threshold,
+                threshold=self._opts.match_threshold_simprints,
                 detailed=True,
                 doc_freq_fn=doc_freq_fn,
                 total_assets=total_assets,
@@ -1095,7 +1094,14 @@ class UsearchIndex:
         for unit_type in tracked_unit_types:
             shard_dir = self.path / unit_type
             try:
-                nphd_index = ShardedNphdIndex(max_dim=self.max_dim, path=shard_dir)
+                nphd_index = ShardedNphdIndex(
+                    max_dim=self.max_dim,
+                    path=shard_dir,
+                    connectivity=self._opts.hnsw_connectivity_units,
+                    expansion_add=self._opts.hnsw_expansion_add_units,
+                    expansion_search=self._opts.hnsw_expansion_search_units,
+                    shard_size=self._opts.shard_size_units * 1024 * 1024,
+                )
 
                 # Check if index is in sync with LMDB
                 expected_count = self._get_nphd_metadata(unit_type)
@@ -1163,7 +1169,14 @@ class UsearchIndex:
             shutil.rmtree(shard_dir)
 
         # Create fresh ShardedNphdIndex and add all vectors
-        nphd_index = ShardedNphdIndex(max_dim=self.max_dim, path=shard_dir)
+        nphd_index = ShardedNphdIndex(
+            max_dim=self.max_dim,
+            path=shard_dir,
+            connectivity=self._opts.hnsw_connectivity_units,
+            expansion_add=self._opts.hnsw_expansion_add_units,
+            expansion_search=self._opts.hnsw_expansion_search_units,
+            shard_size=self._opts.shard_size_units * 1024 * 1024,
+        )
         nphd_index.add(keys, vectors)
 
         # Save to disk
@@ -1182,7 +1195,14 @@ class UsearchIndex:
         # type: (str) -> ShardedNphdIndex
         """Get or create ShardedNphdIndex for unit_type."""
         if unit_type not in self._nphd_indexes:  # pragma: no branch
-            nphd_index = ShardedNphdIndex(max_dim=self.max_dim, path=self.path / unit_type)
+            nphd_index = ShardedNphdIndex(
+                max_dim=self.max_dim,
+                path=self.path / unit_type,
+                connectivity=self._opts.hnsw_connectivity_units,
+                expansion_add=self._opts.hnsw_expansion_add_units,
+                expansion_search=self._opts.hnsw_expansion_search_units,
+                shard_size=self._opts.shard_size_units * 1024 * 1024,
+            )
             self._nphd_indexes[unit_type] = nphd_index
             logger.debug(f"Created new ShardedNphdIndex for unit_type '{unit_type}'")
 
@@ -1193,7 +1213,15 @@ class UsearchIndex:
         """Get or create derived UsearchSimprintIndex for a simprint type."""
         if sp_type not in self._simprint_indexes:
             sp_dir = self.path / f"SIMPRINT_{sp_type}"
-            sp_index = UsearchSimprintIndex(path=sp_dir, ndim=ndim)
+            sp_index = UsearchSimprintIndex(
+                path=sp_dir,
+                ndim=ndim,
+                connectivity=self._opts.hnsw_connectivity_simprints,
+                expansion_add=self._opts.hnsw_expansion_add_simprints,
+                expansion_search=self._opts.hnsw_expansion_search_simprints,
+                shard_size=self._opts.shard_size_simprints * 1024 * 1024,
+                oversampling_factor=self._opts.oversampling_factor,
+            )
             self._simprint_indexes[sp_type] = sp_index
             logger.debug(f"Created new UsearchSimprintIndex for type '{sp_type}' (ndim={ndim})")
         return self._simprint_indexes[sp_type]
@@ -1223,7 +1251,15 @@ class UsearchIndex:
                 if ndim is None:
                     continue
 
-                sp_index = UsearchSimprintIndex(path=sp_dir, ndim=ndim)
+                sp_index = UsearchSimprintIndex(
+                    path=sp_dir,
+                    ndim=ndim,
+                    connectivity=self._opts.hnsw_connectivity_simprints,
+                    expansion_add=self._opts.hnsw_expansion_add_simprints,
+                    expansion_search=self._opts.hnsw_expansion_search_simprints,
+                    shard_size=self._opts.shard_size_simprints * 1024 * 1024,
+                    oversampling_factor=self._opts.oversampling_factor,
+                )
 
                 # Check sync with LMDB
                 expected_count = self._get_sp_metadata(sp_type)
@@ -1274,7 +1310,15 @@ class UsearchIndex:
             return
 
         # Iterate LMDB in batches to avoid loading all vectors into RAM
-        sp_index = UsearchSimprintIndex(path=sp_dir, ndim=ndim)
+        sp_index = UsearchSimprintIndex(
+            path=sp_dir,
+            ndim=ndim,
+            connectivity=self._opts.hnsw_connectivity_simprints,
+            expansion_add=self._opts.hnsw_expansion_add_simprints,
+            expansion_search=self._opts.hnsw_expansion_search_simprints,
+            shard_size=self._opts.shard_size_simprints * 1024 * 1024,
+            oversampling_factor=self._opts.oversampling_factor,
+        )
         total_vectors = 0
         with self.env.begin() as txn:
             for keys, vectors in lmdb_ops.iter_simprint_vectors(txn, data_db):

@@ -11,7 +11,7 @@ Storage:
     - Sharded HNSW with bloom filter and tombstone-based deletion
 
 Ranking:
-    - Fixed 20x oversampling to ensure enough distinct assets
+    - Configurable oversampling to ensure enough distinct assets
     - IDF-weighted asset-level scoring: sum(idf_i * sim_i) / sum(all_idf_i)
     - Unmatched query simprints contribute idf * 0.0 (penalizes low coverage)
     - doc_freq_fn callback provides true document frequency via LMDB
@@ -42,29 +42,40 @@ class UsearchSimprintIndex:
     Scoring uses IDF-weighted averaging per the OpenAPI spec (IsccChunkMatch.yaml).
     """
 
-    OVERSAMPLE_FACTOR = 20  # Fixed 20x oversampling for distinct asset diversity
-
-    def __init__(self, path, ndim=128, expansion_search=512, connectivity=8, expansion_add=16):
-        # type: (str | Path, int, int, int, int) -> None
+    def __init__(
+        self,
+        path,
+        ndim=128,
+        connectivity=8,
+        expansion_add=16,
+        expansion_search=512,
+        shard_size=1024 * 1024 * 1024,
+        oversampling_factor=20,
+    ):
+        # type: (str | Path, int, int, int, int, int, int) -> None
         """
         Create or open derived simprint index.
 
         :param path: Directory path for ShardedIndex128 shard storage
         :param ndim: Simprint dimensions in bits (e.g., 64, 128, 256)
-        :param expansion_search: Search depth for HNSW queries
         :param connectivity: HNSW graph connectivity parameter
         :param expansion_add: Build-time search depth
+        :param expansion_search: Search depth for HNSW queries
+        :param shard_size: Maximum shard file size in bytes
+        :param oversampling_factor: Oversampling multiplier for asset diversity
         """
         self.path = Path(path)
         self.ndim = ndim
+        self.oversampling_factor = oversampling_factor
         self._index = ShardedIndex128(
             ndim=ndim,
             metric="hamming",
             dtype="b1",
             path=self.path,
-            expansion_search=expansion_search,
             connectivity=connectivity,
             expansion_add=expansion_add,
+            expansion_search=expansion_search,
+            shard_size=shard_size,
         )
 
     def add_raw(self, composite_keys, vectors):
@@ -98,9 +109,9 @@ class UsearchSimprintIndex:
     def search_raw(self, simprints, limit=10, threshold=0.0, detailed=False, doc_freq_fn=None, total_assets=0):
         # type: (list[bytes], int, float, bool, Callable[[bytes], int] | None, int) -> list[SimprintMatchRaw]
         """
-        Search with fixed oversampling and IDF-weighted asset-level scoring.
+        Search with configurable oversampling and IDF-weighted asset-level scoring.
 
-        For each query simprint, searches ShardedIndex128 with OVERSAMPLE_FACTOR * limit
+        For each query simprint, searches ShardedIndex128 with oversampling_factor * limit
         candidates, groups results by asset (key[:8]), computes best-per-query-per-asset,
         then calculates IDF-weighted score across all query simprints.
 
@@ -122,7 +133,7 @@ class UsearchSimprintIndex:
         query_vectors = np.stack([np.frombuffer(s, dtype=np.uint8) for s in simprints])
 
         # Search with oversampling to get enough distinct assets
-        count = max(1, limit * self.OVERSAMPLE_FACTOR)
+        count = max(1, limit * self.oversampling_factor)
         batch_results = self._index.search(query_vectors, count=count)
 
         # Handle single query case (returns Matches, not BatchMatches)

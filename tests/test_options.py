@@ -202,37 +202,30 @@ def test_get_index_usearch_uri():
 def test_cors_origins_default():
     """Test cors_origins field has correct default value."""
     options = SearchOptions()
-    assert options.cors_origins == ["*"]
-    assert isinstance(options.cors_origins, list)
-
-
-def test_cors_origins_custom_list():
-    """Test cors_origins field with custom list."""
-    custom_origins = ["https://example.com", "https://app.example.com"]
-    options = SearchOptions(cors_origins=custom_origins)
-    assert options.cors_origins == custom_origins
+    assert options.cors_origins == "*"
+    assert options.cors_origins_list == ["*"]
 
 
 def test_cors_origins_comma_separated_string():
-    """Test cors_origins field parses comma-separated string."""
+    """Test cors_origins_list parses comma-separated string."""
     cors_string = "https://example.com,https://app.example.com,http://localhost:3000"
     options = SearchOptions(cors_origins=cors_string)
     expected = ["https://example.com", "https://app.example.com", "http://localhost:3000"]
-    assert options.cors_origins == expected
+    assert options.cors_origins_list == expected
 
 
 def test_cors_origins_comma_separated_with_spaces():
-    """Test cors_origins field handles spaces in comma-separated string."""
+    """Test cors_origins_list handles spaces in comma-separated string."""
     cors_string = "https://example.com, https://app.example.com,  http://localhost:3000"
     options = SearchOptions(cors_origins=cors_string)
     expected = ["https://example.com", "https://app.example.com", "http://localhost:3000"]
-    assert options.cors_origins == expected
+    assert options.cors_origins_list == expected
 
 
 def test_cors_origins_single_wildcard_string():
-    """Test cors_origins field handles single wildcard as string."""
+    """Test cors_origins_list handles single wildcard as string."""
     options = SearchOptions(cors_origins="*")
-    assert options.cors_origins == ["*"]
+    assert options.cors_origins_list == ["*"]
 
 
 def test_host_default():

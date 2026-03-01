@@ -203,10 +203,7 @@ def test_cors_with_custom_origins():
     try:
         # Override settings
         iscc_search.options.search_opts.index_uri = "memory://"
-        iscc_search.options.search_opts.cors_origins = [
-            "https://example.com",
-            "https://app.example.com",
-        ]
+        iscc_search.options.search_opts.cors_origins = "https://example.com,https://app.example.com"
 
         # Need to reimport to pick up new settings
         from importlib import reload

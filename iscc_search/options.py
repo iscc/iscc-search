@@ -29,7 +29,7 @@ options.py while CLI data commands use config.py.
 from pathlib import Path
 from urllib.parse import urlparse
 from dotenv import load_dotenv
-from pydantic import Field, field_validator
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 import iscc_search
 
@@ -63,9 +63,9 @@ class SearchOptions(BaseSettings):
         description="ISCC_SEARCH_API_SECRET - Optional API secret for authentication (if unset, API is public)",
     )
 
-    cors_origins: list[str] = Field(
-        ["*"],
-        description="ISCC_SEARCH_CORS_ORIGINS - CORS allowed origins (comma-separated in env var, or '*' for all)",
+    cors_origins: str = Field(
+        "*",
+        description="ISCC_SEARCH_CORS_ORIGINS - CORS allowed origins (comma-separated, or '*' for all)",
     )
 
     host: str = Field(
@@ -176,22 +176,15 @@ class SearchOptions(BaseSettings):
         description="ISCC_SEARCH_LOG_LEVEL - Log level for the server (debug, info, warning, error, critical)",
     )
 
-    @field_validator("cors_origins", mode="before")
-    @classmethod
-    def parse_cors_origins(cls, v):
-        # type: (str|list[str]) -> list[str]
+    @property
+    def cors_origins_list(self):
+        # type: () -> list[str]
         """
-        Parse CORS origins from environment variable or config.
+        Split comma-separated CORS origins string into a list.
 
-        Accepts either a list (from direct instantiation) or a comma-separated
-        string (from ISCC_SEARCH_CORS_ORIGINS environment variable).
-
-        :param v: CORS origins as list or comma-separated string
         :return: List of allowed origin strings
         """
-        if isinstance(v, str):
-            return [origin.strip() for origin in v.split(",")]
-        return v
+        return [origin.strip() for origin in self.cors_origins.split(",")]
 
     model_config = SettingsConfigDict(
         env_prefix="ISCC_SEARCH_",

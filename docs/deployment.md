@@ -221,7 +221,9 @@ services:
     environment:
       ISCC_SEARCH_INDEX_URI: "usearch:///data"
       ISCC_SEARCH_CORS_ORIGINS: "*"
-      ISCC_SEARCH_FLUSH_INTERVAL: "10000"
+      ISCC_SEARCH_FLUSH_INTERVAL: "500000"
+      ISCC_SEARCH_SHARD_SIZE_UNITS: "256"
+      ISCC_SEARCH_SHARD_SIZE_SIMPRINTS: "256"
     stop_grace_period: 90s
     healthcheck:
       test:

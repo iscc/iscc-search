@@ -67,14 +67,24 @@ stop_grace_period: 90s  # Must be > uvicorn timeout
 | `ISCC_SEARCH_CORS_ORIGINS`   | `*`               | No       | Comma-separated origins                     |
 | `ISCC_SEARCH_API_SECRET`     | None              | No       | API authentication                          |
 | `ISCC_SEARCH_FLUSH_INTERVAL` | `0`               | No       | Auto-flush after N mutations (0 = disabled) |
+| `ISCC_SEARCH_LOG_LEVEL`      | `info`            | No       | Log level (debug, info, warning, error)     |
+| `ISCC_SEARCH_HOST`           | `0.0.0.0`         | No       | Server bind address                         |
+| `ISCC_SEARCH_PORT`           | `8000`            | No       | Server bind port                            |
+
+See `.env.example` for the full list of tunable parameters (HNSW, shard sizes, thresholds, scoring).
 
 **Example:**
 
 ```yaml
 environment:
-  - ISCC_SEARCH_INDEX_URI=usearch:///data
-  - ISCC_SEARCH_CORS_ORIGINS=https://example.com
+  ISCC_SEARCH_INDEX_URI: "usearch:///data"
+  ISCC_SEARCH_CORS_ORIGINS: "https://example.com"
+  ISCC_SEARCH_FLUSH_INTERVAL: "10000"
 ```
+
+**Flush interval:** When loading data in large batches, set `ISCC_SEARCH_FLUSH_INTERVAL` to a value
+larger than your batch size (e.g. `10000` for 1000-entry batches) to avoid excessive disk I/O during
+ingestion. Indexes are always flushed on graceful shutdown regardless of this setting.
 
 ### Resource Limits
 
@@ -176,3 +186,88 @@ Watch logs for:
 - `Saved NphdIndex for unit_type` - index saved successfully
 - `Closed simprint index` - clean shutdown
 - `MapFullError` - LMDB auto-resize (normal)
+
+## Sandbox Deployment (search.iscc.id)
+
+The sandbox runs on a single Ubuntu 22.04 VPS (2 CPU, 4 GB RAM, 78 GB disk) behind a Caddy reverse
+proxy that handles TLS automatically.
+
+**Server layout:**
+
+```
+/opt/iscc-search/
+  docker-compose.yml    # Service definition
+  data/                 # Bind-mounted index data (/data inside container)
+/opt/caddy/
+  docker-compose.yml    # Caddy reverse proxy (auto-TLS for search.iscc.id)
+```
+
+**Compose file (`/opt/iscc-search/docker-compose.yml`):**
+
+```yaml
+services:
+  iscc-search:
+    image: ghcr.io/iscc/iscc-search:develop
+    container_name: iscc-search
+    restart: unless-stopped
+    volumes:
+      - ./data:/data
+    networks:
+      - caddy
+    labels:
+      caddy: search.iscc.id
+      caddy.reverse_proxy: "{{upstreams 8000}}"
+      caddy.encode: gzip
+    environment:
+      ISCC_SEARCH_INDEX_URI: "usearch:///data"
+      ISCC_SEARCH_CORS_ORIGINS: "*"
+      ISCC_SEARCH_FLUSH_INTERVAL: "10000"
+    stop_grace_period: 90s
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8000/').read()",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 3G
+        reservations:
+          cpus: "1.0"
+          memory: 2G
+
+networks:
+  caddy:
+    external: true
+    name: caddy
+```
+
+**CI/CD:** Pushes to the `develop` branch trigger the Docker Build and Publish workflow, which runs
+tests, builds the image, and publishes to `ghcr.io/iscc/iscc-search:develop`.
+
+**Updating the sandbox:**
+
+```bash
+ssh root@search.iscc.id
+cd /opt/iscc-search
+docker compose pull
+docker compose up -d
+docker compose logs -f
+```
+
+**Wiping indexes for a fresh start:**
+
+```bash
+cd /opt/iscc-search
+docker compose down
+rm -rf data/*
+docker compose up -d
+```

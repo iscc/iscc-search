@@ -82,9 +82,9 @@ environment:
   ISCC_SEARCH_FLUSH_INTERVAL: "10000"
 ```
 
-**Flush interval:** When loading data in large batches, set `ISCC_SEARCH_FLUSH_INTERVAL` to a value
-larger than your batch size (e.g. `10000` for 1000-entry batches) to avoid excessive disk I/O during
-ingestion. Indexes are always flushed on graceful shutdown regardless of this setting.
+**Flush interval:** When loading data in large batches, set `ISCC_SEARCH_FLUSH_INTERVAL` to a value larger than
+your batch size (e.g. `10000` for 1000-entry batches) to avoid excessive disk I/O during ingestion. Indexes are
+always flushed on graceful shutdown regardless of this setting.
 
 ### Resource Limits
 
@@ -189,8 +189,8 @@ Watch logs for:
 
 ## Sandbox Deployment (search.iscc.id)
 
-The sandbox runs on a single Ubuntu 22.04 VPS (2 CPU, 4 GB RAM, 78 GB disk) behind a Caddy reverse
-proxy that handles TLS automatically.
+The sandbox runs on a single Ubuntu 22.04 VPS (2 CPU, 4 GB RAM, 78 GB disk) behind a Caddy reverse proxy that
+handles TLS automatically.
 
 **Server layout:**
 
@@ -248,8 +248,8 @@ networks:
     name: caddy
 ```
 
-**CI/CD:** Pushes to the `develop` branch trigger the Docker Build and Publish workflow, which runs
-tests, builds the image, and publishes to `ghcr.io/iscc/iscc-search:develop`.
+**CI/CD:** Pushes to the `develop` branch trigger the Docker Build and Publish workflow, which runs tests,
+builds the image, and publishes to `ghcr.io/iscc/iscc-search:develop`.
 
 **Updating the sandbox:**
 

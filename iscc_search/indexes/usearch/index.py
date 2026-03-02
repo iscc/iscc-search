@@ -98,6 +98,11 @@ class UsearchIndex:
         self._sp_data_dbs = {}  # type: dict[str, lmdb._Database]
         self._sp_assets_dbs = {}  # type: dict[str, lmdb._Database]
 
+        # Profiling counters (cumulative across batches)
+        self._batch_counter = 0  # type: int
+        self._cumulative_nphd_vectors = 0  # type: int
+        self._cumulative_sp_vectors = 0  # type: int
+
         # Setup LMDB
         lmdb_path = self.path / "index.lmdb"
         options = self.DEFAULT_LMDB_OPTIONS.copy()
@@ -143,11 +148,18 @@ class UsearchIndex:
         if not assets:
             return []
 
+        self._batch_counter += 1
+        batch_num = self._batch_counter
+        batch_t0 = time.perf_counter()
+
         results = []
         retry_count = 0
 
         while retry_count <= self.MAX_RESIZE_RETRIES:  # pragma: no branch
             try:
+                lmdb_t0 = time.perf_counter()
+                lmdb_serialize_t = 0.0
+                lmdb_simprint_t = 0.0
                 with self.env.begin(write=True) as txn:
                     # Get database handles
                     metadata_db = self.env.open_db(b"__metadata__", txn=txn)
@@ -205,8 +217,10 @@ class UsearchIndex:
                         status = Status.updated if existing else Status.created
 
                         # Store asset
+                        _t = time.perf_counter()
                         asset_bytes = common.serialize_asset(asset)
                         txn.put(key_bytes, asset_bytes, db=assets_db)
+                        lmdb_serialize_t += time.perf_counter() - _t
 
                         # Index units
                         if asset.units:  # pragma: no branch
@@ -229,6 +243,7 @@ class UsearchIndex:
 
                         # Write simprints to LMDB (source of truth)
                         if asset.simprints and asset.iscc_id:
+                            _t = time.perf_counter()
                             iscc_id_body = IsccID(asset.iscc_id).body
                             for sp_type, sp_list in asset.simprints.items():
                                 data_db, sp_assets_db = self._open_sp_databases_in_txn(txn, sp_type)
@@ -246,12 +261,19 @@ class UsearchIndex:
                                         sp_batches[sp_type] = ([], [])
                                     sp_batches[sp_type][0].append(chunk_ptr)
                                     sp_batches[sp_type][1].append(np.frombuffer(sp_bytes, dtype=np.uint8))
+                            lmdb_simprint_t += time.perf_counter() - _t
 
                         results.append(IsccAddResult(iscc_id=asset.iscc_id, status=status))
 
                 # LMDB transaction commits here (exits context manager)
+                lmdb_elapsed = time.perf_counter() - lmdb_t0
+
                 # Derived index operations below are NOT atomic with LMDB - see docstring
                 # Batch add to ShardedNphdIndex (outside transaction)
+                nphd_t0 = time.perf_counter()
+                nphd_remove_t = 0.0
+                nphd_add_t = 0.0
+                batch_nphd_vectors = 0
                 for unit_type, (keys, vectors) in nphd_batches.items():
                     nphd_index = self._get_or_create_nphd_index(unit_type)
 
@@ -269,28 +291,48 @@ class UsearchIndex:
 
                     # Remove existing keys first (for updates)
                     # remove() handles non-existent keys gracefully (returns 0)
+                    _t = time.perf_counter()
                     nphd_index.remove(keys)
+                    nphd_remove_t += time.perf_counter() - _t
 
+                    _t = time.perf_counter()
                     nphd_index.add(keys, vectors)
+                    nphd_add_t += time.perf_counter() - _t
+                    batch_nphd_vectors += len(keys)
+
                     # Update metadata with new vector count
                     self._update_nphd_metadata(unit_type, nphd_index.size)
+                nphd_elapsed = time.perf_counter() - nphd_t0
 
                 # Update derived ShardedIndex128 simprint indexes
                 # Remove stale keys first (from updated assets), then add new vectors
+                sp_t0 = time.perf_counter()
+                sp_remove_t = 0.0
+                sp_add_t = 0.0
+                batch_sp_vectors = 0
                 for sp_type, (composite_keys, sp_vectors) in sp_batches.items():
                     sp_index = self._get_or_create_simprint_index(sp_type, len(sp_vectors[0]) * 8)
                     if sp_type in sp_deleted_keys:
+                        _t = time.perf_counter()
                         sp_index.remove(sp_deleted_keys[sp_type])
+                        sp_remove_t += time.perf_counter() - _t
+                    _t = time.perf_counter()
                     sp_index.add_raw(composite_keys, sp_vectors)
+                    sp_add_t += time.perf_counter() - _t
+                    batch_sp_vectors += len(composite_keys)
                     self._update_sp_metadata(sp_type, sp_index.size)
 
                 # Remove stale vectors for types with only deletions (no new vectors)
                 for sp_type, deleted_keys in sp_deleted_keys.items():
                     if sp_type not in sp_batches and sp_type in self._simprint_indexes:
+                        _t = time.perf_counter()
                         self._simprint_indexes[sp_type].remove(deleted_keys)
+                        sp_remove_t += time.perf_counter() - _t
                         self._update_sp_metadata(sp_type, self._simprint_indexes[sp_type].size)
+                sp_elapsed = time.perf_counter() - sp_t0
 
                 # Auto-flush sub-indexes that exceed flush_interval
+                flush_t0 = time.perf_counter()
                 flush_interval = self._opts.flush_interval
                 if flush_interval > 0:
                     for nphd_index in self._nphd_indexes.values():
@@ -299,6 +341,21 @@ class UsearchIndex:
                     for sp_index in self._simprint_indexes.values():
                         if sp_index.dirty >= flush_interval:
                             sp_index.save()
+                flush_elapsed = time.perf_counter() - flush_t0
+
+                # Log profiling summary
+                self._cumulative_nphd_vectors += batch_nphd_vectors
+                self._cumulative_sp_vectors += batch_sp_vectors
+                batch_elapsed = time.perf_counter() - batch_t0
+                logger.info(
+                    f"add_assets batch={batch_num} assets={len(assets)} "
+                    f"nphd={batch_nphd_vectors} sp={batch_sp_vectors} "
+                    f"total_nphd={self._cumulative_nphd_vectors} total_sp={self._cumulative_sp_vectors} | "
+                    f"lmdb={lmdb_elapsed:.3f}s (ser={lmdb_serialize_t:.3f} sp_w={lmdb_simprint_t:.3f}) "
+                    f"nphd={nphd_elapsed:.3f}s (rm={nphd_remove_t:.3f} add={nphd_add_t:.3f}) "
+                    f"sp={sp_elapsed:.3f}s (rm={sp_remove_t:.3f} add={sp_add_t:.3f}) "
+                    f"flush={flush_elapsed:.3f}s TOTAL={batch_elapsed:.3f}s"
+                )
 
                 break  # Success
 
@@ -1097,12 +1154,12 @@ class UsearchIndex:
     def _load_nphd_indexes(self):
         # type: () -> None
         """
-        Load existing ShardedNphdIndex directories with auto-rebuild on sync mismatch.
+        Load existing ShardedNphdIndex directories, accepting stale state on mismatch.
 
         Loads indexes for all unit_types tracked in LMDB metadata. ShardedNphdIndex
         auto-loads existing shards from its directory at construction time.
-        Triggers full rebuild from LMDB if vector count is out of sync.
-        Also rebuilds missing directories for tracked unit_types (crash recovery).
+        Logs warning if vector count is out of sync but does NOT auto-rebuild
+        (auto-rebuild can cause OOM on large indexes). Use CLI rebuild command instead.
         """
         tracked_unit_types = self._get_all_tracked_unit_types()
 
@@ -1126,17 +1183,16 @@ class UsearchIndex:
                     logger.warning(
                         f"ShardedNphdIndex '{unit_type}' out of sync: "
                         f"expected {expected_count} vectors, found {actual_count}. "
-                        f"Rebuilding from LMDB..."
+                        f"Skipping auto-rebuild (use CLI rebuild command to fix)."
                     )
-                    nphd_index.reset()
-                    self._rebuild_nphd_index(unit_type)
+                    # Accept stale index rather than risk OOM during rebuild
+                    self._nphd_indexes[unit_type] = nphd_index
                 else:
                     self._nphd_indexes[unit_type] = nphd_index
                     logger.debug(f"Loaded ShardedNphdIndex for unit_type '{unit_type}' ({actual_count} vectors)")
 
             except Exception as e:  # pragma: no cover
-                logger.warning(f"Failed to load ShardedNphdIndex '{unit_type}': {e}. Rebuilding...")
-                self._rebuild_nphd_index(unit_type)
+                logger.warning(f"Failed to load ShardedNphdIndex '{unit_type}': {e}. Skipping.")
 
     def _rebuild_nphd_index(self, unit_type):
         # type: (str) -> None
@@ -1244,10 +1300,11 @@ class UsearchIndex:
     def _load_simprint_indexes(self):
         # type: () -> None
         """
-        Load existing derived simprint indexes (ShardedIndex128) with sync check.
+        Load existing derived simprint indexes (ShardedIndex128), accepting stale state.
 
         For each known simprint type from LMDB metadata, opens the ShardedIndex128
-        directory and checks vector count against LMDB metadata. Rebuilds on mismatch.
+        directory and checks vector count against LMDB metadata. Logs warning on
+        mismatch but does NOT auto-rebuild (auto-rebuild can cause OOM on large indexes).
         """
         sp_types = self._get_sp_types()
         if not sp_types:
@@ -1283,16 +1340,17 @@ class UsearchIndex:
                 if expected_count is not None and expected_count != actual_count:
                     logger.warning(
                         f"UsearchSimprintIndex '{sp_type}' out of sync: "
-                        f"expected {expected_count}, found {actual_count}. Rebuilding..."
+                        f"expected {expected_count}, found {actual_count}. "
+                        f"Skipping auto-rebuild (use CLI rebuild command to fix)."
                     )
-                    sp_index.reset()
-                    self._rebuild_simprint_index(sp_type)
+                    # Accept stale index rather than risk OOM during rebuild
+                    self._simprint_indexes[sp_type] = sp_index
                 else:
                     self._simprint_indexes[sp_type] = sp_index
                     logger.debug(f"Loaded UsearchSimprintIndex for type '{sp_type}' ({actual_count} vectors)")
 
             except Exception as e:  # pragma: no cover
-                logger.warning(f"Failed to load UsearchSimprintIndex '{sp_type}': {e}. Will rebuild on demand.")
+                logger.warning(f"Failed to load UsearchSimprintIndex '{sp_type}': {e}. Skipping.")
 
     def _rebuild_simprint_index(self, sp_type):
         # type: (str) -> None

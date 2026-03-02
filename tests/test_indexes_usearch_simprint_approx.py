@@ -953,8 +953,8 @@ def test_usearch_simprint_unmatched_penalty(tmp_path):
     idx.close()
 
 
-def test_simprint_sync_mismatch_triggers_rebuild(tmp_path, sample_iscc_ids):
-    """Sync mismatch between sp_count metadata and ShardedIndex128 triggers rebuild."""
+def test_simprint_sync_mismatch_loads_stale(tmp_path, sample_iscc_ids):
+    """Sync mismatch between sp_count metadata and ShardedIndex128 loads stale index."""
     index_path = tmp_path / "sp_sync_mismatch"
     sp_bytes = b"\xaa" * 16
     sp_type = "CONTENT_TEXT_V0"
@@ -976,10 +976,14 @@ def test_simprint_sync_mismatch_triggers_rebuild(tmp_path, sample_iscc_ids):
     idx._update_sp_metadata(sp_type, 999)  # Wrong count
     idx.close()
 
-    # Reopen - should detect mismatch and rebuild
+    # Reopen - should detect mismatch, log warning, but load stale index
     idx2 = UsearchIndex(index_path, realm_id=0, max_dim=256)
 
-    # After rebuild, search should still work
+    # Stale index is loaded and functional (1 actual vector despite metadata saying 999)
+    assert sp_type in idx2._simprint_indexes
+    assert idx2._simprint_indexes[sp_type].size == 1
+
+    # Search still works with stale data
     query = IsccQuery(simprints=_make_query_simprints(sp_type, [sp_bytes]))
     result = idx2.search_assets(query, limit=10)
     assert len(result.chunk_matches) > 0

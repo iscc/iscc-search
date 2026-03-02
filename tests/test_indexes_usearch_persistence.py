@@ -106,8 +106,8 @@ def test_usearch_index_auto_rebuild_on_corrupted_shard(tmp_path, sample_iscc_ids
     idx2.close()
 
 
-def test_usearch_index_auto_rebuild_on_count_mismatch(tmp_path, sample_iscc_ids):
-    """Test auto-rebuild when vector count doesn't match metadata."""
+def test_usearch_index_loads_stale_on_count_mismatch(tmp_path, sample_iscc_ids):
+    """Test stale index accepted with warning when vector count doesn't match metadata."""
     index_path = tmp_path / "rebuild_mismatch"
 
     # Create index and add assets
@@ -133,12 +133,12 @@ def test_usearch_index_auto_rebuild_on_count_mismatch(tmp_path, sample_iscc_ids)
         txn.put(key, struct.pack(">Q", 999), db=metadata_db)
     env.close()
 
-    # Reopen - should detect mismatch (999 != 2) and rebuild
+    # Reopen - should detect mismatch (999 != 2), log warning, but load stale index
     idx2 = UsearchIndex(index_path, realm_id=0, max_dim=256)
 
-    # Verify both assets are found (rebuild worked)
-    result = idx2.search_assets(IsccQuery(units=[instance_unit, content_unit_1, content_unit_2]), limit=10)
-    assert len(result.global_matches) == 2
+    # Verify stale index is loaded and functional (2 actual vectors despite metadata saying 999)
+    assert "CONTENT_TEXT_V0" in idx2._nphd_indexes
+    assert idx2._nphd_indexes["CONTENT_TEXT_V0"].size == 2
 
     idx2.close()
 
@@ -224,6 +224,36 @@ def test_usearch_index_rebuild_without_existing_dir(tmp_path, sample_iscc_ids):
     idx.close()
 
 
+def test_usearch_index_rebuild_with_existing_dir(tmp_path, sample_iscc_ids):
+    """Test _rebuild_nphd_index removes stale shard directory before rebuilding."""
+    index_path = tmp_path / "rebuild_existing_dir"
+
+    idx = UsearchIndex(index_path, realm_id=0, max_dim=256)
+
+    content_unit = ic.gen_text_code_v0("Test content for rebuild existing dir")["iscc"]
+    instance_unit = f"ISCC:{ic.Code.rnd(ic.MT.INSTANCE, bits=128)}"
+    asset = IsccEntry(iscc_id=sample_iscc_ids[0], units=[instance_unit, content_unit])
+    idx.add_assets([asset])
+
+    # Save so shard files exist on disk
+    idx.flush()
+
+    unit_type = "CONTENT_TEXT_V0"
+    shard_dir = index_path / unit_type
+    assert shard_dir.exists()
+
+    # Remove from memory but leave directory on disk
+    del idx._nphd_indexes[unit_type]
+
+    # Rebuild — should remove stale dir first (exercises shard_dir.exists()=True branch)
+    idx._rebuild_nphd_index(unit_type)
+
+    assert unit_type in idx._nphd_indexes
+    assert idx._nphd_indexes[unit_type].size == 1
+
+    idx.close()
+
+
 def test_usearch_index_no_save_on_add(tmp_path, sample_iscc_ids):
     """Test that add_assets does NOT immediately save to disk (shard files)."""
     index_path = tmp_path / "no_save_on_add"
@@ -250,12 +280,13 @@ def test_usearch_index_no_save_on_add(tmp_path, sample_iscc_ids):
     assert len(shard_files) > 0, "Shard files should exist after close()"
 
 
-def test_usearch_index_crash_recovery_rebuild_missing_dirs(tmp_path, sample_iscc_ids):
+def test_usearch_index_crash_recovery_loads_stale(tmp_path, sample_iscc_ids):
     """
-    Test crash recovery: rebuild missing shard directories from LMDB on startup.
+    Test crash recovery: stale (empty) indexes accepted after missing shard dirs.
 
     Simulates a crash scenario where vectors were added but never flushed,
     leaving metadata in LMDB but no shard directory on disk.
+    Auto-rebuild is disabled to prevent OOM on large indexes.
     """
     index_path = tmp_path / "crash_recovery"
 
@@ -283,24 +314,20 @@ def test_usearch_index_crash_recovery_rebuild_missing_dirs(tmp_path, sample_iscc
         if d.exists():
             shutil.rmtree(d)
 
-    # Reopen index - should detect missing/empty dirs and auto-rebuild from LMDB
+    # Reopen index - detects mismatch (expected 1, found 0) but loads stale index
     idx2 = UsearchIndex(index_path, realm_id=0, max_dim=256)
 
-    # Verify directories were created by auto-rebuild with actual shard files
-    content_dir = index_path / "CONTENT_TEXT_V0"
-    data_dir = index_path / "DATA_NONE_V0"
-    assert content_dir.is_dir(), "Missing directory should be rebuilt on startup"
-    assert data_dir.is_dir(), "Missing directory should be rebuilt on startup"
+    # Stale indexes are loaded (empty but functional)
+    assert "CONTENT_TEXT_V0" in idx2._nphd_indexes
+    assert "DATA_NONE_V0" in idx2._nphd_indexes
+    assert idx2._nphd_indexes["CONTENT_TEXT_V0"].size == 0
+    assert idx2._nphd_indexes["DATA_NONE_V0"].size == 0
 
-    # Verify data is accessible via search (proving rebuild worked)
+    # INSTANCE match still works (LMDB-based, not affected by shard loss)
     query = IsccQuery(units=[instance_unit, content_unit, data_unit])
     result = idx2.search_assets(query, limit=10)
     assert len(result.global_matches) == 1
-    assert result.global_matches[0].iscc_id == sample_iscc_ids[0]
-
-    # Verify both unit types are searchable
-    assert "CONTENT_TEXT_V0" in result.global_matches[0].types
-    assert "DATA_NONE_V0" in result.global_matches[0].types
+    assert "INSTANCE_NONE_V0" in result.global_matches[0].types
 
     idx2.close()
 

@@ -18,6 +18,7 @@ keys (iscc_id_body + offset + size) for ShardedIndex128 simprint indexes.
 import json
 import shutil
 import struct
+import threading
 import time
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -103,6 +104,11 @@ class UsearchIndex:
         self._cumulative_nphd_vectors = 0  # type: int
         self._cumulative_sp_vectors = 0  # type: int
 
+        # Serialize LMDB write operations to prevent EINVAL from concurrent set_mapsize.
+        # RLock allows reentrant acquisition (e.g., _rebuild_simprint_index → _update_sp_metadata
+        # both need the lock, and _update_sp_metadata is also called from within add_assets/flush/close).
+        self._write_lock = threading.RLock()
+
         # Setup LMDB
         lmdb_path = self.path / "index.lmdb"
         options = self.DEFAULT_LMDB_OPTIONS.copy()
@@ -156,6 +162,7 @@ class UsearchIndex:
         retry_count = 0
 
         while retry_count <= self.MAX_RESIZE_RETRIES:  # pragma: no branch
+            self._write_lock.acquire()
             try:
                 lmdb_t0 = time.perf_counter()
                 lmdb_serialize_t = 0.0
@@ -401,6 +408,9 @@ class UsearchIndex:
                 )
                 self.env.set_mapsize(new_size)
 
+            finally:
+                self._write_lock.release()
+
         return results
 
     def get_asset(self, iscc_id):
@@ -591,45 +601,47 @@ class UsearchIndex:
         Indexes are automatically saved on close(), so flush() is only
         needed for durability guarantees during long-running sessions.
         """
-        for unit_type, nphd_index in self._nphd_indexes.items():
-            if nphd_index.dirty == 0:
-                continue
-            nphd_index.save()
-            self._update_nphd_metadata(unit_type, nphd_index.size)
-            logger.debug(f"Flushed ShardedNphdIndex for unit_type '{unit_type}'")
+        with self._write_lock:
+            for unit_type, nphd_index in self._nphd_indexes.items():
+                if nphd_index.dirty == 0:
+                    continue
+                nphd_index.save()
+                self._update_nphd_metadata(unit_type, nphd_index.size)
+                logger.debug(f"Flushed ShardedNphdIndex for unit_type '{unit_type}'")
 
-        for sp_type, sp_index in self._simprint_indexes.items():
-            if sp_index.dirty == 0:
-                continue
-            sp_index.save()
-            self._update_sp_metadata(sp_type, sp_index.size)
-            logger.debug(f"Flushed UsearchSimprintIndex for type '{sp_type}'")
+            for sp_type, sp_index in self._simprint_indexes.items():
+                if sp_index.dirty == 0:
+                    continue
+                sp_index.save()
+                self._update_sp_metadata(sp_type, sp_index.size)
+                logger.debug(f"Flushed UsearchSimprintIndex for type '{sp_type}'")
 
     def close(self):
         # type: () -> None
         """Close LMDB environment and all derived indexes, saving dirty state."""
-        # Save dirty ShardedNphdIndex instances before closing
-        for unit_type, nphd_index in self._nphd_indexes.items():
-            if nphd_index.dirty > 0:
-                nphd_index.save()
-                self._update_nphd_metadata(unit_type, nphd_index.size)
-                logger.debug(f"Saved ShardedNphdIndex for unit_type '{unit_type}'")
-            nphd_index.reset()
+        with self._write_lock:
+            # Save dirty ShardedNphdIndex instances before closing
+            for unit_type, nphd_index in self._nphd_indexes.items():
+                if nphd_index.dirty > 0:
+                    nphd_index.save()
+                    self._update_nphd_metadata(unit_type, nphd_index.size)
+                    logger.debug(f"Saved ShardedNphdIndex for unit_type '{unit_type}'")
+                nphd_index.reset()
 
-        self._nphd_indexes.clear()
+            self._nphd_indexes.clear()
 
-        # Save dirty derived simprint indexes (ShardedIndex128)
-        for sp_type, sp_index in self._simprint_indexes.items():
-            if sp_index.dirty > 0:
-                sp_index.save()
-                self._update_sp_metadata(sp_type, sp_index.size)
-                logger.debug(f"Saved UsearchSimprintIndex for type '{sp_type}'")
-            sp_index.reset()
+            # Save dirty derived simprint indexes (ShardedIndex128)
+            for sp_type, sp_index in self._simprint_indexes.items():
+                if sp_index.dirty > 0:
+                    sp_index.save()
+                    self._update_sp_metadata(sp_type, sp_index.size)
+                    logger.debug(f"Saved UsearchSimprintIndex for type '{sp_type}'")
+                sp_index.reset()
 
-        self._simprint_indexes.clear()
+            self._simprint_indexes.clear()
 
-        # Close LMDB
-        self.env.close()
+            # Close LMDB
+            self.env.close()
 
     def __len__(self):  # pragma: no cover
         # type: () -> int
@@ -1106,7 +1118,7 @@ class UsearchIndex:
         :param unit_type: Unit type identifier
         :param vector_count: Current number of vectors in ShardedNphdIndex
         """
-        with self.env.begin(write=True) as txn:
+        with self._write_lock, self.env.begin(write=True) as txn:
             metadata_db = self.env.open_db(b"__metadata__", txn=txn)
             key = f"nphd_count:{unit_type}".encode()
             txn.put(key, struct.pack(">Q", vector_count), db=metadata_db)
@@ -1426,7 +1438,7 @@ class UsearchIndex:
         :param sp_type: Simprint type identifier
         :param vector_count: Current number of vectors in the derived index
         """
-        with self.env.begin(write=True) as txn:
+        with self._write_lock, self.env.begin(write=True) as txn:
             metadata_db = self.env.open_db(b"__metadata__", txn=txn)
             key = f"sp_count:{sp_type}".encode()
             txn.put(key, struct.pack(">Q", vector_count), db=metadata_db)

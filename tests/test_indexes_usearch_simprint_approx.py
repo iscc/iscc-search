@@ -123,6 +123,25 @@ def test_usearch_simprint_index_empty_add(tmp_path):
     idx.close()
 
 
+def test_usearch_simprint_index_add_raw_dedup(tmp_path):
+    """Duplicate composite keys within a batch are deduplicated (first wins)."""
+    sp_dir = tmp_path / "sp_dedup"
+    idx = UsearchSimprintIndex(path=sp_dir, ndim=64)
+
+    asset_id = b"\x01" * 8
+    key = lmdb_ops.pack_chunk_pointer(asset_id, 0, 100)
+    sp1 = b"\xaa" * 8
+    sp2 = b"\xbb" * 8
+    vec1 = np.frombuffer(sp1, dtype=np.uint8)
+    vec2 = np.frombuffer(sp2, dtype=np.uint8)
+
+    # Same key twice — first occurrence should win
+    idx.add_raw([key, key], [vec1, vec2])
+    assert idx.size == 1
+
+    idx.close()
+
+
 def test_usearch_simprint_index_remove_empty(tmp_path):
     """Removing empty list is a no-op."""
     sp_dir = tmp_path / "sp_remove_noop"

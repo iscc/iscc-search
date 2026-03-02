@@ -83,8 +83,9 @@ class UsearchSimprintIndex:
         """
         Add vectors with composite 128-bit keys to derived index.
 
-        Asset dedup is handled by the caller (main LMDB registry).
-        Uses add_once() as safety net against duplicate composite keys.
+        Deduplicates within batch (keeps first occurrence) but skips the
+        expensive contains-check against the existing index. Asset-level
+        dedup is handled by the caller (main LMDB registry).
         Does NOT call save() - caller is responsible for explicit flush.
 
         :param composite_keys: 16-byte composite keys (iscc_id_body + offset + size)
@@ -92,8 +93,15 @@ class UsearchSimprintIndex:
         """
         if not composite_keys:
             return
+        keys_arr = self._index._normalize_batch_keys(composite_keys)
         vectors_array = np.stack(vectors)
-        self._index.add_once(composite_keys, vectors_array)
+        # Deduplicate within batch (keep first occurrence)
+        _, first_indices = np.unique(keys_arr, return_index=True)
+        if len(first_indices) < len(keys_arr):
+            first_indices = np.sort(first_indices)
+            keys_arr = keys_arr[first_indices]
+            vectors_array = vectors_array[first_indices]
+        self._index.add(keys_arr, vectors_array)
 
     def remove(self, composite_keys):
         # type: (list[bytes]) -> None

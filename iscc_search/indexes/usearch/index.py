@@ -192,6 +192,8 @@ class UsearchIndex:
                     # Prepare vectors for batch add to derived ShardedIndex128 simprint indexes
                     sp_batches = {}  # type: dict[str, tuple[list[bytes], list[np.ndarray]]]
                     sp_deleted_keys = {}  # type: dict[str, list[bytes]]
+                    # Accumulate simprint LMDB pairs for batched putmulti
+                    sp_lmdb_pairs = {}  # type: dict[str, list[tuple[bytes, bytes]]]
 
                     for asset in assets:
                         # Validate iscc_id present
@@ -241,7 +243,7 @@ class UsearchIndex:
                                     nphd_batches[unit_type][0].append(key)
                                     nphd_batches[unit_type][1].append(unit_body)
 
-                        # Write simprints to LMDB (source of truth)
+                        # Prepare simprints for batched LMDB write
                         if asset.simprints and asset.iscc_id:
                             _t = time.perf_counter()
                             iscc_id_body = IsccID(asset.iscc_id).body
@@ -255,7 +257,8 @@ class UsearchIndex:
                                 for sp_obj in sp_list:
                                     sp_bytes = ic.decode_base64(sp_obj.simprint)
                                     chunk_ptr = lmdb_ops.pack_chunk_pointer(iscc_id_body, sp_obj.offset, sp_obj.size)
-                                    txn.put(sp_bytes, chunk_ptr, dupdata=False, db=data_db)
+                                    # Accumulate for batched putmulti
+                                    sp_lmdb_pairs.setdefault(sp_type, []).append((sp_bytes, chunk_ptr))
                                     # Batch for derived ShardedIndex128
                                     if sp_type not in sp_batches:
                                         sp_batches[sp_type] = ([], [])
@@ -264,6 +267,14 @@ class UsearchIndex:
                             lmdb_simprint_t += time.perf_counter() - _t
 
                         results.append(IsccAddResult(iscc_id=asset.iscc_id, status=status))
+
+                    # Batch write all simprint data to LMDB using putmulti (C loop)
+                    _t = time.perf_counter()
+                    for sp_type, pairs in sp_lmdb_pairs.items():
+                        data_db = self._sp_data_dbs[sp_type]
+                        cursor = txn.cursor(data_db)
+                        cursor.putmulti(pairs, dupdata=False)
+                    lmdb_simprint_t += time.perf_counter() - _t
 
                 # LMDB transaction commits here (exits context manager)
                 lmdb_elapsed = time.perf_counter() - lmdb_t0

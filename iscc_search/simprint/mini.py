@@ -77,12 +77,11 @@ class SimprintMiniIndexRaw:
         self.path.mkdir(parents=True, exist_ok=True)
 
         # Open LMDB environment with default map_size (10MB)
-        # writemap=True and map_async=True avoid Windows file reservation issue
+        # writemap=False for lower memory footprint (dirty pages evictable)
         self.env = lmdb.open(
             str(self.path),
             max_dbs=2,
-            writemap=True,  # Use writable mmap, avoids Windows file reservation
-            map_async=True,  # Asynchronous flushing for better write performance
+            writemap=False,
         )
 
         # Open database with optimal flags for fixed-size integer keys and values

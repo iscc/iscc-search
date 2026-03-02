@@ -792,7 +792,7 @@ def test_default_lmdb_options_applied(temp_instance_path):
     assert len(idx) == 0
 
     # Test that options allow expected operations
-    # Default has sync=False, writemap=True, etc.
+    # Default has sync=False, writemap=False, etc.
     idx.close()
 
 

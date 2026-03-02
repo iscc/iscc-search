@@ -80,9 +80,9 @@ class InstanceIndex:
         "mode": 0o644,  # Standard file permissions
         "create": True,  # Create directory if missing
         "readahead": False,  # Better for random writes + prefix scans
-        "writemap": True,  # Performance optimization, safe since rebuildable
+        "writemap": False,  # Lower memory footprint (dirty pages evictable)
         "meminit": True,  # Security: zero-initialize buffers
-        "map_async": False,  # Safer to sync on commit even with writemap
+        "map_async": False,  # Not applicable without writemap
         "max_readers": 126,  # LMDB default for concurrent reads
         "max_spare_txns": 16,  # Good for batch operations
         "lock": True,  # Enable locking for concurrent access

@@ -131,12 +131,11 @@ class SimprintIndexRaw:
         self.path.mkdir(parents=True, exist_ok=True)
 
         # Open LMDB environment with default map_size (10MB)
-        # writemap=True and map_async=True avoid Windows file reservation issue
+        # writemap=False for lower memory footprint (dirty pages evictable)
         self.env = lmdb.open(
             str(self.path),
             max_dbs=3,  # simprint_type db, index_metadata db, asset_metadata db
-            writemap=True,
-            map_async=True,
+            writemap=False,
             sync=False,
             metasync=False,
         )

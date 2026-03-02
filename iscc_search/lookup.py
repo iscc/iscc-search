@@ -54,7 +54,7 @@ class IsccLookupIndex:
         "mode": 0o644,
         "create": True,
         "readahead": False,
-        "writemap": True,
+        "writemap": False,
         "meminit": True,
         "map_async": False,
         "max_readers": 126,

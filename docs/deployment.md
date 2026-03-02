@@ -222,17 +222,13 @@ services:
       ISCC_SEARCH_INDEX_URI: "usearch:///data"
       ISCC_SEARCH_CORS_ORIGINS: "*"
       ISCC_SEARCH_FLUSH_INTERVAL: "500000"
-      ISCC_SEARCH_SHARD_SIZE_UNITS: "256"
-      ISCC_SEARCH_SHARD_SIZE_SIMPRINTS: "256"
+      ISCC_SEARCH_SHARD_SIZE_UNITS: "128"
+      ISCC_SEARCH_SHARD_SIZE_SIMPRINTS: "128"
+      ISCC_SEARCH_HNSW_EXPANSION_SEARCH_UNITS: "1024"
+      ISCC_SEARCH_HNSW_EXPANSION_SEARCH_SIMPRINTS: "1024"
     stop_grace_period: 90s
     healthcheck:
-      test:
-        [
-          "CMD",
-          "python",
-          "-c",
-          "import urllib.request; urllib.request.urlopen('http://localhost:8000/').read()",
-        ]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/').read()"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -241,7 +237,7 @@ services:
       resources:
         limits:
           cpus: "2.0"
-          memory: 3G
+          memory: 4G
         reservations:
           cpus: "1.0"
           memory: 2G

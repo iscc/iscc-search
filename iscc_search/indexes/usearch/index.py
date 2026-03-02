@@ -62,10 +62,10 @@ class UsearchIndex:
         "create": True,
         "readahead": False,
         "writemap": False,
-        "meminit": True,
+        "meminit": False,
         "map_async": False,
-        "max_readers": 126,
-        "max_spare_txns": 16,
+        "max_readers": 4,
+        "max_spare_txns": 1,
         "lock": True,
     }
 

@@ -98,6 +98,7 @@ class UsearchIndex:
         self._simprint_indexes = {}  # type: dict[str, UsearchSimprintIndex]
         self._sp_data_dbs = {}  # type: dict[str, lmdb._Database]
         self._sp_assets_dbs = {}  # type: dict[str, lmdb._Database]
+        self._closed = False
 
         # Profiling counters (cumulative across batches)
         self._batch_counter = 0  # type: int
@@ -388,10 +389,11 @@ class UsearchIndex:
                         f"This may indicate disk space issues, permissions problems, or filesystem limits."
                     )
 
-                # Clear state for retry
+                # Clear result list for retry (LMDB transaction rolled back).
+                # NPHD indexes are NOT reset: MapFullError occurs inside the LMDB
+                # transaction, before NPHD additions run (line ~292), so they still
+                # hold all vectors from prior successful batches.
                 results = []
-                # Reset ShardedNphdIndexes - they have vectors from failed transaction
-                self._nphd_indexes = {}
                 old_size = self.map_size
 
                 # Limit resize increment to max 1GB to avoid wasting space
@@ -597,6 +599,8 @@ class UsearchIndex:
         """
         Save dirty derived indexes (ShardedNphdIndex and UsearchSimprintIndex) to disk.
 
+        Exception-safe: each sub-index is saved independently so a failure in one
+        does not prevent the others from being saved.
         Skips sub-indexes with dirty == 0 to avoid unnecessary I/O.
         Indexes are automatically saved on close(), so flush() is only
         needed for durability guarantees during long-running sessions.
@@ -605,43 +609,72 @@ class UsearchIndex:
             for unit_type, nphd_index in self._nphd_indexes.items():
                 if nphd_index.dirty == 0:
                     continue
-                nphd_index.save()
-                self._update_nphd_metadata(unit_type, nphd_index.size)
-                logger.debug(f"Flushed ShardedNphdIndex for unit_type '{unit_type}'")
+                try:
+                    nphd_index.save()
+                    self._update_nphd_metadata(unit_type, nphd_index.size)
+                    logger.debug(f"Flushed ShardedNphdIndex for unit_type '{unit_type}'")
+                except Exception:  # pragma: no cover
+                    logger.exception(f"Failed to flush ShardedNphdIndex '{unit_type}'")
 
             for sp_type, sp_index in self._simprint_indexes.items():
                 if sp_index.dirty == 0:
                     continue
-                sp_index.save()
-                self._update_sp_metadata(sp_type, sp_index.size)
-                logger.debug(f"Flushed UsearchSimprintIndex for type '{sp_type}'")
+                try:
+                    sp_index.save()
+                    self._update_sp_metadata(sp_type, sp_index.size)
+                    logger.debug(f"Flushed UsearchSimprintIndex for type '{sp_type}'")
+                except Exception:  # pragma: no cover
+                    logger.exception(f"Failed to flush UsearchSimprintIndex '{sp_type}'")
 
     def close(self):
         # type: () -> None
-        """Close LMDB environment and all derived indexes, saving dirty state."""
+        """
+        Close LMDB environment and all derived indexes, saving dirty state.
+
+        Idempotent and exception-safe: each sub-index is saved independently so a
+        failure in one does not prevent the others from being saved.
+        """
+        if self._closed:
+            return
+
         with self._write_lock:
+            if self._closed:  # pragma: no cover - race condition guard
+                return
+
             # Save dirty ShardedNphdIndex instances before closing
-            for unit_type, nphd_index in self._nphd_indexes.items():
-                if nphd_index.dirty > 0:
-                    nphd_index.save()
-                    self._update_nphd_metadata(unit_type, nphd_index.size)
-                    logger.debug(f"Saved ShardedNphdIndex for unit_type '{unit_type}'")
-                nphd_index.reset()
+            for unit_type, nphd_index in list(self._nphd_indexes.items()):
+                try:
+                    if nphd_index.dirty > 0:
+                        nphd_index.save()
+                        self._update_nphd_metadata(unit_type, nphd_index.size)
+                        logger.info(f"Saved ShardedNphdIndex '{unit_type}' ({nphd_index.size} vectors)")
+                    nphd_index.reset()
+                except Exception:  # pragma: no cover
+                    logger.exception(f"Failed to save ShardedNphdIndex '{unit_type}' on close")
 
             self._nphd_indexes.clear()
 
             # Save dirty derived simprint indexes (ShardedIndex128)
-            for sp_type, sp_index in self._simprint_indexes.items():
-                if sp_index.dirty > 0:
-                    sp_index.save()
-                    self._update_sp_metadata(sp_type, sp_index.size)
-                    logger.debug(f"Saved UsearchSimprintIndex for type '{sp_type}'")
-                sp_index.reset()
+            for sp_type, sp_index in list(self._simprint_indexes.items()):
+                try:
+                    if sp_index.dirty > 0:
+                        sp_index.save()
+                        self._update_sp_metadata(sp_type, sp_index.size)
+                        logger.info(f"Saved UsearchSimprintIndex '{sp_type}' ({sp_index.size} vectors)")
+                    sp_index.reset()
+                except Exception:  # pragma: no cover
+                    logger.exception(f"Failed to save UsearchSimprintIndex '{sp_type}' on close")
 
             self._simprint_indexes.clear()
 
             # Close LMDB
-            self.env.close()
+            try:
+                self.env.close()
+            except Exception:  # pragma: no cover
+                logger.exception("Failed to close LMDB environment")
+
+            self._closed = True
+            logger.info(f"Closed UsearchIndex at {self.path}")
 
     def __len__(self):  # pragma: no cover
         # type: () -> int

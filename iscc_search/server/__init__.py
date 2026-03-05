@@ -1,5 +1,6 @@
 """FastAPI server for ISCC-Search API."""
 
+import atexit
 import sys
 import typing  # noqa: F401
 from contextlib import asynccontextmanager
@@ -29,17 +30,30 @@ async def lifespan(app):  # type: ignore
     """
     Manage ISCC index lifecycle across FastAPI app startup and shutdown.
 
-    On startup: Creates index instance via factory and stores in app.state.
-    On shutdown: Properly closes index and releases resources.
+    On startup: Creates index instance, stores in app.state, and registers atexit
+    handler as defense-in-depth for process exit scenarios not covered by lifespan
+    (e.g. unhandled exceptions, SIGTERM during request processing).
+    On shutdown: Closes index and releases resources.
 
     :param app: FastAPI application instance
     :yield: Control to FastAPI application
     """
     # Startup: Create and store index instance
-    app.state.index = get_index()
+    index = get_index()
+    app.state.index = index
+
+    # Capture bound method reference for consistent register/unregister
+    close_callback = index.close
+    atexit.register(close_callback)
+
     yield
-    # Shutdown: Close index and cleanup resources
-    app.state.index.close()
+
+    # Shutdown: Always unregister atexit handler, even if close() fails
+    logger.info("Lifespan shutdown: closing index...")
+    try:
+        index.close()
+    finally:
+        atexit.unregister(close_callback)
 
 
 def get_index_from_state(request: Request):

@@ -466,6 +466,32 @@ def test_close_skips_clean_saves_but_resets(tmp_path, sample_iscc_ids):
     idx2.close()
 
 
+def test_close_idempotent(tmp_path, sample_iscc_ids):
+    """close() is idempotent - calling it multiple times is safe."""
+    index_path = tmp_path / "close_idempotent"
+
+    idx = UsearchIndex(index_path, realm_id=0, max_dim=256)
+    content_unit = ic.gen_text_code_v0("Test close idempotent")["iscc"]
+    instance_unit = f"ISCC:{ic.Code.rnd(ic.MT.INSTANCE, bits=128)}"
+    asset = IsccEntry(
+        iscc_id=sample_iscc_ids[0],
+        units=[instance_unit, content_unit],
+    )
+    idx.add_assets([asset])
+
+    # Close multiple times - should not raise
+    idx.close()
+    idx.close()
+    idx.close()
+
+    # Verify data was saved correctly
+    idx2 = UsearchIndex(index_path, realm_id=0, max_dim=256)
+    query = IsccQuery(units=[instance_unit, content_unit])
+    result = idx2.search_assets(query, limit=10)
+    assert len(result.global_matches) == 1
+    idx2.close()
+
+
 def test_auto_flush_triggers_on_threshold(tmp_path, sample_iscc_ids):
     """Auto-flush triggers when dirty >= flush_interval."""
     index_path = tmp_path / "auto_flush"

@@ -151,16 +151,16 @@ def test_lifespan_shutdown():
         with TestClient(app) as client:
             # Verify the lifespan startup created an index
             assert hasattr(client.app.state, "index")
-            original_index = client.app.state.index
-            assert isinstance(original_index, MemoryIndex)
+            index = client.app.state.index
+            assert isinstance(index, MemoryIndex)
 
-            # Replace the index with a mock to track close() calls
-            mock_index = MagicMock(spec=MemoryIndex)
-            client.app.state.index = mock_index
+            # Patch close() on the real index to track calls
+            # Lifespan captures the index reference directly, so we must
+            # patch the actual instance (not swap app.state.index)
+            index.close = MagicMock()
 
-        # Verify close was called during shutdown on the mock
-        # (In production, the real index's close() would be called)
-        mock_index.close.assert_called_once()
+        # Verify close was called during lifespan shutdown
+        index.close.assert_called_once()
     finally:
         # Restore original URI
         iscc_search.options.search_opts.index_uri = original_uri

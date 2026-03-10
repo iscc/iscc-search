@@ -101,6 +101,50 @@ def test_usearch_simprint_index_add_and_search(tmp_path):
     idx.close()
 
 
+def test_usearch_simprint_index_single_query_with_view_and_active_shards(tmp_path):
+    """Single simprint search works when both view and active shards have data.
+
+    Regression test for iscc-usearch#22: ShardedIndex128._merge_batch_matches
+    crashes with AxisError when batch_size=1 input produces 2D array but
+    underlying usearch returns 1D Matches.
+    """
+    sp_dir = tmp_path / "sp_single_query"
+
+    # Create with tiny shard_size to force shard rotation on each add
+    idx = UsearchSimprintIndex(path=sp_dir, ndim=64, shard_size=1)
+
+    asset_id_1 = b"\x01" * 8
+    sp_bytes_1 = b"\xaa" * 8
+    key_1 = lmdb_ops.pack_chunk_pointer(asset_id_1, 0, 100)
+    idx.add_raw([key_1], [np.frombuffer(sp_bytes_1, dtype=np.uint8)])
+
+    asset_id_2 = b"\x02" * 8
+    sp_bytes_2 = b"\xbb" * 8
+    key_2 = lmdb_ops.pack_chunk_pointer(asset_id_2, 0, 200)
+    idx.add_raw([key_2], [np.frombuffer(sp_bytes_2, dtype=np.uint8)])
+    idx.close()
+
+    # Reopen with large shard_size — saved shards load as view, new adds go to active
+    idx = UsearchSimprintIndex(path=sp_dir, ndim=64)
+    asset_id_3 = b"\x03" * 8
+    sp_bytes_3 = b"\xcc" * 8
+    key_3 = lmdb_ops.pack_chunk_pointer(asset_id_3, 0, 300)
+    idx.add_raw([key_3], [np.frombuffer(sp_bytes_3, dtype=np.uint8)])
+
+    # Verify both shards have data
+    has_view = idx._index._view_shards is not None and len(idx._index._view_shards) > 0
+    has_active = idx._index._active_shard is not None and len(idx._index._active_shard) > 0
+    assert has_view and has_active, "Test requires both view and active shards populated"
+
+    # Search with single simprint (previously crashed with AxisError)
+    results = idx.search_raw([sp_bytes_1], limit=10, total_assets=3)
+    assert len(results) >= 1
+    assert results[0].iscc_id_body == asset_id_1
+    assert results[0].score > 0.0
+
+    idx.close()
+
+
 def test_usearch_simprint_index_empty_search(tmp_path):
     """Search on empty index returns empty list."""
     sp_dir = tmp_path / "sp_empty"

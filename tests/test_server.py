@@ -93,6 +93,52 @@ def test_openapi_static_files(client):
     assert response.status_code == 200
 
 
+def test_healthz_endpoint(client):
+    """Liveness probe always returns 200 with status ok."""
+    response = client.get("/healthz")
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok"}
+
+
+def test_readyz_endpoint_ready(client):
+    """Readiness probe returns 200 when the index is initialized and list_indexes works."""
+    response = client.get("/readyz")
+    assert response.status_code == 200
+    assert response.json() == {"status": "ready"}
+
+
+def test_readyz_endpoint_index_not_initialized(client):
+    """Readiness probe returns 503 when app.state.index is missing."""
+    original_index = app.state.index
+    try:
+        del app.state.index
+        response = client.get("/readyz")
+        assert response.status_code == 503
+        body = response.json()
+        assert body["status"] == "not_ready"
+        assert body["reason"] == "index_not_initialized"
+    finally:
+        app.state.index = original_index
+
+
+def test_readyz_endpoint_list_indexes_fails(client):
+    """Readiness probe returns 503 when list_indexes raises."""
+    original_list_indexes = app.state.index.list_indexes
+
+    def failing_list_indexes():
+        raise RuntimeError("simulated backend failure")
+
+    app.state.index.list_indexes = failing_list_indexes
+    try:
+        response = client.get("/readyz")
+        assert response.status_code == 503
+        body = response.json()
+        assert body["status"] == "not_ready"
+        assert body["reason"] == "list_indexes_failed"
+    finally:
+        app.state.index.list_indexes = original_list_indexes
+
+
 def test_main_entry_point():
     """Test main entry point starts uvicorn server."""
     from iscc_search.server.__main__ import main

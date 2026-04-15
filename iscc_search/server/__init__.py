@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from loguru import logger
 from iscc_search.options import get_index, search_opts
@@ -194,6 +194,44 @@ def root():
         "version": app.version,
         "docs": "/docs",
     }
+
+
+@app.get("/healthz", include_in_schema=False)
+def healthz():
+    # type: () -> dict
+    """
+    Liveness probe: 200 as long as the process can respond.
+
+    Used by orchestrators (ECS, Kubernetes, ALB) to decide whether to restart the
+    container. It must not depend on index state — only on the process being alive.
+    """
+    return {"status": "ok"}
+
+
+@app.get("/readyz", include_in_schema=False)
+def readyz(request: Request):
+    # type: (Request) -> JSONResponse
+    """
+    Readiness probe: 200 only when the index is initialized and list_indexes() works.
+
+    Used by load balancers and orchestrators to route traffic only to ready
+    instances. Returns 503 with a structured reason otherwise.
+    """
+    index = getattr(request.app.state, "index", None)
+    if index is None:
+        return JSONResponse(
+            status_code=503,
+            content={"status": "not_ready", "reason": "index_not_initialized"},
+        )
+    try:
+        index.list_indexes()
+    except Exception as exc:
+        logger.warning(f"/readyz: list_indexes() failed: {exc}")
+        return JSONResponse(
+            status_code=503,
+            content={"status": "not_ready", "reason": "list_indexes_failed"},
+        )
+    return JSONResponse(status_code=200, content={"status": "ready"})
 
 
 # Include API routers

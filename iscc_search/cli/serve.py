@@ -17,7 +17,10 @@ def serve_command(
     port: int = typer.Option(search_opts.port, "--port", "-p", help="Port to bind server to"),
     dev: bool = typer.Option(False, "--dev", "-d", help="Run in development mode with auto-reload"),
     workers: int = typer.Option(
-        search_opts.workers, "--workers", "-w", help="Number of worker processes (production only)"
+        search_opts.workers,
+        "--workers",
+        "-w",
+        help="Number of worker processes (not supported with usearch:// backend)",
     ),
 ):
     # type: (...) -> None
@@ -31,13 +34,21 @@ def serve_command(
         iscc-search serve                    # Production mode
         iscc-search serve --dev              # Development mode with auto-reload
         iscc-search serve --port 9000        # Custom port
-        iscc-search serve --workers 4        # Multi-worker production
     """
     import uvicorn
 
     if dev and workers:
         console.print("[yellow]Warning: --workers is ignored in development mode[/yellow]")
         workers = None
+
+    # Reject multi-worker with usearch:// backend: concurrent writers corrupt .usearch files.
+    if workers and workers > 1 and search_opts.index_uri.startswith("usearch://"):
+        console.print(
+            "[red]Error:[/red] --workers > 1 is not supported with the usearch:// backend.\n"
+            "Multi-worker access to .usearch files corrupts the index.\n"
+            "Run with a single worker (omit --workers or use --workers 1)."
+        )
+        raise typer.Exit(1)
 
     # Configure uvicorn based on mode
     uvicorn_config = {

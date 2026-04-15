@@ -409,6 +409,11 @@ class UsearchIndex:
                     f"(retry {retry_count}/{self.MAX_RESIZE_RETRIES})"
                 )
                 self.env.set_mapsize(new_size)
+                # py-lmdb 2.2.0 invalidates cached named-db handles on set_mapsize.
+                # Repopulate simprint db caches from metadata before retry.
+                self._sp_data_dbs = {}
+                self._sp_assets_dbs = {}
+                self._load_sp_databases()
 
             finally:
                 self._write_lock.release()

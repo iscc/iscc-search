@@ -12,6 +12,9 @@ uvicorn iscc_search.server:app --workers 4
 uvicorn iscc_search.server:app
 ```
 
+The `iscc-search serve` CLI rejects `--workers > 1` with `usearch://` automatically, but the raw `uvicorn`
+command above is not guarded. Launch via `iscc-search serve` or the Dockerfile `CMD` whenever possible.
+
 **Why:**
 
 - `.usearch` files have no file locking or multi-process coordination
@@ -22,7 +25,7 @@ uvicorn iscc_search.server:app
 
 - Use single worker with FastAPI async/await (handles 1000s concurrent connections)
 - Scale horizontally with separate data directories (one per instance)
-- Ensure graceful shutdown: Docker `stop_grace_period > 60s`
+- Ensure graceful shutdown: Docker `stop_grace_period ≥ 120s`
 
 ## Quick Start
 
@@ -54,10 +57,14 @@ CMD ["uvicorn", "iscc_search.server:app",
 **docker-compose.yml:**
 
 ```yaml
-stop_grace_period: 90s  # Must be > uvicorn timeout
+stop_grace_period: 120s  # Must be > uvicorn timeout
 ```
 
-**Timing:** `Docker grace (90s) > Uvicorn timeout (60s) + buffer`
+**Timing:** `Docker grace (120s) > Uvicorn timeout (60s) + buffer`
+
+**ECS / Kubernetes:** set `stopTimeout: 120` (ECS task definition) or `terminationGracePeriodSeconds: 120`
+(Kubernetes pod spec). A forced SIGKILL (OOM-killer, power loss) loses any writes since the last flush — the
+`FLUSH_INTERVAL` setting below reduces this blast radius.
 
 ### Environment Variables
 
@@ -85,6 +92,40 @@ environment:
 **Flush interval:** When loading data in large batches, set `ISCC_SEARCH_FLUSH_INTERVAL` to a value larger than
 your batch size (e.g. `10000` for 1000-entry batches) to avoid excessive disk I/O during ingestion. Indexes are
 always flushed on graceful shutdown regardless of this setting.
+
+### Sizing Profiles
+
+Size hardware around the pessimistic 256-bit simprint case; 64-bit simprints fit the same envelope with
+headroom. `SHARD_SIZE_*` is in MB, `EXPANSION_SEARCH_*` controls HNSW query-time search depth (higher = better
+recall, slower queries).
+
+| Profile    | Assets  | RAM        | Disk     | `SHARD_SIZE_UNITS` / `_SIMPRINTS` | `FLUSH_INTERVAL` | `EXPANSION_SEARCH_*` |
+| ---------- | ------- | ---------- | -------- | --------------------------------- | ---------------- | -------------------- |
+| Sandbox    | ≤ 100 K | 4 GB       | 80 GB    | 128 / 128                         | 500000           | 1024                 |
+| Validation | ≤ 500 K | 64 GB      | 500 GB   | 128 / 256                         | 100000           | 1024                 |
+| **Launch** | **1 M** | **128 GB** | **1 TB** | **128 / 256**                     | **100000**       | **1024**             |
+| Growth     | 5 M+    | 256 GB+    | 4 TB+    | 256 / 512                         | 100000           | 1024                 |
+
+**Instance & disk notes for the Launch profile:**
+
+- **Instance class**: AWS `r6i.4xlarge` (16 vCPU, 128 GB) is the first recommended production size. Start on
+    `r6i.2xlarge` (64 GB) for validation if you want an empirical sanity check before cutover.
+- **Storage**: NVMe-backed SSD is mandatory. On AWS use `gp3` with **provisioned 16 000 IOPS + 750 MB/s
+    throughput**, `io2 Block Express` for the lowest tail latency, or local-instance NVMe (`i4i`/`im4gn`) if you
+    have a tested rebuild path. Never use HDD, `sc1`/`st1`, NFS, EFS, or shared volumes.
+- **CPU**: 4 vCPU is sufficient for search (HNSW is memory-latency bound), 8 vCPU gives headroom for concurrent
+    ingestion.
+
+### Health & Readiness Probes
+
+| Endpoint   | Purpose                 | Use as                                  |
+| ---------- | ----------------------- | --------------------------------------- |
+| `/healthz` | Liveness (process up)   | Docker healthcheck, K8s `livenessProbe` |
+| `/readyz`  | Readiness (index ready) | ALB target group, K8s `readinessProbe`  |
+
+`/readyz` returns `503 {"status": "not_ready", "reason": ...}` until the index is initialized and
+`list_indexes()` succeeds, then `200 {"status": "ready"}`. Point load balancers at `/readyz` so traffic only
+reaches instances that can actually serve it.
 
 ### Resource Limits
 
@@ -154,11 +195,13 @@ upstream iscc_search {
 ## Production Checklist
 
 - [ ] Single worker configured (no `--workers`)
-- [ ] Graceful shutdown timeouts set (60s uvicorn, 90s docker)
+- [ ] Graceful shutdown timeouts set (60s uvicorn, 120s docker)
 - [ ] Data volume mounted at `/data`
 - [ ] CORS origins configured (not `*`)
 - [ ] API secret set if needed
-- [ ] Health checks passing
+- [ ] `ISCC_SEARCH_FLUSH_INTERVAL` set to a non-zero value
+- [ ] Liveness probe at `/healthz`, readiness probe at `/readyz`
+- [ ] `ISCC_SEARCH_SENTRY_DSN` set (or alternative error tracking wired up)
 - [ ] Backup strategy tested
 - [ ] Load tested with single worker
 
@@ -226,9 +269,9 @@ services:
       ISCC_SEARCH_SHARD_SIZE_SIMPRINTS: "128"
       ISCC_SEARCH_HNSW_EXPANSION_SEARCH_UNITS: "1024"
       ISCC_SEARCH_HNSW_EXPANSION_SEARCH_SIMPRINTS: "1024"
-    stop_grace_period: 90s
+    stop_grace_period: 120s
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/').read()"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz').read()"]
       interval: 30s
       timeout: 10s
       retries: 3

@@ -18,14 +18,6 @@ def test_search_options_custom_index_uri():
     assert options.index_uri == custom_uri
 
 
-def test_search_options_postgres_uri():
-    """Test SearchOptions with PostgreSQL connection string."""
-    postgres_uri = "postgresql://user:pass@localhost/isccdb"
-    options = SearchOptions(index_uri=postgres_uri)
-    assert options.index_uri == postgres_uri
-    assert options.index_uri.startswith("postgresql://")
-
-
 def test_search_options_memory_uri():
     """Test SearchOptions with memory:// URI."""
     memory_uri = "memory://"
@@ -155,8 +147,7 @@ def test_get_index_unsupported_uri():
 
     original_uri = iscc_search.options.search_opts.index_uri
     try:
-        # PostgreSQL URI is not yet supported
-        iscc_search.options.search_opts.index_uri = "postgresql://user:pass@localhost/isccdb"
+        iscc_search.options.search_opts.index_uri = "redis://localhost:6379/0"
         with pytest.raises(ValueError, match="Unsupported ISCC_SEARCH_INDEX_URI scheme"):
             get_index()
     finally:

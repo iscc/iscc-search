@@ -55,7 +55,7 @@ class SearchOptions(BaseSettings):
 
     index_uri: str = Field(
         f"usearch:///{Path(iscc_search.dirs.user_data_dir).as_posix()}",
-        description="ISCC_SEARCH_INDEX_URI - URI specifying index backend (memory://, lmdb://, usearch://, postgres://)",
+        description="ISCC_SEARCH_INDEX_URI - URI specifying index backend (memory://, lmdb://, usearch://)",
     )
 
     api_secret: str | None = Field(
@@ -226,12 +226,8 @@ def get_index():
     - lmdb:///path → LmdbIndexManager (LMDB-backed, production-ready)
     - usearch:///path → UsearchIndexManager (HNSW + LMDB, high-performance)
 
-    Future implementations:
-    - postgresql:// → PostgresIndex (planned)
-
     :return: Index instance implementing IsccIndexProtocol
     :raises ValueError: If URI scheme is not supported or missing
-    :raises NotImplementedError: If URI scheme is planned but not yet implemented
     """
     from iscc_search.protocols.index import IsccIndexProtocol  # noqa: F401
     import sys
@@ -246,7 +242,7 @@ def get_index():
 
     # Require explicit URI scheme (reject plain paths)
     if "://" not in uri:
-        supported = ["memory://", "lmdb:///path", "usearch:///path (planned)"]
+        supported = ["memory://", "lmdb:///path", "usearch:///path"]
         raise ValueError(
             f"ISCC_SEARCH_INDEX_URI requires explicit scheme, got: '{uri}'. Supported schemes: {', '.join(supported)}"
         )
@@ -283,9 +279,5 @@ def get_index():
         return UsearchIndexManager(path)
 
     # Reject unsupported URI schemes
-    supported = ["memory://", "lmdb://", "usearch://", "postgres:// (planned)"]
-    raise ValueError(
-        f"Unsupported ISCC_SEARCH_INDEX_URI scheme: '{uri}'. "
-        f"Supported schemes: {', '.join(supported)}. "
-        f"PostgreSQL URIs are planned for future implementation."
-    )
+    supported = ["memory://", "lmdb://", "usearch://"]
+    raise ValueError(f"Unsupported ISCC_SEARCH_INDEX_URI scheme: '{uri}'. Supported schemes: {', '.join(supported)}.")

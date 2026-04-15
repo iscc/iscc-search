@@ -994,11 +994,15 @@ class UsearchIndex:
 
         for sp_type, simprint_objs in query.simprints.items():
             if sp_type not in self._simprint_indexes:
-                # Attempt on-demand rebuild if LMDB has data for this type
+                # Derived index missing for this type. Rebuilding from LMDB can take hours
+                # at production scale, so we must NOT do it inside a search request. Log a
+                # loud warning and skip the type; an explicit out-of-band rebuild is required.
                 if sp_type in self._sp_data_dbs:
-                    self._rebuild_simprint_index(sp_type)
-                if sp_type not in self._simprint_indexes:
-                    continue
+                    logger.warning(
+                        f"UsearchSimprintIndex missing for type '{sp_type}' but LMDB has data - "
+                        "skipping this type in search. Run an explicit rebuild to restore results."
+                    )
+                continue
 
             sp_index = self._simprint_indexes[sp_type]
 
@@ -1374,8 +1378,13 @@ class UsearchIndex:
         for sp_type in sp_types:
             sp_dir = self.path / f"SIMPRINT_{sp_type}"
             if not sp_dir.exists():
-                # Directory missing - needs rebuild (will happen lazily when searched)
-                logger.debug(f"Simprint index directory missing for type '{sp_type}', will rebuild on demand")
+                # Directory missing - searches of this type will return empty results until an
+                # explicit rebuild is run. Auto-rebuild is intentionally disabled to avoid
+                # hours-long work blocking a search request at production scale.
+                logger.warning(
+                    f"Simprint index directory missing for type '{sp_type}' - "
+                    "searches of this type will be empty until an explicit rebuild is run."
+                )
                 continue
 
             try:

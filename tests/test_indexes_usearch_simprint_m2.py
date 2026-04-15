@@ -1,6 +1,10 @@
 """M2: Integration tests for UsearchIndex simprint search."""
 
+from io import StringIO
+
 import pytest
+from loguru import logger
+
 from iscc_search.indexes.usearch.index import UsearchIndex
 from iscc_search.schema import IsccQuery
 
@@ -98,25 +102,39 @@ def test_usearch_simprint_metadata_enrichment(tmp_path, sample_assets_with_simpr
     index.close()
 
 
-def test_usearch_simprint_search_rebuilds_on_demand(
-    tmp_path, sample_assets_with_simprints, sample_simprints, monkeypatch
-):
-    """Test on-demand rebuild when derived simprint indexes are missing."""
-    index = UsearchIndex(path=tmp_path / "test_index")
-    index.add_assets(sample_assets_with_simprints)
+def test_usearch_simprint_search_skips_missing_type(tmp_path, sample_assets_with_simprints, sample_simprints):
+    """Missing derived simprint index must NOT trigger an in-request rebuild.
 
-    # Clear derived simprint indexes to simulate missing/corrupted state
-    index._simprint_indexes.clear()
+    At production scale (hundreds of millions of vectors per type) an automatic
+    rebuild would run for hours inside the user's HTTP request. The correct
+    behavior is to log a warning and return an empty result for that type; an
+    explicit out-of-band rebuild must be used instead.
+    """
+    log_output = StringIO()
+    sink_id = logger.add(log_output, format="{level}|{message}", level="WARNING")
 
-    # Search triggers on-demand rebuild from LMDB and returns results
-    query = IsccQuery(simprints={"CONTENT_TEXT_V0": [sample_simprints["CONTENT_TEXT_V0"][0]["simprint"]]})
-    result = index.search_assets(query, limit=10)
+    try:
+        index = UsearchIndex(path=tmp_path / "test_index")
+        index.add_assets(sample_assets_with_simprints)
 
-    # On-demand rebuild should restore the index and return matches
-    assert len(result.chunk_matches) > 0
-    assert "CONTENT_TEXT_V0" in index._simprint_indexes
+        # Simulate missing/corrupted derived state for this type
+        index._simprint_indexes.clear()
 
-    index.close()
+        query = IsccQuery(simprints={"CONTENT_TEXT_V0": [sample_simprints["CONTENT_TEXT_V0"][0]["simprint"]]})
+        result = index.search_assets(query, limit=10)
+
+        # Search must not auto-rebuild: type stays absent from _simprint_indexes
+        assert "CONTENT_TEXT_V0" not in index._simprint_indexes
+        # No chunk matches produced for the skipped type
+        assert len(result.chunk_matches) == 0
+        # A warning must be emitted so operators can act on it
+        log_content = log_output.getvalue()
+        assert "UsearchSimprintIndex missing for type 'CONTENT_TEXT_V0'" in log_content
+        assert "explicit rebuild" in log_content
+
+        index.close()
+    finally:
+        logger.remove(sink_id)
 
 
 # Note: test_usearch_chunk_details_populated removed - usearch backend doesn't track

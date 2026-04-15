@@ -24,6 +24,35 @@ logger.add(
 )
 
 
+def init_sentry():
+    # type: () -> bool
+    """
+    Initialize Sentry error tracking if ISCC_SEARCH_SENTRY_DSN is configured.
+
+    Idempotent: a missing DSN simply skips initialization (returns False).
+    Called once at module import time so exceptions from any request path are
+    captured, including the ones that do not go through a FastAPI handler.
+
+    :return: True if Sentry was initialized, False otherwise.
+    """
+    if not search_opts.sentry_dsn:
+        return False
+
+    import sentry_sdk
+    from sentry_sdk.integrations.fastapi import FastApiIntegration
+
+    sentry_sdk.init(
+        dsn=search_opts.sentry_dsn,
+        integrations=[FastApiIntegration()],
+        traces_sample_rate=search_opts.sentry_traces_sample_rate,
+    )
+    logger.info("Sentry error tracking initialized")
+    return True
+
+
+init_sentry()
+
+
 @asynccontextmanager
 async def lifespan(app):  # type: ignore
     # type: (FastAPI) -> typing.AsyncGenerator[None, None]

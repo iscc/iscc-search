@@ -3,7 +3,8 @@
 from unittest.mock import patch, MagicMock
 import pytest
 from fastapi.testclient import TestClient
-from iscc_search.server import app, custom_docs, root
+from iscc_search.options import search_opts
+from iscc_search.server import app, custom_docs, init_sentry, root
 
 
 @pytest.fixture
@@ -119,6 +120,32 @@ def test_readyz_endpoint_index_not_initialized(client):
         assert body["reason"] == "index_not_initialized"
     finally:
         app.state.index = original_index
+
+
+def test_init_sentry_skips_when_dsn_unset(monkeypatch):
+    """init_sentry() is a no-op when ISCC_SEARCH_SENTRY_DSN is not configured."""
+    monkeypatch.setattr(search_opts, "sentry_dsn", None)
+    assert init_sentry() is False
+
+
+def test_init_sentry_initializes_when_dsn_set(monkeypatch):
+    """init_sentry() calls sentry_sdk.init with the configured DSN and sample rate."""
+    import sentry_sdk
+
+    calls = []
+
+    def fake_init(**kwargs):
+        calls.append(kwargs)
+
+    monkeypatch.setattr(sentry_sdk, "init", fake_init)
+    monkeypatch.setattr(search_opts, "sentry_dsn", "https://public@sentry.example.com/1")
+    monkeypatch.setattr(search_opts, "sentry_traces_sample_rate", 0.1)
+
+    assert init_sentry() is True
+    assert len(calls) == 1
+    assert calls[0]["dsn"] == "https://public@sentry.example.com/1"
+    assert calls[0]["traces_sample_rate"] == 0.1
+    assert calls[0]["integrations"]  # at least one integration
 
 
 def test_readyz_endpoint_list_indexes_fails(client):

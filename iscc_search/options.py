@@ -176,6 +176,19 @@ class SearchOptions(BaseSettings):
         description="ISCC_SEARCH_LOG_LEVEL - Log level for the server (debug, info, warning, error, critical)",
     )
 
+    # Error tracking
+    sentry_dsn: str | None = Field(
+        None,
+        description="ISCC_SEARCH_SENTRY_DSN - Sentry DSN for error tracking (disabled when unset)",
+    )
+
+    sentry_traces_sample_rate: float = Field(
+        0.05,
+        ge=0.0,
+        le=1.0,
+        description="ISCC_SEARCH_SENTRY_TRACES_SAMPLE_RATE - Sentry performance sampling rate (0.0-1.0)",
+    )
+
     @property
     def cors_origins_list(self):
         # type: () -> list[str]

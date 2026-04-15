@@ -534,5 +534,5 @@ class IsccSearchResult(BaseModel):
     ]
     chunk_matches: Annotated[
         list[IsccChunkMatch],
-        Field(default_factory=list, description="Segment-level simprint matches, ordered by relevance (best first)"),
-    ]
+        Field(description="Segment-level simprint matches, ordered by relevance (best first)", validate_default=True),
+    ] = []

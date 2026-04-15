@@ -4,10 +4,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**iscc-search** is a high-performance ISCC similarity search engine for ISCC (International Standard Content
-Code). In active development (v0.0.1), it provides high-performance vector similarity search for variable-length
-binary ISCC vectors using the Normalized Prefix Hamming Distance (NPHD) metric. Built on top of usearch for fast
-approximate nearest neighbor search.
+**iscc-search** is a high-performance similarity search engine for ISCC (International Standard Content Code).
+It ships as a Python package, a Typer-based CLI, and a FastAPI REST server. Indexes can be kept in memory,
+persisted in LMDB, or accelerated with HNSW via the external `iscc-usearch` package. In active development
+(v0.0.1).
 
 ## ISCC Specific Terminology
 
@@ -39,89 +39,118 @@ approximate nearest neighbor search.
 
 ## Development Commands
 
-This project uses `uv` (modern Python package manager) and `poe` (poethepoet task runner). All commands should
-be run with `uv run poe <command>`:
+This project uses `uv` (modern Python package manager) and `poe` (poethepoet task runner):
 
 ```bash
 # Show all available tasks
 uv run poe --help
 
+# OpenAPI build (regenerates schema.py from openapi.yaml and bundles openapi.json)
+uv run poe build
+
 # Formatting
 uv run poe format-code      # Format Python code with ruff
 uv run poe format-markdown  # Format markdown files
-uv run poe format           # Format all files (code + markdown)
+uv run poe format           # Format all files
 
 # Testing
 uv run poe test             # Run tests with coverage (fails if coverage < 100%)
 uv run pytest tests/test_foo.py::test_function_name  # Run single test
 
-# Pre-commit checks
-uv run poe precommit        # Run pre-commit hooks
+# Complexity report
+uv run poe check-complexity
 
-# All checks
-uv run poe all              # Format, test, and all checks
+# Pre-commit checks
+uv run poe precommit
+
+# Everything (build + format + test + complexity)
+uv run poe all
 ```
+
+Run the server locally: `uv run iscc-search serve --dev`.
 
 ## Architecture
 
-The project structure follows standard Python packaging conventions:
+iscc-search is organized around a protocol-based abstraction so CLI, REST API, and library users all talk to the
+same `IsccIndexProtocol` regardless of the backend.
 
-- `iscc_search/` - Main package directory
-    - `nphd.py` - NphdIndex class for ANNS with variable-length binary vectors
-    - `metrics.py` - Custom NPHD metric implementation using Numba
-- `tests/` - Test files using pytest
-    - `conftest.py` - Shared fixtures for ISCC-IDs and ISCC-UNITs
-    - `test_nphd.py` - Tests for NphdIndex, pad/unpad functions
-    - `test_metrics.py` - Tests for NPHD metric calculation
-    - `test_usearch_*.py` - Low-level usearch API tests
-- `docs/` - MkDocs documentation with Material theme
+### Package Layout
+
+- `iscc_search/` - Main package
+    - `__init__.py` - Re-exports `SearchOptions` / `search_opts`; defines `PlatformDirs`
+    - `options.py` - Server deployment configuration (`SearchOptions`, env vars prefixed `ISCC_SEARCH_`,
+        `get_index()` factory that parses `index_uri`)
+    - `config.py` - CLI multi-index management (persistent JSON at `~/.iscc-search/config.json`, git-style
+        add/list/use/remove workflow)
+    - `models.py` - `IsccBase`, `IsccID`, `IsccUnit`, `IsccCode`, `IsccItem` convenience classes on top of
+        `iscc-core`
+    - `schema.py` - **Auto-generated** Pydantic v2 models from `openapi/openapi.yaml` (do not hand-edit)
+    - `processing.py` - Text processing helpers (tokenization, etc.)
+    - `utils.py` - Shared utilities
+    - `log_config.json` - Loguru logging configuration
+    - `cli/` - Typer CLI (`add`, `get`, `search`, `serve`, `index` subcommands)
+    - `server/` - FastAPI application (`assets`, `auth`, `indexes`, `search`, `playground`)
+    - `remote/` - HTTP client (`IsccSearchClient`) for talking to a remote server
+    - `protocols/` - `IsccIndexProtocol` Protocol definition
+    - `indexes/` - Backend implementations (see below)
+    - `openapi/` - Modular OpenAPI 3.0 spec (`openapi.yaml` + fragment files, bundled to `openapi.json`)
+- `tests/` - Pytest test suite with 100% coverage requirement
+- `docs/` - MkDocs documentation (Material theme)
+- `scripts/bundle_openapi.py` - Bundles modular OpenAPI fragments into `openapi.json`
 - `scratch/` - Local debugging and one-off scripts (not tracked in git)
 
-### Core Components
+### Index Backends (`iscc_search/indexes/`)
 
-**NphdIndex** (`iscc_search/nphd.py`): Main index class that wraps usearch Index with:
+All backends implement `IsccIndexProtocol`. `options.get_index()` selects one based on `ISCC_SEARCH_INDEX_URI`:
 
-- Automatic vector padding/unpadding for variable-length ISCC vectors
-- NPHD metric configuration (binary vectors with length signal byte)
-- Supports 64-256 bit vectors (configurable via `max_dim` parameter)
+- `memory://` → `indexes/memory/` - In-memory dict-based, no persistence (tests, demos)
+- `lmdb:///path` → `indexes/lmdb/` - LMDB-backed storage with inverted prefix-search index
+- `usearch:///path` → `indexes/usearch/` - HNSW (via `iscc-usearch`) + LMDB for storage and metadata (production
+    backend)
 
-**Custom NPHD Metric** (`iscc_search/metrics.py`):
+The `indexes/simprint/` subpackage implements ISCC-SIMPRINT (granular feature) indexing, with LMDB ops for exact
+search and a usearch-backed approximate search path.
 
-- Compiled Numba function for fast NPHD calculation
-- Handles variable-length vectors via length signal in first byte
-- Uses bit-packed binary representation (ScalarKind.B1)
+### Configuration Systems
+
+There are **two** independent configuration systems — this is intentional and important:
+
+1. **`options.py` (`SearchOptions`)** - Server deployment configuration
+    - Consumed by `iscc-search serve` and the FastAPI app
+    - Sourced from environment variables (`ISCC_SEARCH_*`) and `.env`
+    - Single index per deployment, 12-factor style
+2. **`config.py` (`AppConfig`)** - CLI multi-index management
+    - Consumed by CLI data commands (`add`, `get`, `search`, `index ...`)
+    - Sourced from persistent JSON at `~/.iscc-search/config.json`
+    - Multiple named indexes (local or remote) with an "active" index, git-style workflow
+
+Don't conflate them. The serve command uses `options.py`; CLI data commands use `config.py`.
 
 ### Key Dependencies
 
-- `usearch==2.21.0` - Custom build from iscc.github.io (platform-specific wheels)
+- `iscc-usearch>=0.6.1` - Provides `NphdIndex` and the NPHD metric (previously vendored into this repo as
+    `nphd.py` / `metrics.py`; now an external package)
 - `iscc-core>=1.2.1` - ISCC code generation and manipulation
-- `numba>=0.60.0` - JIT compilation for custom metrics
-- `platformdirs>=4.3.8` - Cross-platform directory paths
-
-## Binary Vector Handling
-
-- **ISCC vectors are binary**: 64, 128, 192, or 256 bits (8, 16, 24, or 32 bytes)
-- **Usearch configuration**: `ndim` specifies bits (not bytes), use `dtype=ScalarKind.B1`
-- **Storage calculations**: Always verify bit-to-byte conversions
-- **Length signaling approach**: Default 264-bit vectors = 33 bytes (1 byte signal + 32 bytes max ISCC)
-- **Vector padding**: Use `pad_vectors()` to add length prefix and pad to uniform size
-- **Vector unpadding**: Use `unpad_vectors()` to extract original variable-length vectors
-
-## NPHD Metric Properties
-
-- NPHD (Normalized Prefix Hamming Distance) is a **valid metric** for prefix-compatible codes
-- Satisfies all metric axioms: non-negativity, identity, symmetry, triangle inequality
-- Correctly handles variable-length comparisons by normalizing over common prefix length
-- Standard Hamming distance does NOT work because it treats all differences equally regardless of vector length
+- `iscc-sct>=0.1.3` - Semantic content-code generator
+- `lmdb>=1.7.5` - Persistent key-value storage for entries, metadata, and inverted indexes
+- `msgspec>=0.19.0` - Fast (de)serialization for simprint models
+- `pysimdjson` - Fast JSON parsing
+- `fastapi`, `uvicorn[standard]`, `pydantic-settings` - REST API server
+- `typer`, `click`, `rich`, `tqdm` - CLI
+- `loguru` - Logging
+- `httpx` - Used by `remote/` client and by tests
+- `platformdirs` - Cross-platform default data paths
+- `simsimd` - SIMD-accelerated distance functions
 
 ## Code Standards
 
 - **Python versions**: 3.10 to 3.13
 - **Line length**: 120 characters
-- **Type checking**: Strict mypy configuration - all functions must use PEP 484 type comments
-- **Type comments**: Use `# type: (arg_types) -> return_type` format (see @~/.claude/docs/python.md)
-- **Linting**: Ruff with extensive rule sets for code quality, security, and style
-- **Testing**: pytest with 100% coverage requirement (fail_under = 100)
+- **Type hints**: Use PEP 484 **type comments**, not annotations in function signatures (exception: FastAPI and
+    Typer require annotations on route/command handlers — that's fine)
+- **Imports**: Module level, absolute only
+- **Linting**: Ruff with extensive rule sets
+- **Testing**: pytest with **100% coverage requirement** (`fail_under = 100`)
 - **Pre-commit**: Automated checks run on commit
 
 @~/.claude/docs/python.md
@@ -129,111 +158,70 @@ The project structure follows standard Python packaging conventions:
 ## Code Style Preferences
 
 1. **Prefer library functions over manual implementations**
-
     - Use `ic.decode_base64()` instead of manual base64 padding + `urlsafe_b64decode()`
-    - Leverage domain-specific libraries (iscc-core) for ISCC operations
-    - Example: `ic.decode_base64(s)[:8]` vs `urlsafe_b64decode(s + "=" * (-len(s) % 4))[:8]`
-
-2. **Use list comprehensions for building lists**
-
-    - Prefere concise comprehensions over explicit loops
-    - Bad: `pairs = []; for x in items: pairs.append(transform(x))`
-    - Good: `pairs = [transform(x) for x in items]`
+    - Leverage domain-specific libraries (iscc-core, iscc-usearch, iscc-sct) for ISCC operations
+2. **Use list comprehensions** over explicit append loops
+3. **Thin wrappers over manual reconstruction** - CLI/API layers should serialize internal results directly
+    rather than rebuilding schemas by hand
 
 ## Development Notes
 
-1. **Custom usearch build**: Project uses custom usearch wheels from iscc.github.io (not PyPI)
-2. **Test fixtures**: Use fixtures from `tests/conftest.py` for ISCC code generation
-3. **Numba JIT**: Functions decorated with `@njit` won't show in coverage - mark with `# pragma: no cover`
-4. **Type hints**: Always use PEP 484 type comments, not function annotations
-5. **Cross-platform**: Ensure all code works on Linux, macOS, and Windows
-6. **Type-only imports**: Ruff F401 doesn't recognize imports used only in PEP 484 type comments as valid usage
-    (known issue: [astral-sh/ruff#1619](https://github.com/astral-sh/ruff/issues/1619)). Workaround pattern:
+1. **Auto-generated schema**: `iscc_search/schema.py` is generated from `iscc_search/openapi/openapi.yaml` via
+    `uv run poe build-schema`. Don't hand-edit it — edit the YAML and rebuild.
+2. **Coverage omits**: `cli/*`, `schema.py`, `protocols/*`, and `server/playground.py` are excluded from
+    coverage (see `pyproject.toml [tool.coverage.run]`).
+3. **Test fixtures**: Use fixtures from `tests/conftest.py` for ISCC code generation
+4. **Type-only imports**: Ruff F401 doesn't recognize PEP 484 type-comment imports. Use the `TYPE_CHECKING`
+    pattern:
     ```python
     from typing import TYPE_CHECKING
 
     if TYPE_CHECKING:
         from iscc_search.schema import IsccEntry  # noqa: F401
     ```
-    This allows IDEs to resolve type references while preventing ruff from removing the imports
+5. **Cross-platform**: All code must work on Linux, macOS, and Windows. `options.get_index()` contains
+    Windows-specific URI path handling — preserve it when touching that code.
+6. **Logging**: Use `loguru` (`from loguru import logger`). Log config is in `iscc_search/log_config.json`.
+7. **Virtual environment**: Assume you are running inside an activated venv in the project directory — no need
+    to prefix every command with `uv run`.
 
 ## Testing
 
-- Write tests in `tests/` directory following pytest conventions
-- Use shared fixtures from `tests/conftest.py` for ISCC code generation
-- Run single test: `uv run pytest tests/test_foo.py::test_function_name`
-- Run all tests with coverage: `uv run poe test`
-- Coverage requirement is 100% - all code must be tested
-- Mark JIT-compiled code with `# pragma: no cover` as it's not traceable
-- Tests include: unit tests, integration tests, edge cases, and usearch API validation
+- Tests live under `tests/` and follow the pattern `test_<module>_<submodule>.py`
+- Run all: `uv run poe test` (parallel via `pytest-xdist`)
+- Single test: `uv run pytest tests/test_indexes_lmdb_index.py::test_foo`
+- **Coverage must stay at 100%** — adding new code means adding matching tests
+- Prefer real data and fixtures over mocks. If a test requires heavy mocking, propose a refactor instead.
 
-## usearch Library Deep Dive
+## External Library Documentation (DeepWiki)
 
-### Memory Reminder
+Many libraries have nuanced details not in general training data. Use `mcp__deepwiki__ask_question` to verify
+behavior before implementing:
 
-**IMPORTANT**: When implementing NPHD or custom metrics, ALWAYS use `mcp__deepwiki__ask_question` with
-repository `unum-cloud/usearch` to verify:
+- usearch → `unum-cloud/usearch`
+- iscc-core → `iscc/iscc-core`
+- lmdb (Python bindings) → `jnwatson/py-lmdb`
+- lmdb (C library) → `LMDB/lmdb`
+- simdjson → `TkTech/pysimdjson`
+- fastapi → `fastapi/fastapi`
+- typer → `fastapi/typer`
+- rich → `Textualize/rich`
+- uvicorn → `Kludex/uvicorn`
+- loguru → `Delgan/loguru`
+- msgspec → `jcrist/msgspec`
 
-- Binary vector handling (`ScalarKind.B1`, bit packing)
-- Custom metric implementation (`CompiledMetric`, Numba requirements)
-- Index initialization parameters for binary data
-- Performance implications of custom metrics
+## Stability Policy
 
-Common pitfalls to avoid:
-
-- Confusing `ndim` (number of bits) with bytes
-- Assuming built-in metrics work for variable-length vectors
-- Not using bit-packing for binary data
-
-### usearch Key Findings & Notes
-
-*(This section will be updated as I learn more about usearch)*
-
-#### Core Library Information
-
-- Repository: `unum-cloud/usearch`
-- Current project dependency: `usearch==2.21.0` (custom build)
-- Primary use case: High-performance vector similarity search
-- Language: C++ with Python bindings
-
-#### Important Actionable Findings
-
-- **Custom wheels**: Project uses custom usearch 2.21.0 builds hosted at iscc.github.io
-- **Binary vectors**: Use `ScalarKind.B1` and set `ndim` to bit count (not bytes)
-- **Custom metrics**: Use `CompiledMetric` with Numba `@cfunc` for custom distance functions
-- **Length signaling**: First byte stores actual vector length for variable-length support
-- **Batch operations**: Index supports batch add/search with multiple vectors
-- **Virtual Environment**: Assume you are running within an activated virtual environment
-- **Command prefix**: You don't need to prefix commands with `uv run` with an activated virtual environment
-- **Working directory**: Assume your current working directory is the project directory
-
-## Remember
-
-For now ISCC-SEARCH is unreleased work in progress and we do not care about backwards compatibility neither do
-we need to document breaking changes. We are free to change anything at any time if it helps to improve the
-project architecture, desing, maintainability, testability, or implementation.
-
-- Use loguru for logging
-- Many current and nuanced details about specific python libraries may not be known to you yet. Whenever you
-    encounter a problem, use the deepwiki mcp to ask questions about these libraries:
-    - usearch -> unum-cloud/usearch
-    - iscc-core -> iscc/iscc-core
-    - lmdb -> jnwatson/py-lmdb (python bindings)
-    - lmdb -> LMDB/lmdb (C library)
-    - simdjson -> TkTech/pysimdjson
-    - fastapi -> fastapi/fastapi
-    - typer -> fastapi/typer
-    - rich -> Textualize/rich
-    - uvicorn -> Kludex/uvicorn
-    - loguru -> Delgan/loguru
-    - msgspec -> jcrist/msgspec
+iscc-search is unreleased work-in-progress. We do **not** care about backwards compatibility and we do **not**
+need to document breaking changes. Change anything that improves architecture, design, maintainability,
+testability, or implementation.
 
 @.claude/learnings.md
 
 ## Use the MAP
 
-If you need a quick overview of the project structure, read the MAP from .claude/map.md to get a high-level
-overview of all directories, files, functions, and classes.
+For a quick overview of the project structure, read `.claude/map.md` — it lists all directories, files,
+functions, and classes. If the MAP looks out of date relative to the code you're reading, trust the code.
 
 ## Command Execution
 

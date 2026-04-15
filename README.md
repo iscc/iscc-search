@@ -11,27 +11,32 @@
 >
 > The API and features are subject to significant changes. Use at your own risk.
 
-High-performance ISCC similarity search engine for variable-length binary [ISCC](https://iscc.codes) codes with
-fast approximate nearest neighbor search.
+High-performance similarity search engine for [ISCC](https://iscc.codes) (International Standard Content Code).
+Ships as a Python package, a CLI, and a FastAPI REST server, with pluggable backends for in-memory, LMDB, and
+HNSW-accelerated indexes.
 
 - **Github repository**: <https://github.com/iscc/iscc-search/>
 - **Documentation** <https://search.iscc.codes/>
 
 ## Features
 
-- Fast approximate nearest neighbor search (ANNS) for variable-length binary vectors
-- Custom NPHD (Normalized Prefix Hamming Distance) metric optimized for ISCC codes
-- Support for 64-256 bit vectors (8-32 bytes)
-- Built on [usearch](https://github.com/unum-cloud/usearch) with JIT-compiled Numba metrics
-- Cross-platform support (Linux, macOS, Windows)
-- Python 3.10-3.13 support
+- REST API server (FastAPI) for indexing and searching ISCC assets
+- CLI (`iscc-search`) for managing multiple local or remote indexes and ingesting assets
+- Protocol-based backend abstraction with three implementations:
+    - `memory://` — in-memory, no persistence (tests and demos)
+    - `lmdb:///path` — LMDB-backed persistent storage with bidirectional prefix search
+    - `usearch:///path` — HNSW + LMDB for high-performance approximate nearest neighbor search
+- Variable-length ISCC-UNIT indexing using the NPHD metric (via
+    [iscc-usearch](https://github.com/iscc/iscc-usearch))
+- Granular ISCC-SIMPRINT search for fine-grained content matching
+- Cross-platform (Linux, macOS, Windows)
+- Python 3.10–3.13
 
 ## What is ISCC?
 
 The [International Standard Content Code (ISCC)](https://iscc.codes) is a similarity-preserving content
 identifier for digital media. ISCC codes are variable-length binary vectors that enable efficient similarity
-search across different media types. This library provides a specialized vector database for storing and
-querying ISCC codes at scale.
+search across different media types. This project provides the indexing and search engine for those codes.
 
 ## Installation
 
@@ -39,7 +44,7 @@ querying ISCC codes at scale.
 pip install iscc-search
 ```
 
-For development installation:
+For development:
 
 ```bash
 git clone https://github.com/iscc/iscc-search.git
@@ -49,50 +54,65 @@ uv sync
 
 ## Quick Start
 
-```python
-from iscc_search import NphdIndex
-import numpy as np
+### Run the server
 
-# Create index for up to 256-bit vectors
-index = NphdIndex(max_dim=256)
+```bash
+# Start the REST API server (development mode with auto-reload)
+iscc-search serve --dev
 
-# Add some binary vectors with integer keys
-vectors = [
-    np.array([18, 52, 86, 120], dtype=np.uint8),  # 32-bit vector
-    np.array([171, 205, 239], dtype=np.uint8),  # 24-bit vector
-    np.array([17, 34, 51, 68, 85], dtype=np.uint8),  # 40-bit vector
-]
-keys = [1, 2, 3]
-index.add(keys, vectors)
-
-# Search for similar vectors
-query = np.array([18, 52, 86, 121], dtype=np.uint8)
-matches = index.search(query, k=2)
-
-print(f"Found {len(matches.keys)} matches")
-print(f"Keys: {matches.keys}")
-print(f"Distances: {matches.distances}")
+# Or production mode
+iscc-search serve --host 0.0.0.0 --port 8000
 ```
 
-## API Overview
+Interactive API docs are available at `http://localhost:8000/docs`.
 
-### NphdIndex
+### Use the CLI
 
-The main index class for ANNS with variable-length binary vectors.
+```bash
+# Register an index configuration (local or remote)
+iscc-search index add my-index --uri usearch:///path/to/data
+iscc-search index use my-index
 
-```python
-NphdIndex(max_dim=256, **kwargs)
+# Add assets, search, retrieve
+iscc-search add asset.json
+iscc-search search asset.json
+iscc-search get ISCC:KACYPXW557...
 ```
 
-- `max_dim`: Maximum vector dimension in bits (default: 256)
-- `**kwargs`: Additional arguments passed to usearch Index
+### Configure the server
 
-#### Methods
+The server reads its configuration from environment variables prefixed with `ISCC_SEARCH_` (or a `.env` file):
 
-- `add(keys, vectors)`: Add vectors with integer keys
-- `search(query, k)`: Search for k nearest neighbors
-- `get(keys)`: Retrieve vectors by keys
-- `remove(keys)`: Remove vectors by keys
+| Variable                   | Default          | Description                                                  |
+| -------------------------- | ---------------- | ------------------------------------------------------------ |
+| `ISCC_SEARCH_INDEX_URI`    | `usearch:///...` | Backend URI (`memory://`, `lmdb:///path`, `usearch:///path`) |
+| `ISCC_SEARCH_HOST`         | `0.0.0.0`        | Server bind host                                             |
+| `ISCC_SEARCH_PORT`         | `8000`           | Server bind port                                             |
+| `ISCC_SEARCH_API_SECRET`   | *(unset)*        | Optional API key; when unset the API is public               |
+| `ISCC_SEARCH_CORS_ORIGINS` | `*`              | Comma-separated CORS origins                                 |
+| `ISCC_SEARCH_LOG_LEVEL`    | `info`           | Loguru log level                                             |
+
+Additional knobs control HNSW parameters, shard sizes, match thresholds, and scoring — see
+`iscc_search/options.py` or the [deployment guide](docs/deployment.md) for the full list.
+
+## Architecture
+
+iscc-search uses a protocol-based design so the CLI, REST API, and library users all talk to the same
+`IsccIndexProtocol` interface regardless of backend:
+
+```
+  CLI / REST API / Remote client
+              │
+              ▼
+     IsccIndexProtocol
+              │
+    ┌─────────┼─────────┐
+    ▼         ▼         ▼
+  memory    lmdb      usearch
+            (LMDB)    (HNSW + LMDB)
+```
+
+See [docs/architecture.md](docs/architecture.md) for the full picture.
 
 ## Development
 
@@ -104,56 +124,47 @@ This project uses [uv](https://docs.astral.sh/uv/) for package management and
 - Python 3.10 or higher
 - [uv](https://docs.astral.sh/uv/) package manager
 
-### Available Commands
+### Common tasks
 
 ```bash
-uv run poe format-code      # Format Python code with ruff
-uv run poe format-markdown  # Format markdown files
-uv run poe format           # Format all files
-uv run poe test             # Run tests with coverage (requires 100%)
+uv run poe build            # Rebuild schema.py + openapi.json and validate
+uv run poe format           # Format code and markdown
+uv run poe test             # Run tests with coverage (must stay at 100%)
+uv run poe check-complexity # Radon complexity report
 uv run poe precommit        # Run pre-commit hooks
-uv run poe all              # Format and test
+uv run poe all              # Build, format, test, and complexity
 ```
 
-### Running Tests
+### Running tests
 
 ```bash
-# Run all tests with coverage
+# Run full test suite in parallel with coverage
 uv run poe test
 
-# Run specific test
-uv run pytest tests/test_nphd.py::test_pad_vectors
-
-# Run tests in watch mode
-uv run pytest --watch
+# Run a single test
+uv run pytest tests/test_indexes_usearch_index.py::test_foo
 ```
 
-## Technical Details
+## Technical Notes
 
 ### NPHD Metric
 
 The Normalized Prefix Hamming Distance (NPHD) is a valid metric specifically designed for variable-length
-prefix-compatible codes like ISCC. It normalizes the Hamming distance by the length of the common prefix,
-enabling meaningful similarity comparisons between vectors of different lengths.
-
-Unlike standard Hamming distance, NPHD:
+prefix-compatible codes like ISCC. Unlike standard Hamming distance, NPHD:
 
 - Correctly handles variable-length comparisons
-- Normalizes over common prefix length
+- Normalizes over the common prefix length
 - Satisfies all metric axioms (non-negativity, identity, symmetry, triangle inequality)
 
-### Binary Vector Format
+The implementation lives in the external [iscc-usearch](https://github.com/iscc/iscc-usearch) package, which
+iscc-search depends on for its HNSW backend.
 
-Vectors are stored as packed binary arrays (`np.uint8`) with an internal length prefix:
+### Storage
 
-- Each vector is prefixed with a length byte
-- Vectors are padded to uniform size for efficient indexing
-- `pad_vectors()` and `unpad_vectors()` handle conversions automatically
-
-### Custom usearch Build
-
-This project uses custom usearch 2.21.0 wheels with platform-specific builds hosted at iscc.github.io to ensure
-consistent behavior across platforms.
+- **LMDB** is used for durable key-value storage: ISCC entries, metadata, and the inverted prefix-search index.
+- **usearch** (HNSW) is used for approximate nearest-neighbor search over ISCC-UNITs and ISCC-SIMPRINTS.
+- Multi-worker deployments are **not** supported with the usearch backend — see
+    [docs/deployment.md](docs/deployment.md) for details.
 
 ## License
 

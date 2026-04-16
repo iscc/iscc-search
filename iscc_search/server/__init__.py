@@ -1,14 +1,57 @@
 """FastAPI server for ISCC-Search API."""
 
+import atexit
+import sys
 import typing  # noqa: F401
 from contextlib import asynccontextmanager
 from pathlib import Path
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-from iscc_search.settings import get_index, search_settings
+from loguru import logger
+from iscc_search import __version__
+from iscc_search.options import get_index, search_opts
 from iscc_search.protocols.index import IsccIndexProtocol  # noqa: F401
+
+
+# Configure loguru for production logging
+logger.remove()  # Remove default handler
+logger.add(
+    sys.stdout,
+    format="{time:YYYY-MM-DD HH:mm:ss.SSS} | {level: <7} | {name}:{function}:{line} - {message}",
+    level="INFO",
+    colorize=False,  # Disable colors for clean Docker logs
+)
+
+
+def init_sentry():
+    # type: () -> bool
+    """
+    Initialize Sentry error tracking if ISCC_SEARCH_SENTRY_DSN is configured.
+
+    Idempotent: a missing DSN simply skips initialization (returns False).
+    Called once at module import time so exceptions from any request path are
+    captured, including the ones that do not go through a FastAPI handler.
+
+    :return: True if Sentry was initialized, False otherwise.
+    """
+    if not search_opts.sentry_dsn:
+        return False
+
+    import sentry_sdk
+    from sentry_sdk.integrations.fastapi import FastApiIntegration
+
+    sentry_sdk.init(
+        dsn=search_opts.sentry_dsn,
+        integrations=[FastApiIntegration()],
+        traces_sample_rate=search_opts.sentry_traces_sample_rate,
+    )
+    logger.info("Sentry error tracking initialized")
+    return True
+
+
+init_sentry()
 
 
 @asynccontextmanager
@@ -17,17 +60,30 @@ async def lifespan(app):  # type: ignore
     """
     Manage ISCC index lifecycle across FastAPI app startup and shutdown.
 
-    On startup: Creates index instance via factory and stores in app.state.
-    On shutdown: Properly closes index and releases resources.
+    On startup: Creates index instance, stores in app.state, and registers atexit
+    handler as defense-in-depth for process exit scenarios not covered by lifespan
+    (e.g. unhandled exceptions, SIGTERM during request processing).
+    On shutdown: Closes index and releases resources.
 
     :param app: FastAPI application instance
     :yield: Control to FastAPI application
     """
     # Startup: Create and store index instance
-    app.state.index = get_index()
+    index = get_index()
+    app.state.index = index
+
+    # Capture bound method reference for consistent register/unregister
+    close_callback = index.close
+    atexit.register(close_callback)
+
     yield
-    # Shutdown: Close index and cleanup resources
-    app.state.index.close()
+
+    # Shutdown: Always unregister atexit handler, even if close() fails
+    logger.info("Lifespan shutdown: closing index...")
+    try:
+        index.close()
+    finally:
+        atexit.unregister(close_callback)
 
 
 def get_index_from_state(request: Request):
@@ -48,7 +104,7 @@ app = FastAPI(
     lifespan=lifespan,
     title="ISCC-Search API",
     description="A Scalable Nearest Neighbor Search Multi-Index for the International Standard Content Code (ISCC)",
-    version="0.1.0",
+    version=__version__,
     docs_url=None,  # Disable default docs
     redoc_url=None,  # Disable default redoc
     openapi_url=None,  # We'll serve our own OpenAPI spec
@@ -57,7 +113,7 @@ app = FastAPI(
 # Configure CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=search_settings.cors_origins,
+    allow_origins=search_opts.cors_origins_list,
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -168,6 +224,44 @@ def root():
         "version": app.version,
         "docs": "/docs",
     }
+
+
+@app.get("/healthz", include_in_schema=False)
+def healthz():
+    # type: () -> dict
+    """
+    Liveness probe: 200 as long as the process can respond.
+
+    Used by orchestrators (ECS, Kubernetes, ALB) to decide whether to restart the
+    container. It must not depend on index state — only on the process being alive.
+    """
+    return {"status": "ok"}
+
+
+@app.get("/readyz", include_in_schema=False)
+def readyz(request: Request):
+    # type: (Request) -> JSONResponse
+    """
+    Readiness probe: 200 only when the index is initialized and list_indexes() works.
+
+    Used by load balancers and orchestrators to route traffic only to ready
+    instances. Returns 503 with a structured reason otherwise.
+    """
+    index = getattr(request.app.state, "index", None)
+    if index is None:
+        return JSONResponse(
+            status_code=503,
+            content={"status": "not_ready", "reason": "index_not_initialized"},
+        )
+    try:
+        index.list_indexes()
+    except Exception as exc:
+        logger.warning(f"/readyz: list_indexes() failed: {exc}")
+        return JSONResponse(
+            status_code=503,
+            content={"status": "not_ready", "reason": "list_indexes_failed"},
+        )
+    return JSONResponse(status_code=200, content={"status": "ready"})
 
 
 # Include API routers

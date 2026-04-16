@@ -1,63 +1,42 @@
 [project]
 name = "iscc-search"
-version = "0.0.1"
+dynamic = ["version"]
 description = "High-performance ISCC similarity search engine"
 authors = [{ name = "Titusz Pan", email = "tp@py7.de" }]
 readme = "README.md"
+license = "Apache-2.0"
 keywords = ['python']
-requires-python = ">=3.10,<4.0"
+requires-python = ">=3.11,<4.0"
 classifiers = [
+    "License :: OSI Approved :: Apache Software License",
     "Intended Audience :: Developers",
     "Programming Language :: Python",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
 dependencies = [
     "iscc-core>=1.2.1",
     "lmdb>=1.7.5",
     "msgspec>=0.19.0",
-    "numba>=0.60.0",
     "platformdirs>=4.3.8",
-    # Python 3.10
-    "usearch @ https://iscc.github.io/usearch/usearch/usearch-2.21.0-cp310-cp310-macosx_10_9_universal2.whl ; sys_platform == 'darwin' and python_version == '3.10'",
-    "usearch @ https://iscc.github.io/usearch/usearch/usearch-2.21.0-cp310-cp310-manylinux_2_26_x86_64.manylinux_2_28_x86_64.whl ; sys_platform == 'linux' and platform_machine == 'x86_64' and python_version == '3.10'",
-    "usearch @ https://iscc.github.io/usearch/usearch/usearch-2.21.0-cp310-cp310-manylinux_2_26_aarch64.manylinux_2_28_aarch64.whl ; sys_platform == 'linux' and platform_machine == 'aarch64' and python_version == '3.10'",
-    "usearch @ https://iscc.github.io/usearch/usearch/usearch-2.21.0-cp310-cp310-win_amd64.whl ; sys_platform == 'win32' and platform_machine == 'AMD64' and python_version == '3.10'",
-    "usearch @ https://iscc.github.io/usearch/usearch/usearch-2.21.0-cp310-cp310-win_arm64.whl ; sys_platform == 'win32' and platform_machine == 'ARM64' and python_version == '3.10'",
-    # Python 3.11
-    "usearch @ https://iscc.github.io/usearch/usearch/usearch-2.21.0-cp311-cp311-macosx_10_9_universal2.whl ; sys_platform == 'darwin' and python_version == '3.11'",
-    "usearch @ https://iscc.github.io/usearch/usearch/usearch-2.21.0-cp311-cp311-manylinux_2_26_x86_64.manylinux_2_28_x86_64.whl ; sys_platform == 'linux' and platform_machine == 'x86_64' and python_version == '3.11'",
-    "usearch @ https://iscc.github.io/usearch/usearch/usearch-2.21.0-cp311-cp311-manylinux_2_26_aarch64.manylinux_2_28_aarch64.whl ; sys_platform == 'linux' and platform_machine == 'aarch64' and python_version == '3.11'",
-    "usearch @ https://iscc.github.io/usearch/usearch/usearch-2.21.0-cp311-cp311-win_amd64.whl ; sys_platform == 'win32' and platform_machine == 'AMD64' and python_version == '3.11'",
-    "usearch @ https://iscc.github.io/usearch/usearch/usearch-2.21.0-cp311-cp311-win_arm64.whl ; sys_platform == 'win32' and platform_machine == 'ARM64' and python_version == '3.11'",
-    # Python 3.12
-    "usearch @ https://iscc.github.io/usearch/usearch/usearch-2.21.0-cp312-cp312-macosx_10_13_universal2.whl ; sys_platform == 'darwin' and python_version == '3.12'",
-    "usearch @ https://iscc.github.io/usearch/usearch/usearch-2.21.0-cp312-cp312-manylinux_2_26_x86_64.manylinux_2_28_x86_64.whl ; sys_platform == 'linux' and platform_machine == 'x86_64' and python_version == '3.12'",
-    "usearch @ https://iscc.github.io/usearch/usearch/usearch-2.21.0-cp312-cp312-manylinux_2_26_aarch64.manylinux_2_28_aarch64.whl ; sys_platform == 'linux' and platform_machine == 'aarch64' and python_version == '3.12'",
-    "usearch @ https://iscc.github.io/usearch/usearch/usearch-2.21.0-cp312-cp312-win_amd64.whl ; sys_platform == 'win32' and platform_machine == 'AMD64' and python_version == '3.12'",
-    "usearch @ https://iscc.github.io/usearch/usearch/usearch-2.21.0-cp312-cp312-win_arm64.whl ; sys_platform == 'win32' and platform_machine == 'ARM64' and python_version == '3.12'",
-    # Python 3.13
-    "usearch @ https://iscc.github.io/usearch/usearch/usearch-2.21.0-cp313-cp313-macosx_10_13_universal2.whl ; sys_platform == 'darwin' and python_version == '3.13'",
-    "usearch @ https://iscc.github.io/usearch/usearch/usearch-2.21.0-cp313-cp313-manylinux_2_26_x86_64.manylinux_2_28_x86_64.whl ; sys_platform == 'linux' and platform_machine == 'x86_64' and python_version == '3.13'",
-    "usearch @ https://iscc.github.io/usearch/usearch/usearch-2.21.0-cp313-cp313-manylinux_2_26_aarch64.manylinux_2_28_aarch64.whl ; sys_platform == 'linux' and platform_machine == 'aarch64' and python_version == '3.13'",
-    "usearch @ https://iscc.github.io/usearch/usearch/usearch-2.21.0-cp313-cp313-win_amd64.whl ; sys_platform == 'win32' and platform_machine == 'AMD64' and python_version == '3.13'",
-    "usearch @ https://iscc.github.io/usearch/usearch/usearch-2.21.0-cp313-cp313-win_arm64.whl ; sys_platform == 'win32' and platform_machine == 'ARM64' and python_version == '3.13'",
+    "iscc-usearch>=0.6.1",
     "pysimdjson (>=7.0.2,<8.0.0)",
     "loguru>=0.7.3",
-    "click>=8.3.0",
-    "tqdm>=4.67.1",
     "typer>=0.20.0",
     "rich>=13.7.0",
     "fastapi>=0.120.0",
-    "pyyaml>=6.0.3",
     "uvicorn[standard]>=0.38.0",
     "pydantic-settings>=2.0.0",
     "httpx>=0.28.1",
-    "simsimd>=6.5.3",
+    "iscc-sct>=0.1.3",
+    "python-dotenv>=1.2.1",
+    "sentry-sdk[fastapi]>=2.0",
+    "huggingface-hub>=1.10",
+    "pyarrow>=19",
 ]
 
 [project.urls]
@@ -74,14 +53,7 @@ dev = [
     "pytest-cov>=4.0.0",
     "poethepoet>=0.24.0",
     "ruff>=0.11.5",
-    "mkdocs>=1.4.2",
-    "mkdocs-material>=8.5.10",
     "mkdocstrings[python]>=0.26.1",
-    "mdformat>=0.7.22",
-    "mdformat-mkdocs>=4.3.0",
-    "mdformat-footnote>=0.1.1",
-    "mdformat-tables>=1.0.0",
-    "mdformat-gfm-alerts>=2.0.0",
     "prek>=0.2.9",
     "datamodel-code-generator>=0.35.0",
     "httpx>=0.28.1",
@@ -89,17 +61,29 @@ dev = [
     "pytest-xdist>=3.8.0",
     "radon>=6.0.1",
     "openapi-spec-validator>=0.7.2",
-]
-semantic = [
-    "iscc-sct>=0.1.3",
+    "zensical>=0.0.33",
 ]
 
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling", "hatch-vcs"]
 build-backend = "hatchling.build"
+
+[tool.hatch.version]
+source = "vcs"
+fallback-version = "0.0.0"
+
+[tool.hatch.version.raw-options]
+version_scheme = "guess-next-dev"
+local_scheme = "no-local-version"
 
 [tool.hatch.build.targets.wheel]
 packages = ["iscc_search"]
+include = [
+    "iscc_search/**/*.py",
+    "iscc_search/log_config.json",
+    "iscc_search/openapi/*.json",
+    "iscc_search/openapi/*.yaml",
+]
 
 [tool.hatch.metadata]
 allow-direct-references = true
@@ -125,7 +109,7 @@ fail_under = 100
 [tool.coverage.run]
 branch = true
 source = ["iscc_search"]
-omit = ["iscc_search/cli/*", "iscc_search/schema.py", "iscc_search/simprint/*", "iscc_search/protocols/*", "iscc_search/server/playground.py"]
+omit = ["iscc_search/cli/*", "iscc_search/schema.py", "iscc_search/protocols/*", "iscc_search/server/playground.py"]
 
 [tool.datamodel-codegen]
 input = "iscc_search/openapi/openapi.yaml"
@@ -151,11 +135,12 @@ build-schema = { shell = "uv run datamodel-codegen && uv run ruff format iscc_se
 build-openapi = { shell = "uv run python scripts/bundle_openapi.py", help = "Bundle modular OpenAPI files into openapi.json" }
 build-validate = { shell = "uv run openapi-spec-validator iscc_search/openapi/openapi.json", help = "Validate bundled OpenAPI specification" }
 
-format = { sequence = ["format-code", "format-markdown",], help = "Format all files" }
+format = { sequence = ["format-code",], help = "Format all files" }
 format-code = { shell = "uv run ruff format .", help = "Format code files" }
-format-markdown = { shell = "uv run mdformat --end-of-line lf --wrap 112 --number *.md docs", help = "Format markdown files" }
 
 precommit = { shell = "uv run prek run"}
 test = { shell = "uv run python -m pytest -n auto --tb=line --no-header -q --cov --cov-config=pyproject.toml --cov-report=xml --cov-report=term-missing", help = "Test the code with pytest" }
 check-complexity = { shell = "uv run radon cc --min C --show-complexity --average iscc_search/", help = "Check code complexity with radon" }
+docs-serve = { cmd = "zensical serve", help = "Serve documentation locally" }
+docs-build = { sequence = [{ cmd = "zensical build" }, { cmd = "python scripts/gen_llms_full.py" }], help = "Build documentation site" }
 all = { sequence = ["build", "format", "test", "check-complexity"], help = "Run all tasks" }

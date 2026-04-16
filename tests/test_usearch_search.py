@@ -675,16 +675,14 @@ def test_search_batch_provides_statistics():
 # Tests for edge cases and special scenarios
 
 
-def test_search_with_count_zero_causes_segfault():
-    """
-    Searching with count=0 causes segmentation fault (usearch bug).
+def test_search_with_count_zero_raises_value_error():
+    """Searching with count=0 raises ValueError instead of segfaulting."""
+    idx = Index(ndim=32, metric=MetricKind.Hamming, dtype=ScalarKind.B1)
+    idx.add(1, np.array([178, 204, 60, 240], dtype=np.uint8))
 
-    This test documents the known issue that usearch crashes when count=0.
-    The test is skipped to prevent test suite crashes.
-
-    Related: This should be reported as a bug to unum-cloud/usearch
-    """
-    pytest.skip("count=0 causes segmentation fault in usearch")
+    query = np.array([178, 204, 60, 240], dtype=np.uint8)
+    with pytest.raises(ValueError, match="`count` must be >= 1"):
+        idx.search(query, count=0)
 
 
 def test_search_with_count_one_returns_single_best_match():

@@ -789,10 +789,10 @@ def test_usearch_index_search_returns_none_metadata_when_asset_not_stored(usearc
     assert result.global_matches[0].metadata is None  # Asset not in __assets__ db
 
 
-def test_usearch_index_filters_low_confidence_matches(usearch_index, sample_iscc_ids, monkeypatch):
-    """Test that matches below MATCH_THRESHOLD are filtered out."""
-    # Temporarily set a high threshold that will filter out non-perfect matches
-    monkeypatch.setattr("iscc_search.indexes.usearch.index.UsearchIndex.MATCH_THRESHOLD", 0.99)
+def test_usearch_index_filters_low_confidence_matches(tmp_path, sample_iscc_ids):
+    """Test that matches below match_threshold_units are filtered out."""
+    # Create index with a high threshold that will filter out non-perfect matches
+    idx = UsearchIndex(tmp_path / "test_threshold", realm_id=0, max_dim=256, match_threshold_units=0.99)
 
     # Add an asset
     content_unit = ic.gen_text_code_v0("Original content for testing")["iscc"]
@@ -803,12 +803,13 @@ def test_usearch_index_filters_low_confidence_matches(usearch_index, sample_iscc
         units=[instance_unit, content_unit],
         metadata={"name": "Test Asset"},
     )
-    usearch_index.add_assets([asset])
+    idx.add_assets([asset])
 
     # Search with slightly different content (will match but score < 0.99)
     different_content_unit = ic.gen_text_code_v0("Different content for testing")["iscc"]
     query = IsccQuery(units=[different_content_unit])
-    result = usearch_index.search_assets(query, limit=10)
+    result = idx.search_assets(query, limit=10)
 
     # Should have no matches because score is below 0.99 threshold
     assert len(result.global_matches) == 0
+    idx.close()

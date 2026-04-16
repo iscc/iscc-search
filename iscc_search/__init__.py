@@ -8,9 +8,6 @@ __author__ = "iscc"
 __version__ = metadata.version(__package_name__)
 dirs = PlatformDirs(appname=__package_name__, appauthor=__author__)
 
-from iscc_search.settings import SearchSettings, search_settings  # noqa: E402
-from iscc_search.nphd import NphdIndex  # noqa: E402
-from iscc_search.unit import UnitIndex  # noqa: E402
-from iscc_search.instance import InstanceIndex  # noqa: E402
+from iscc_search.options import SearchOptions, search_opts  # noqa: E402
 
-__all__ = ["NphdIndex", "UnitIndex", "InstanceIndex", "SearchSettings", "search_settings"]
+__all__ = ["SearchOptions", "search_opts"]

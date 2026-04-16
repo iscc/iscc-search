@@ -1,8 +1,8 @@
 """
 Msgspec models for simprint search results.
 
-These concrete implementations of the protocol types provide efficient serialization
-and clean type checking for simprint index implementations.
+These concrete types provide efficient serialization and clean type checking
+for simprint index implementations.
 """
 
 import msgspec
@@ -27,28 +27,6 @@ class SimprintMatchRaw(msgspec.Struct):
     queried: int  # Number of simprints in the query
     matches: int  # Number of query simprints that found matches
     chunks: list[MatchedChunkRaw] | None  # Individual chunk matches (None when detailed=False)
-
-
-class SimprintRaw(msgspec.Struct):
-    """Raw simprint representation for a content chunk."""
-
-    simprint: bytes  # Binary simprint digest of the chunk
-    offset: int  # Byte offset where chunk starts in the asset
-    size: int  # Size in bytes of the chunk
-
-
-class SimprintEntryRaw(msgspec.Struct):
-    """Entry containing all simprints of a specific type for a single asset."""
-
-    iscc_id_body: bytes  # Binary ISCC-ID body (8 bytes, without header)
-    simprints: list[SimprintRaw]  # List of simprints with location metadata
-
-
-class SimprintEntryMulti(msgspec.Struct):
-    """Entry containing simprints of multiple types for a single asset."""
-
-    iscc_id: bytes  # Full ISCC-ID digest (10 bytes: 2-byte header + 8-byte body)
-    simprints: dict[str, list[SimprintRaw]]  # Simprints grouped by type
 
 
 class TypeMatchResult(msgspec.Struct):

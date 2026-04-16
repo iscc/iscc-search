@@ -12,11 +12,18 @@ repos:
       - id: check-yaml
       - id: mixed-line-ending
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.14.0
+    rev: v0.15.1
     hooks:
       - id: ruff-format
       - id: ruff-check
         args: [ --fix ]
+  - repo: https://github.com/executablebooks/mdformat
+    rev: 1.0.0
+    hooks:
+      - id: mdformat
+        exclude: docs/reference/api\.md
+        additional_dependencies:
+          - "mdformat-mkdocs[recommended]"
   - repo: https://github.com/python-openapi/openapi-spec-validator
     rev: 0.7.2
     hooks:

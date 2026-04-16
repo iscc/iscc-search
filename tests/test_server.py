@@ -3,7 +3,9 @@
 from unittest.mock import patch, MagicMock
 import pytest
 from fastapi.testclient import TestClient
-from iscc_search.server import app, custom_docs, root
+from iscc_search import __version__
+from iscc_search.options import search_opts
+from iscc_search.server import app, custom_docs, init_sentry, root
 
 
 @pytest.fixture
@@ -18,24 +20,24 @@ def client():
 
     :return: FastAPI TestClient instance
     """
-    import iscc_search.settings
+    import iscc_search.options
 
     # Save original URI and set to memory://
-    original_uri = iscc_search.settings.search_settings.index_uri
-    iscc_search.settings.search_settings.index_uri = "memory://"
+    original_uri = iscc_search.options.search_opts.index_uri
+    iscc_search.options.search_opts.index_uri = "memory://"
 
     try:
         with TestClient(app) as client:
             yield client
     finally:
         # Restore original URI
-        iscc_search.settings.search_settings.index_uri = original_uri
+        iscc_search.options.search_opts.index_uri = original_uri
 
 
 def test_app_instance():
     """Test FastAPI app instance is properly configured."""
     assert app.title == "ISCC-Search API"
-    assert app.version == "0.1.0"
+    assert app.version == __version__
     assert app.docs_url is None
     assert app.redoc_url is None
     assert app.openapi_url is None
@@ -48,7 +50,7 @@ def test_root_endpoint(client):
     assert response.status_code == 200
     data = response.json()
     assert data["title"] == "ISCC-Search API"
-    assert data["version"] == "0.1.0"
+    assert data["version"] == __version__
     assert data["docs"] == "/docs"
     assert "description" in data
 
@@ -83,7 +85,7 @@ def test_root_function():
     result = root()
     assert isinstance(result, dict)
     assert result["title"] == "ISCC-Search API"
-    assert result["version"] == "0.1.0"
+    assert result["version"] == __version__
     assert result["docs"] == "/docs"
 
 
@@ -91,6 +93,78 @@ def test_openapi_static_files(client):
     """Test that OpenAPI static files are accessible."""
     response = client.get("/openapi/openapi.yaml")
     assert response.status_code == 200
+
+
+def test_healthz_endpoint(client):
+    """Liveness probe always returns 200 with status ok."""
+    response = client.get("/healthz")
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok"}
+
+
+def test_readyz_endpoint_ready(client):
+    """Readiness probe returns 200 when the index is initialized and list_indexes works."""
+    response = client.get("/readyz")
+    assert response.status_code == 200
+    assert response.json() == {"status": "ready"}
+
+
+def test_readyz_endpoint_index_not_initialized(client):
+    """Readiness probe returns 503 when app.state.index is missing."""
+    original_index = app.state.index
+    try:
+        del app.state.index
+        response = client.get("/readyz")
+        assert response.status_code == 503
+        body = response.json()
+        assert body["status"] == "not_ready"
+        assert body["reason"] == "index_not_initialized"
+    finally:
+        app.state.index = original_index
+
+
+def test_init_sentry_skips_when_dsn_unset(monkeypatch):
+    """init_sentry() is a no-op when ISCC_SEARCH_SENTRY_DSN is not configured."""
+    monkeypatch.setattr(search_opts, "sentry_dsn", None)
+    assert init_sentry() is False
+
+
+def test_init_sentry_initializes_when_dsn_set(monkeypatch):
+    """init_sentry() calls sentry_sdk.init with the configured DSN and sample rate."""
+    import sentry_sdk
+
+    calls = []
+
+    def fake_init(**kwargs):
+        calls.append(kwargs)
+
+    monkeypatch.setattr(sentry_sdk, "init", fake_init)
+    monkeypatch.setattr(search_opts, "sentry_dsn", "https://public@sentry.example.com/1")
+    monkeypatch.setattr(search_opts, "sentry_traces_sample_rate", 0.1)
+
+    assert init_sentry() is True
+    assert len(calls) == 1
+    assert calls[0]["dsn"] == "https://public@sentry.example.com/1"
+    assert calls[0]["traces_sample_rate"] == 0.1
+    assert calls[0]["integrations"]  # at least one integration
+
+
+def test_readyz_endpoint_list_indexes_fails(client):
+    """Readiness probe returns 503 when list_indexes raises."""
+    original_list_indexes = app.state.index.list_indexes
+
+    def failing_list_indexes():
+        raise RuntimeError("simulated backend failure")
+
+    app.state.index.list_indexes = failing_list_indexes
+    try:
+        response = client.get("/readyz")
+        assert response.status_code == 503
+        body = response.json()
+        assert body["status"] == "not_ready"
+        assert body["reason"] == "list_indexes_failed"
+    finally:
+        app.state.index.list_indexes = original_list_indexes
 
 
 def test_main_entry_point():
@@ -140,30 +214,30 @@ if __name__ == '__main__':
 def test_lifespan_shutdown():
     """Test that lifespan context manager properly closes index on shutdown."""
     from iscc_search.indexes.memory import MemoryIndex
-    import iscc_search.settings
+    import iscc_search.options
 
     # Save and override URI to use memory://
-    original_uri = iscc_search.settings.search_settings.index_uri
-    iscc_search.settings.search_settings.index_uri = "memory://"
+    original_uri = iscc_search.options.search_opts.index_uri
+    iscc_search.options.search_opts.index_uri = "memory://"
 
     try:
         # Use TestClient context manager to trigger lifespan events
         with TestClient(app) as client:
             # Verify the lifespan startup created an index
             assert hasattr(client.app.state, "index")
-            original_index = client.app.state.index
-            assert isinstance(original_index, MemoryIndex)
+            index = client.app.state.index
+            assert isinstance(index, MemoryIndex)
 
-            # Replace the index with a mock to track close() calls
-            mock_index = MagicMock(spec=MemoryIndex)
-            client.app.state.index = mock_index
+            # Patch close() on the real index to track calls
+            # Lifespan captures the index reference directly, so we must
+            # patch the actual instance (not swap app.state.index)
+            index.close = MagicMock()
 
-        # Verify close was called during shutdown on the mock
-        # (In production, the real index's close() would be called)
-        mock_index.close.assert_called_once()
+        # Verify close was called during lifespan shutdown
+        index.close.assert_called_once()
     finally:
         # Restore original URI
-        iscc_search.settings.search_settings.index_uri = original_uri
+        iscc_search.options.search_opts.index_uri = original_uri
 
 
 def test_cors_headers_default(client):
@@ -194,19 +268,16 @@ def test_cors_preflight_request(client):
 
 def test_cors_with_custom_origins():
     """Test CORS with custom allowed origins."""
-    import iscc_search.settings
+    import iscc_search.options
 
     # Save original values
-    original_uri = iscc_search.settings.search_settings.index_uri
-    original_cors = iscc_search.settings.search_settings.cors_origins
+    original_uri = iscc_search.options.search_opts.index_uri
+    original_cors = iscc_search.options.search_opts.cors_origins
 
     try:
         # Override settings
-        iscc_search.settings.search_settings.index_uri = "memory://"
-        iscc_search.settings.search_settings.cors_origins = [
-            "https://example.com",
-            "https://app.example.com",
-        ]
+        iscc_search.options.search_opts.index_uri = "memory://"
+        iscc_search.options.search_opts.cors_origins = "https://example.com,https://app.example.com"
 
         # Need to reimport to pick up new settings
         from importlib import reload
@@ -228,8 +299,8 @@ def test_cors_with_custom_origins():
             ]
     finally:
         # Restore original values
-        iscc_search.settings.search_settings.index_uri = original_uri
-        iscc_search.settings.search_settings.cors_origins = original_cors
+        iscc_search.options.search_opts.index_uri = original_uri
+        iscc_search.options.search_opts.cors_origins = original_cors
         # Reload module to restore original state
         import iscc_search.server
 

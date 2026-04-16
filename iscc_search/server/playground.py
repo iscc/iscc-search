@@ -176,6 +176,15 @@ def playground():
             showElement(prefix + 'Error');
         }
 
+        async function errorDetail(response, fallback) {
+            try {
+                const data = await response.json();
+                return data.detail || fallback;
+            } catch {
+                return fallback;
+            }
+        }
+
         function showLoading(prefix, message = 'Processing...') {
             hideElement(prefix + 'Results');
             hideElement(prefix + 'Error');
@@ -361,7 +370,8 @@ def playground():
                 });
 
                 if (!isccResponse.ok) {
-                    throw new Error('Failed to generate ISCC-CODE: ' + isccResponse.statusText);
+                    const detail = await errorDetail(isccResponse, isccResponse.statusText);
+                    throw new Error('Failed to generate ISCC-CODE: ' + detail);
                 }
 
                 const isccData = await isccResponse.json();
@@ -386,7 +396,8 @@ def playground():
                 });
 
                 if (!searchResponse.ok) {
-                    throw new Error('Search failed: ' + searchResponse.statusText);
+                    const detail = await errorDetail(searchResponse, searchResponse.statusText);
+                    throw new Error('Search failed: ' + detail);
                 }
 
                 const searchData = await searchResponse.json();
@@ -422,7 +433,8 @@ def playground():
                 });
 
                 if (!response.ok) {
-                    throw new Error('Search failed: ' + response.statusText);
+                    const detail = await errorDetail(response, response.statusText);
+                    throw new Error('Search failed: ' + detail);
                 }
 
                 const data = await response.json();

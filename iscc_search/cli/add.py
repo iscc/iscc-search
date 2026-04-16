@@ -187,12 +187,18 @@ def parse_and_index_files(files, index, index_name, batch_size=100, verbose=Fals
                 # Flush batch when full
                 if len(batch) >= batch_size:
                     batch_count += 1
-                    if verbose:
-                        console.print(f"[cyan]Indexing batch {batch_count} ({len(batch)} assets)...[/cyan]")
+                    flush_size = len(batch)
+                    progress.update(parse_task, description=f"Indexing batch {batch_count} ({flush_size} assets)...")
 
-                    results = index.add_assets(index_name, batch)
-                    all_results.extend(results)
-                    batch.clear()
+                    try:
+                        results = index.add_assets(index_name, batch)
+                        all_results.extend(results)
+                    except Exception as flush_err:
+                        errors.append(f"Batch {batch_count} ({flush_size} assets): {flush_err}")
+                        logger.error(f"Batch {batch_count} failed: {flush_err}")
+                    finally:
+                        batch.clear()
+                    progress.update(parse_task, description="Parsing files...")
 
             except Exception as e:
                 error_msg = f"{file_path.name}: {str(e)}"
@@ -205,12 +211,17 @@ def parse_and_index_files(files, index, index_name, batch_size=100, verbose=Fals
         # Flush remaining assets
         if batch:
             batch_count += 1
-            if verbose:
-                console.print(f"[cyan]Indexing final batch {batch_count} ({len(batch)} assets)...[/cyan]")
+            flush_size = len(batch)
+            progress.update(parse_task, description=f"Indexing batch {batch_count} ({flush_size} assets)...")
 
-            results = index.add_assets(index_name, batch)
-            all_results.extend(results)
-            batch.clear()
+            try:
+                results = index.add_assets(index_name, batch)
+                all_results.extend(results)
+            except Exception as flush_err:
+                errors.append(f"Batch {batch_count} ({flush_size} assets): {flush_err}")
+                logger.error(f"Batch {batch_count} failed: {flush_err}")
+            finally:
+                batch.clear()
 
     return all_results, errors
 

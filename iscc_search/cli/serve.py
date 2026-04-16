@@ -7,15 +7,21 @@ Handles starting the ISCC-Search REST API server.
 import typer
 
 from iscc_search.cli.common import console
+from iscc_search.options import search_opts
 
 __all__ = ["serve_command"]
 
 
 def serve_command(
-    host: str = typer.Option("0.0.0.0", "--host", "-h", help="Host to bind server to"),
-    port: int = typer.Option(8000, "--port", "-p", help="Port to bind server to"),
+    host: str = typer.Option(search_opts.host, "--host", "-h", help="Host to bind server to"),
+    port: int = typer.Option(search_opts.port, "--port", "-p", help="Port to bind server to"),
     dev: bool = typer.Option(False, "--dev", "-d", help="Run in development mode with auto-reload"),
-    workers: int = typer.Option(None, "--workers", "-w", help="Number of worker processes (production only)"),
+    workers: int = typer.Option(
+        search_opts.workers,
+        "--workers",
+        "-w",
+        help="Number of worker processes (not supported with usearch:// backend)",
+    ),
 ):
     # type: (...) -> None
     """
@@ -28,7 +34,6 @@ def serve_command(
         iscc-search serve                    # Production mode
         iscc-search serve --dev              # Development mode with auto-reload
         iscc-search serve --port 9000        # Custom port
-        iscc-search serve --workers 4        # Multi-worker production
     """
     import uvicorn
 
@@ -36,12 +41,21 @@ def serve_command(
         console.print("[yellow]Warning: --workers is ignored in development mode[/yellow]")
         workers = None
 
+    # Reject multi-worker with usearch:// backend: concurrent writers corrupt .usearch files.
+    if workers and workers > 1 and search_opts.index_uri.startswith("usearch://"):
+        console.print(
+            "[red]Error:[/red] --workers > 1 is not supported with the usearch:// backend.\n"
+            "Multi-worker access to .usearch files corrupts the index.\n"
+            "Run with a single worker (omit --workers or use --workers 1)."
+        )
+        raise typer.Exit(1)
+
     # Configure uvicorn based on mode
     uvicorn_config = {
         "app": "iscc_search.server:app",
         "host": host,
         "port": port,
-        "log_level": "debug" if dev else "info",
+        "log_level": "debug" if dev else search_opts.log_level,
     }
 
     if dev:

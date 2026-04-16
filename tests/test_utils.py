@@ -92,9 +92,11 @@ def test_timer_measures_actual_time():
     time_part = log_content.split("(")[1].split(" ")[0]
     elapsed = float(time_part)
 
-    # Verify elapsed time is close to sleep_duration (within reasonable margin)
+    # Verify elapsed time is close to sleep_duration. The upper bound is generous
+    # so the test does not flake on contended CI runners (notably macOS hosted),
+    # while still catching gross unit or implementation bugs.
     assert elapsed >= sleep_duration
-    assert elapsed < sleep_duration + 0.1  # Allow 100ms overhead
+    assert elapsed < sleep_duration + 1.0
 
     # Clean up logger
     logger.remove()

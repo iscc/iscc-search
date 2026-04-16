@@ -1,6 +1,11 @@
 """Tests for simprint msgspec models."""
 
-from iscc_search.indexes.simprint.models import MatchedChunkRaw, SimprintMatchRaw
+from iscc_search.indexes.simprint.models import (
+    MatchedChunkRaw,
+    SimprintMatchRaw,
+    TypeMatchResult,
+    SimprintMatchMulti,
+)
 
 
 def test_matched_chunk_raw_creation():
@@ -79,3 +84,41 @@ def test_simprint_match_raw_creation_without_chunks():
     assert match.queried == 5
     assert match.matches == 3
     assert match.chunks is None
+
+
+def test_type_match_result_creation():
+    # type: () -> None
+    """Test TypeMatchResult struct instantiation."""
+    result = TypeMatchResult(
+        score=0.92,
+        queried=3,
+        matches=2,
+        chunks=None,
+    )
+
+    assert result.score == 0.92
+    assert result.queried == 3
+    assert result.matches == 2
+    assert result.chunks is None
+
+
+def test_simprint_match_multi_creation():
+    # type: () -> None
+    """Test SimprintMatchMulti struct instantiation."""
+    match = SimprintMatchMulti(
+        iscc_id=b"\x00\x01" + b"\x12\x34\x56\x78\x9a\xbc\xde\xf0",
+        score=0.88,
+        types={
+            "CONTENT_TEXT_V0": TypeMatchResult(
+                score=0.88,
+                queried=2,
+                matches=2,
+                chunks=None,
+            )
+        },
+    )
+
+    assert len(match.iscc_id) == 10
+    assert match.score == 0.88
+    assert "CONTENT_TEXT_V0" in match.types
+    assert match.types["CONTENT_TEXT_V0"].score == 0.88

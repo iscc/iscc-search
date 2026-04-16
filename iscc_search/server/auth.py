@@ -3,7 +3,7 @@
 import secrets
 from fastapi import Security, HTTPException, status
 from fastapi.security import APIKeyHeader
-from iscc_search.settings import search_settings
+from iscc_search.options import search_opts
 
 
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
@@ -24,11 +24,11 @@ def verify_api_key(api_key=Security(api_key_header)):
     :raises HTTPException: 401 Unauthorized if key is invalid or missing
     """
     # Public mode - no authentication required
-    if search_settings.api_secret is None:
+    if search_opts.api_secret is None:
         return
 
     # Protected mode - require valid API key
-    if api_key is None or not secrets.compare_digest(api_key, search_settings.api_secret):
+    if api_key is None or not secrets.compare_digest(api_key, search_opts.api_secret):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Unauthorized",

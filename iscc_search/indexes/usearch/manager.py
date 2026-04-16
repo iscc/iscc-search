@@ -217,10 +217,14 @@ class UsearchIndexManager:
         """
         Close all cached indexes and cleanup resources.
 
-        Safe to call multiple times.
+        Exception-safe: each index is closed independently so a failure in one
+        does not prevent the others from being saved. Safe to call multiple times.
         """
-        for idx in self._index_cache.values():
-            idx.close()
+        for name, idx in list(self._index_cache.items()):
+            try:
+                idx.close()
+            except Exception:  # pragma: no cover
+                logger.exception(f"Failed to close index '{name}'")
         self._index_cache = {}
 
     # Helper methods

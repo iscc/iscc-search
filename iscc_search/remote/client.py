@@ -9,8 +9,6 @@ from typing import TYPE_CHECKING
 
 import httpx
 from loguru import logger
-from rich.console import Console
-from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
 
 if TYPE_CHECKING:
     from iscc_search.schema import IsccAddResult  # noqa: F401
@@ -21,9 +19,6 @@ if TYPE_CHECKING:
 
 
 __all__ = ["RemoteIndex"]
-
-
-console = Console()
 
 
 class RemoteIndex:
@@ -178,23 +173,13 @@ class RemoteIndex:
         if len(assets) <= self.chunk_size:
             return self._add_assets_batch(index_name, assets)
 
-        # Chunked batches with progress bar
+        # Chunked batches (no progress bar — caller handles progress display)
         results = []  # type: list[IsccAddResult]
         chunks = [assets[i : i + self.chunk_size] for i in range(0, len(assets), self.chunk_size)]
 
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            BarColumn(),
-            TaskProgressColumn(),
-            console=console,
-        ) as progress:
-            task = progress.add_task(f"Adding assets to {index_name}", total=len(chunks))
-
-            for chunk in chunks:
-                chunk_results = self._add_assets_batch(index_name, chunk)
-                results.extend(chunk_results)
-                progress.update(task, advance=1)
+        for chunk in chunks:
+            chunk_results = self._add_assets_batch(index_name, chunk)
+            results.extend(chunk_results)
 
         return results
 

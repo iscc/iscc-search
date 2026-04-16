@@ -97,7 +97,7 @@ same `IsccIndexProtocol` regardless of the backend.
 - `tests/` - Pytest test suite with 100% coverage requirement
 - `docs/` - MkDocs documentation (Material theme)
 - `scripts/bundle_openapi.py` - Bundles modular OpenAPI fragments into `openapi.json`
-- `scratch/` - Local debugging and one-off scripts (not tracked in git)
+- `cauldron/` - Local untracked workspace for internal dev/ops info (see `CLAUDE.local.md`)
 
 ### Index Backends (`iscc_search/indexes/`)
 

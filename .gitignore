@@ -161,5 +161,8 @@ scratch/
 .playwright-mcp/
 .gemini/
 
+# Local untracked instructions for Claude Code
+CLAUDE.local.md
+
 # Bubbling, alchemical, where secret raw ingredients transform ;)
 cauldron/

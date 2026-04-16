@@ -34,7 +34,7 @@ logger.add(
         show_path=False,  # Don't show file path on right
     ),
     format="{time:YYYY-MM-DD HH:mm:ss.SSS} | {level: <7} | {module}:{function}:{line} - {message}",
-    level="DEBUG",
+    level="INFO",
 )
 
 

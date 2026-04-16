@@ -366,7 +366,7 @@ class UsearchIndex:
                 self._cumulative_nphd_vectors += batch_nphd_vectors
                 self._cumulative_sp_vectors += batch_sp_vectors
                 batch_elapsed = time.perf_counter() - batch_t0
-                logger.info(
+                logger.debug(
                     f"add_assets batch={batch_num} assets={len(assets)} "
                     f"nphd={batch_nphd_vectors} sp={batch_sp_vectors} "
                     f"total_nphd={self._cumulative_nphd_vectors} total_sp={self._cumulative_sp_vectors} | "

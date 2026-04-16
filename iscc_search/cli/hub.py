@@ -6,8 +6,14 @@ into a local index, auto-registering one named after the dataset when needed.
 """
 
 import json
+import os
 import re
 import time
+
+# Silence huggingface_hub's tqdm progress bars — they render poorly in non-TTY
+# terminals (e.g. PyCharm console) where every refresh writes a new line. Our
+# rich spinners + row-count progress bar already give the user feedback.
+os.environ.setdefault("HF_HUB_DISABLE_PROGRESS_BARS", "1")
 
 import iscc_core as ic
 import typer

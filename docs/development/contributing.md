@@ -33,16 +33,16 @@ uv run poe test
 
 The project uses [poethepoet](https://poethepoet.naber.io/) as task runner.
 
-| Task | Command | Description |
-|------|---------|-------------|
-| Build | `uv run poe build` | Regenerate schema.py from OpenAPI and bundle openapi.json |
-| Format | `uv run poe format` | Format all files (code + markdown) |
-| Test | `uv run poe test` | Run tests with coverage (100% required) |
-| Complexity | `uv run poe check-complexity` | Check code complexity |
-| Pre-commit | `uv run poe precommit` | Run pre-commit checks |
-| All | `uv run poe all` | Build + format + test + complexity |
-| Docs serve | `uv run poe docs-serve` | Serve documentation locally |
-| Docs build | `uv run poe docs-build` | Build documentation site |
+| Task       | Command                       | Description                                               |
+| ---------- | ----------------------------- | --------------------------------------------------------- |
+| Build      | `uv run poe build`            | Regenerate schema.py from OpenAPI and bundle openapi.json |
+| Format     | `uv run poe format`           | Format Python code with ruff                              |
+| Test       | `uv run poe test`             | Run tests with coverage (100% required)                   |
+| Complexity | `uv run poe check-complexity` | Check code complexity                                     |
+| Pre-commit | `uv run poe precommit`        | Run pre-commit checks                                     |
+| All        | `uv run poe all`              | Build + format + test + complexity                        |
+| Docs serve | `uv run poe docs-serve`       | Serve documentation locally                               |
+| Docs build | `uv run poe docs-build`       | Build documentation site                                  |
 
 ## Code standards
 

@@ -87,8 +87,10 @@ backend based on the `ISCC_SEARCH_INDEX_URI` scheme:
 - `memory://` - `MemoryIndex`: Python dicts, no persistence. Useful for tests and demos.
 - `lmdb:///path` - `LmdbIndexManager`: LMDB key-value storage with inverted prefix-search index. Good for
   exact matching and moderate-scale deployments.
-- `usearch:///path` - `UsearchIndexManager`: HNSW (via `iscc-usearch`) for similarity search plus LMDB for
-  storage, metadata, and INSTANCE matching. The production backend.
+- `usearch:///path` - `UsearchIndexManager`: HNSW (via
+  [iscc-usearch](https://github.com/iscc/iscc-usearch), a patched fork of
+  [usearch](https://github.com/unum-cloud/usearch)) for similarity search plus LMDB for storage,
+  metadata, and INSTANCE matching. The production backend.
 
 ### USearch backend structure
 

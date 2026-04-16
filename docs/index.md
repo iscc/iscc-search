@@ -23,6 +23,13 @@ The project supports multiple storage backends - from in-memory indexes for test
 persistent stores for production. You can use it as a Python library, a command-line tool, or a REST API
 server.
 
+!!! note "iscc-search vs iscc-usearch"
+    **iscc-search** (this project) is the search engine - CLI, REST API, and index management.
+    **[iscc-usearch](https://github.com/iscc/iscc-usearch)** is a patched fork of the
+    [usearch](https://github.com/unum-cloud/usearch) vector search library that provides the
+    NPHD metric and low-level vector indexes. iscc-search uses iscc-usearch internally as one
+    of its backends. Most users only need iscc-search.
+
 ## Key capabilities
 
 - **Variable-length code matching** - compares ISCC codes of different lengths using normalized prefix

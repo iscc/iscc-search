@@ -17,6 +17,11 @@ HNSW-accelerated indexes.
 - **Github repository**: <https://github.com/iscc/iscc-search/>
 - **Documentation** <https://search.iscc.codes/>
 
+> **Note:** [iscc-usearch](https://github.com/iscc/iscc-usearch) is a separate project - a patched
+> fork of the [usearch](https://github.com/unum-cloud/usearch) vector search library that provides
+> the NPHD metric and low-level vector indexes. iscc-search uses it internally as one of its
+> backends. Most users only need to install iscc-search.
+
 ## Features
 
 - REST API server (FastAPI) for indexing and searching ISCC assets

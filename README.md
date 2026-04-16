@@ -1,7 +1,7 @@
 # iscc-search
 
 [![Release](https://img.shields.io/github/v/release/iscc/iscc-search)](https://img.shields.io/github/v/release/iscc/iscc-search)
-[![Build status](https://img.shields.io/github/actions/workflow/status/iscc/iscc-search/main.yml?branch=main)](https://github.com/iscc/iscc-search/actions/workflows/main.yml?query=branch%3Amain)
+[![Tests](https://img.shields.io/github/actions/workflow/status/iscc/iscc-search/main.yml?branch=main)](https://github.com/iscc/iscc-search/actions/workflows/main.yml?query=branch%3Amain)
 [![codecov](https://codecov.io/gh/iscc/iscc-search/branch/main/graph/badge.svg)](https://codecov.io/gh/iscc/iscc-search)
 [![Commit activity](https://img.shields.io/github/commit-activity/m/iscc/iscc-search)](https://img.shields.io/github/commit-activity/m/iscc/iscc-search)
 [![License](https://img.shields.io/github/license/iscc/iscc-search)](https://img.shields.io/github/license/iscc/iscc-search)
@@ -185,6 +185,6 @@ Contributions are welcome! Please ensure:
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
 
-______________________________________________________________________
+---
 
 Repository initiated with [fpgmaas/cookiecutter-uv](https://github.com/fpgmaas/cookiecutter-uv).

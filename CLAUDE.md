@@ -119,7 +119,7 @@ There are **two** independent configuration systems — this is intentional and 
     - Consumed by `iscc-search serve` and the FastAPI app
     - Sourced from environment variables (`ISCC_SEARCH_*`) and `.env`
     - Single index per deployment, 12-factor style
-2. **`config.py` (`AppConfig`)** - CLI multi-index management
+1. **`config.py` (`AppConfig`)** - CLI multi-index management
     - Consumed by CLI data commands (`add`, `get`, `search`, `index ...`)
     - Sourced from persistent JSON at `~/.iscc-search/config.json`
     - Multiple named indexes (local or remote) with an "active" index, git-style workflow
@@ -144,7 +144,7 @@ Don't conflate them. The serve command uses `options.py`; CLI data commands use 
 
 ## Code Standards
 
-- **Python versions**: 3.10 to 3.13
+- **Python versions**: 3.11 to 3.14
 - **Line length**: 120 characters
 - **Type hints**: Use PEP 484 **type comments**, not annotations in function signatures (exception: FastAPI and
     Typer require annotations on route/command handlers — that's fine)
@@ -160,18 +160,18 @@ Don't conflate them. The serve command uses `options.py`; CLI data commands use 
 1. **Prefer library functions over manual implementations**
     - Use `ic.decode_base64()` instead of manual base64 padding + `urlsafe_b64decode()`
     - Leverage domain-specific libraries (iscc-core, iscc-usearch, iscc-sct) for ISCC operations
-2. **Use list comprehensions** over explicit append loops
-3. **Thin wrappers over manual reconstruction** - CLI/API layers should serialize internal results directly
+1. **Use list comprehensions** over explicit append loops
+1. **Thin wrappers over manual reconstruction** - CLI/API layers should serialize internal results directly
     rather than rebuilding schemas by hand
 
 ## Development Notes
 
 1. **Auto-generated schema**: `iscc_search/schema.py` is generated from `iscc_search/openapi/openapi.yaml` via
     `uv run poe build-schema`. Don't hand-edit it — edit the YAML and rebuild.
-2. **Coverage omits**: `cli/*`, `schema.py`, `protocols/*`, and `server/playground.py` are excluded from
+1. **Coverage omits**: `cli/*`, `schema.py`, `protocols/*`, and `server/playground.py` are excluded from
     coverage (see `pyproject.toml [tool.coverage.run]`).
-3. **Test fixtures**: Use fixtures from `tests/conftest.py` for ISCC code generation
-4. **Type-only imports**: Ruff F401 doesn't recognize PEP 484 type-comment imports. Use the `TYPE_CHECKING`
+1. **Test fixtures**: Use fixtures from `tests/conftest.py` for ISCC code generation
+1. **Type-only imports**: Ruff F401 doesn't recognize PEP 484 type-comment imports. Use the `TYPE_CHECKING`
     pattern:
     ```python
     from typing import TYPE_CHECKING
@@ -179,10 +179,10 @@ Don't conflate them. The serve command uses `options.py`; CLI data commands use 
     if TYPE_CHECKING:
         from iscc_search.schema import IsccEntry  # noqa: F401
     ```
-5. **Cross-platform**: All code must work on Linux, macOS, and Windows. `options.get_index()` contains
+1. **Cross-platform**: All code must work on Linux, macOS, and Windows. `options.get_index()` contains
     Windows-specific URI path handling — preserve it when touching that code.
-6. **Logging**: Use `loguru` (`from loguru import logger`). Log config is in `iscc_search/log_config.json`.
-7. **Virtual environment**: Assume you are running inside an activated venv in the project directory — no need
+1. **Logging**: Use `loguru` (`from loguru import logger`). Log config is in `iscc_search/log_config.json`.
+1. **Virtual environment**: Assume you are running inside an activated venv in the project directory — no need
     to prefix every command with `uv run`.
 
 ## Testing

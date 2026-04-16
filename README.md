@@ -1,7 +1,7 @@
 # iscc-search
 
 [![Release](https://img.shields.io/github/v/release/iscc/iscc-search)](https://img.shields.io/github/v/release/iscc/iscc-search)
-[![Tests](https://img.shields.io/github/actions/workflow/status/iscc/iscc-search/main.yml?branch=main)](https://github.com/iscc/iscc-search/actions/workflows/main.yml?query=branch%3Amain)
+[![Tests](https://img.shields.io/github/actions/workflow/status/iscc/iscc-search/ci.yml?branch=main&label=tests)](https://github.com/iscc/iscc-search/actions/workflows/ci.yml?query=branch%3Amain)
 [![codecov](https://codecov.io/gh/iscc/iscc-search/branch/main/graph/badge.svg)](https://codecov.io/gh/iscc/iscc-search)
 [![Commit activity](https://img.shields.io/github/commit-activity/m/iscc/iscc-search)](https://img.shields.io/github/commit-activity/m/iscc/iscc-search)
 [![License](https://img.shields.io/github/license/iscc/iscc-search)](https://img.shields.io/github/license/iscc/iscc-search)

@@ -5,12 +5,13 @@ description: Similarity search engine for ISCC content codes (ISO 24138). Python
 
 # iscc-search
 
-[![Tests](https://github.com/iscc/iscc-search/actions/workflows/tests.yml/badge.svg)](https://github.com/iscc/iscc-search/actions/workflows/tests.yml)
-![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.13-blue)
+[![Tests](https://github.com/iscc/iscc-search/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/iscc/iscc-search/actions/workflows/ci.yml?query=branch%3Amain)
+![Python](https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13%20%7C%203.14-blue)
 ![License](https://img.shields.io/badge/license-Apache%202.0-green)
 [![DeepWiki](https://img.shields.io/badge/DeepWiki-iscc%2Fiscc--search-blue.svg?logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IndoaXRlIiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCI+PHBhdGggZD0iTTQgMTkuNXYtMTVBMi41IDIuNSAwIDAgMSA2LjUgMkgxOXYyMEg2LjVhMi41IDIuNSAwIDAgMS0yLjUtMi41eiIvPjxwYXRoIGQ9Ik04IDdoNiIvPjxwYXRoIGQ9Ik04IDExaDgiLz48cGF0aCBkPSJNOCAxNWg1Ii8+PC9zdmc+)](https://deepwiki.com/iscc/iscc-search)
 
 !!! warning "BETA"
+
     This project is under active development. The API is not yet stable and may change without
     notice.
 
@@ -24,6 +25,7 @@ persistent stores for production. You can use it as a Python library, a command-
 server.
 
 !!! note "iscc-search vs iscc-usearch"
+
     **iscc-search** (this project) is the search engine - CLI, REST API, and index management.
     **[iscc-usearch](https://github.com/iscc/iscc-usearch)** is a patched fork of the
     [usearch](https://github.com/unum-cloud/usearch) vector search library that provides the
@@ -33,13 +35,13 @@ server.
 ## Key capabilities
 
 - **Variable-length code matching** - compares ISCC codes of different lengths using normalized prefix
-  Hamming distance
+    Hamming distance
 - **Multiple backends** - in-memory (`memory://`), LMDB-backed (`lmdb://`), and HNSW-accelerated
-  (`usearch://`)
+    (`usearch://`)
 - **REST API** - FastAPI server with OpenAPI documentation, health checks, and optional authentication
 - **CLI** - manage indexes, add assets, and search from the terminal
 - **Protocol-based abstraction** - all backends implement `IsccIndexProtocol`, so you can swap storage
-  without changing application code
+    without changing application code
 
 ## Quick start
 

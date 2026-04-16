@@ -3,6 +3,7 @@
 from unittest.mock import patch, MagicMock
 import pytest
 from fastapi.testclient import TestClient
+from iscc_search import __version__
 from iscc_search.options import search_opts
 from iscc_search.server import app, custom_docs, init_sentry, root
 
@@ -36,7 +37,7 @@ def client():
 def test_app_instance():
     """Test FastAPI app instance is properly configured."""
     assert app.title == "ISCC-Search API"
-    assert app.version == "0.1.0"
+    assert app.version == __version__
     assert app.docs_url is None
     assert app.redoc_url is None
     assert app.openapi_url is None
@@ -49,7 +50,7 @@ def test_root_endpoint(client):
     assert response.status_code == 200
     data = response.json()
     assert data["title"] == "ISCC-Search API"
-    assert data["version"] == "0.1.0"
+    assert data["version"] == __version__
     assert data["docs"] == "/docs"
     assert "description" in data
 
@@ -84,7 +85,7 @@ def test_root_function():
     result = root()
     assert isinstance(result, dict)
     assert result["title"] == "ISCC-Search API"
-    assert result["version"] == "0.1.0"
+    assert result["version"] == __version__
     assert result["docs"] == "/docs"
 
 

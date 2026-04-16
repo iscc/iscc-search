@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from loguru import logger
+from iscc_search import __version__
 from iscc_search.options import get_index, search_opts
 from iscc_search.protocols.index import IsccIndexProtocol  # noqa: F401
 
@@ -103,7 +104,7 @@ app = FastAPI(
     lifespan=lifespan,
     title="ISCC-Search API",
     description="A Scalable Nearest Neighbor Search Multi-Index for the International Standard Content Code (ISCC)",
-    version="0.1.0",
+    version=__version__,
     docs_url=None,  # Disable default docs
     redoc_url=None,  # Disable default redoc
     openapi_url=None,  # We'll serve our own OpenAPI spec

@@ -1,57 +1,11 @@
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-*.egg-info/
-dist/
-build/
-*.egg
+# Allowlist-style .dockerignore: ignore everything, then explicitly allow the build inputs.
+# The Docker image installs from a pre-built wheel, so no source files are required in the context.
+# This prevents dev artifacts (cauldron/, .claude/, scratch/, tests/, docs/, .git/, secrets) from
+# ever entering the image layers or being cached by BuildKit.
 
-# Virtual environments
-.venv/
-venv/
-ENV/
-env/
+# Ignore everything
+**
 
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-
-# Testing
-.pytest_cache/
-.coverage
-htmlcov/
-.tox/
-*.cover
-
-# Git
-.git/
-.gitignore
-.gitattributes
-
-# Documentation
-docs/
-*.md
-!README.md
-
-# Development tools
-.ruff_cache/
-.mypy_cache/
-.pre-commit-config.yaml
-
-# Local development
-scratch/
-.env
-.env.*
-
-# CI/CD
-.github/
-
-# Misc
-*.log
-.DS_Store
+# Allow the Dockerfile and the pre-built wheel produced by `uv build`
+!Dockerfile
+!dist/*.whl

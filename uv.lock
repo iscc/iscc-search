@@ -827,7 +827,6 @@ wheels = [
 
 [[package]]
 name = "iscc-search"
-version = "0.0.1"
 source = { editable = "." }
 dependencies = [
     { name = "fastapi" },

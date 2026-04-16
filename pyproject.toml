@@ -1,6 +1,6 @@
 [project]
 name = "iscc-search"
-version = "0.0.1"
+dynamic = ["version"]
 description = "High-performance ISCC similarity search engine"
 authors = [{ name = "Titusz Pan", email = "tp@py7.de" }]
 readme = "README.md"
@@ -63,11 +63,25 @@ dev = [
 ]
 
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling", "hatch-vcs"]
 build-backend = "hatchling.build"
+
+[tool.hatch.version]
+source = "vcs"
+fallback-version = "0.0.0"
+
+[tool.hatch.version.raw-options]
+version_scheme = "guess-next-dev"
+local_scheme = "no-local-version"
 
 [tool.hatch.build.targets.wheel]
 packages = ["iscc_search"]
+include = [
+    "iscc_search/**/*.py",
+    "iscc_search/log_config.json",
+    "iscc_search/openapi/*.json",
+    "iscc_search/openapi/*.yaml",
+]
 
 [tool.hatch.metadata]
 allow-direct-references = true

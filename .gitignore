@@ -126,6 +126,12 @@ dmypy.json
 # Pyre type checker
 .pyre/
 
+# Ruff cache
+.ruff_cache/
+
+# uv cache
+.uv-cache/
+
 # pytype static type analyzer
 .pytype/
 

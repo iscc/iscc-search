@@ -66,4 +66,7 @@ jobs:
         uses: ./.github/actions/setup-python-env
 
       - name: Deploy documentation
-        run: uv run mkdocs gh-deploy --force
+        run: |
+          uv run zensical build
+          uv run python scripts/gen_llms_full.py
+          uv run zensical gh-deploy --force

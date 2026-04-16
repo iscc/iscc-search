@@ -7,9 +7,8 @@
 [![License](https://img.shields.io/github/license/iscc/iscc-search)](https://img.shields.io/github/license/iscc/iscc-search)
 
 > [!WARNING]
-> **This project is in early development and not ready for production use.**
->
-> The API and features are subject to significant changes. Use at your own risk.
+> **BETA** - This project is under active development. The API is not yet stable and may change
+> without notice. Use at your own risk.
 
 High-performance similarity search engine for [ISCC](https://iscc.codes) (International Standard Content Code).
 Ships as a Python package, a CLI, and a FastAPI REST server, with pluggable backends for in-memory, LMDB, and
@@ -168,7 +167,7 @@ iscc-search depends on for its HNSW backend.
 
 ## License
 
-MIT License - see [LICENSE](LICENSE) file for details.
+Apache License 2.0 - see [LICENSE](LICENSE) file for details.
 
 ## Contributing
 

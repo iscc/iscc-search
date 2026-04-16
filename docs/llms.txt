@@ -1,0 +1,34 @@
+# iscc-search
+
+> High-performance similarity search engine for ISCC content codes (ISO 24138).
+
+iscc-search provides a Python library, CLI, and REST API for indexing and searching
+ISCC codes with support for memory, LMDB, and USearch (HNSW) backends.
+
+Install: `pip install iscc-search`
+
+- [Source code](https://github.com/iscc/iscc-search)
+- [PyPI](https://pypi.org/project/iscc-search/)
+- [Full documentation](https://search.iscc.codes/llms-full.txt)
+
+## Tutorials
+
+- [Getting Started](https://search.iscc.codes/tutorials/getting-started.md): Install, index ISCC codes, and run similarity searches
+
+## How-to Guides
+
+- [Index Backends](https://search.iscc.codes/howto/index-backends.md): Configure Memory, LMDB, and USearch backends
+- [CLI](https://search.iscc.codes/howto/cli.md): Manage indexes and search from the command line
+- [REST API](https://search.iscc.codes/howto/rest-api.md): Run the search server and use HTTP endpoints
+- [Deployment](https://search.iscc.codes/howto/deployment.md): Production deployment with Docker
+
+## Explanation
+
+- [ISCC Primer](https://search.iscc.codes/explanation/iscc-primer.md): Core ISCC concepts for newcomers
+- [Architecture](https://search.iscc.codes/explanation/architecture.md): Protocol-based design and module structure
+- [Similarity Search](https://search.iscc.codes/explanation/similarity-search.md): NPHD metric, variable-length matching
+
+## Reference
+
+- [API](https://search.iscc.codes/reference/api.md): Python API reference
+- [Configuration](https://search.iscc.codes/reference/configuration.md): Environment variables and settings

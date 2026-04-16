@@ -4,9 +4,11 @@ version = "0.0.1"
 description = "High-performance ISCC similarity search engine"
 authors = [{ name = "Titusz Pan", email = "tp@py7.de" }]
 readme = "README.md"
+license = "Apache-2.0"
 keywords = ['python']
 requires-python = ">=3.10,<4.0"
 classifiers = [
+    "License :: OSI Approved :: Apache Software License",
     "Intended Audience :: Developers",
     "Programming Language :: Python",
     "Programming Language :: Python :: 3",
@@ -68,6 +70,7 @@ dev = [
     "pytest-xdist>=3.8.0",
     "radon>=6.0.1",
     "openapi-spec-validator>=0.7.2",
+    "zensical>=0.0.33",
 ]
 
 [build-system]
@@ -134,4 +137,6 @@ format-markdown = { shell = "uv run mdformat --end-of-line lf --wrap 112 --numbe
 precommit = { shell = "uv run prek run"}
 test = { shell = "uv run python -m pytest -n auto --tb=line --no-header -q --cov --cov-config=pyproject.toml --cov-report=xml --cov-report=term-missing", help = "Test the code with pytest" }
 check-complexity = { shell = "uv run radon cc --min C --show-complexity --average iscc_search/", help = "Check code complexity with radon" }
+docs-serve = { cmd = "zensical serve", help = "Serve documentation locally" }
+docs-build = { sequence = [{ cmd = "zensical build" }, { cmd = "python scripts/gen_llms_full.py" }], help = "Build documentation site" }
 all = { sequence = ["build", "format", "test", "check-complexity"], help = "Run all tasks" }

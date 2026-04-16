@@ -8,7 +8,9 @@ import typer
 
 import iscc_search
 from iscc_search.cli.add import add_command
+from iscc_search.cli.datasets import datasets_command
 from iscc_search.cli.get import get_command
+from iscc_search.cli.hub import hub_command
 from iscc_search.cli.search import search_command
 from iscc_search.cli.serve import serve_command
 from iscc_search.cli.common import console
@@ -33,7 +35,9 @@ index_app.command(name="remove")(index.remove_command)
 # Register commands
 app.add_typer(index_app, name="index")
 app.command(name="add")(add_command)
+app.command(name="datasets")(datasets_command)
 app.command(name="get")(get_command)
+app.command(name="hub")(hub_command)
 app.command(name="search")(search_command)
 app.command(name="serve")(serve_command)
 

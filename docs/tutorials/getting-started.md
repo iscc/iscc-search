@@ -80,8 +80,8 @@ everything in RAM and requires no setup.
 
     ```bash
     curl -X POST http://localhost:8000/indexes \
-      -H "Content-Type: application/json" \
-      -d '{"name": "myindex"}'
+        -H "Content-Type: application/json" \
+        -d '{"name": "myindex"}'
     ```
 
 ## Add ISCC codes
@@ -96,12 +96,8 @@ one for search.
     from iscc_search.schema import IsccEntry
 
     assets = [
-        IsccEntry(
-            iscc_code="ISCC:KACYPXW445FTYNJ3CYSXHAFJMA2HUWULUNRFE3BLHRSCXYH2M5AEGQY"
-        ),
-        IsccEntry(
-            iscc_code="ISCC:KEC6CAS5WCRSL4AE"
-        ),
+        IsccEntry(iscc_code="ISCC:KACYPXW445FTYNJ3CYSXHAFJMA2HUWULUNRFE3BLHRSCXYH2M5AEGQY"),
+        IsccEntry(iscc_code="ISCC:KEC6CAS5WCRSL4AE"),
     ]
     results = index.add_assets("myindex", assets)
 
@@ -129,12 +125,24 @@ one for search.
 
     ```bash
     curl -X POST http://localhost:8000/indexes/myindex/assets \
-      -H "Content-Type: application/json" \
-      -d '[{"iscc_code": "ISCC:KACYPXW445FTYNJ3CYSXHAFJMA2HUWULUNRFE3BLHRSCXYH2M5AEGQY"}]'
+        -H "Content-Type: application/json" \
+        -d '[{"iscc_code": "ISCC:KACYPXW445FTYNJ3CYSXHAFJMA2HUWULUNRFE3BLHRSCXYH2M5AEGQY"}]'
     ```
 
 Each asset gets an auto-generated ISCC-ID (a unique identifier) if you do not provide one. The `status`
 field in the result tells you whether the asset was `created` or `updated`.
+
+!!! tip "Index a ready-made dataset"
+
+    To experiment with real data without preparing JSON files, index one of the published ISCC
+    datasets from the HuggingFace Hub. List them with `iscc-search datasets` and pull one in:
+
+    ```bash
+    iscc-search datasets
+    iscc-search hub iscc/iscc-flickr30k --limit 1000
+    ```
+
+    `hub` auto-registers a local index named after the dataset.
 
 ## Search for similar content
 
@@ -145,9 +153,7 @@ Pass an ISCC-CODE as a query. The engine compares it against all indexed codes a
     ```python
     from iscc_search.schema import IsccQuery
 
-    query = IsccQuery(
-        iscc_code="ISCC:KACYPXW445FTYNJ3CYSXHAFJMA2HUWULUNRFE3BLHRSCXYH2M5AEGQY"
-    )
+    query = IsccQuery(iscc_code="ISCC:KACYPXW445FTYNJ3CYSXHAFJMA2HUWULUNRFE3BLHRSCXYH2M5AEGQY")
     results = index.search_assets("myindex", query, limit=10)
 
     for match in results.global_matches:
@@ -166,14 +172,15 @@ Pass an ISCC-CODE as a query. The engine compares it against all indexed codes a
 
     ```bash
     curl -X POST http://localhost:8000/indexes/myindex/search \
-      -H "Content-Type: application/json" \
-      -d '{"iscc_code": "ISCC:KACYPXW445FTYNJ3CYSXHAFJMA2HUWULUNRFE3BLHRSCXYH2M5AEGQY"}'
+        -H "Content-Type: application/json" \
+        -d '{"iscc_code": "ISCC:KACYPXW445FTYNJ3CYSXHAFJMA2HUWULUNRFE3BLHRSCXYH2M5AEGQY"}'
     ```
 
 The `score` field ranges from 0.0 to 1.0. A score of 1.0 means the codes are identical. Scores above 0.75
 (the default threshold) indicate strong similarity.
 
 !!! tip
+
     You can also search using a GET request with a query parameter:
     `GET /indexes/myindex/search?iscc_code=ISCC:KACYPXW445FTYNJ3CYSXHAFJMA2HUWULUNRFE3BLHRSCXYH2M5AEGQY`
 
@@ -209,6 +216,7 @@ stores indexes on disk using LMDB (Lightning Memory-Mapped Database).
     ```
 
 !!! note
+
     For production workloads with large collections, use the `usearch://` backend. It adds HNSW
     (Hierarchical Navigable Small World) graph indexing for fast approximate nearest neighbor search.
     See the [index backends guide](../howto/index-backends.md).

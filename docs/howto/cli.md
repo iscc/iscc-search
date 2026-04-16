@@ -58,6 +58,41 @@ Remove an index and delete its local data:
 iscc-search index remove old-local --delete-data
 ```
 
+## Index HuggingFace datasets
+
+The ISCC Foundation publishes ready-to-index datasets on the HuggingFace Hub. Browse them:
+
+```bash
+iscc-search datasets
+```
+
+The listing defaults to the `iscc` organization. Switch to another namespace with `--author`, cap the
+output with `--limit`, or emit JSON for scripting:
+
+```bash
+iscc-search datasets --author myorg --limit 50
+iscc-search datasets --json
+```
+
+Index a dataset directly — parquet files are streamed from the Hub and cached under your HuggingFace
+cache directory:
+
+```bash
+iscc-search hub iscc/iscc-flickr30k
+```
+
+When no index is registered yet, `hub` auto-creates a local one named after the dataset
+(`iscc/iscc-flickr30k` → `flickr30k`). Override the target name or stop early while experimenting:
+
+```bash
+iscc-search hub iscc/iscc-book-covers --limit 10000
+iscc-search hub iscc/iscc-flickr30k --index production
+iscc-search hub iscc/iscc-flickr30k --split train --batch-size 1000
+```
+
+Original row fields (title, caption, ISBN, image URLs, …) are preserved as opaque metadata on each
+asset; binary columns such as image thumbnails are skipped.
+
 ## Add assets
 
 Add assets from a directory of JSON files:

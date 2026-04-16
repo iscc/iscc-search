@@ -12,28 +12,28 @@ codebase exactly.
 
 ### File Layout
 
-| Path | Contains |
-|------|----------|
-| `iscc_search/__init__.py` | Exports `SearchOptions`, `search_opts`, `PlatformDirs` |
-| `iscc_search/options.py` | `SearchOptions` (Pydantic settings, env vars), `get_index()` factory |
-| `iscc_search/config.py` | `AppConfig`, `ConfigManager` (CLI multi-index JSON config) |
-| `iscc_search/models.py` | `IsccBase`, `IsccID`, `IsccUnit`, `IsccCode`, `IsccItem` |
-| `iscc_search/schema.py` | **Auto-generated** Pydantic models from `openapi/openapi.yaml` |
-| `iscc_search/processing.py` | Text tokenization utilities |
-| `iscc_search/protocols/index.py` | `IsccIndexProtocol` (runtime-checkable Protocol) |
-| `iscc_search/indexes/common.py` | Shared: serialization, ID encoding, validation, query normalization |
-| `iscc_search/indexes/memory/index.py` | `MemoryIndex` (dict-based, no persistence) |
-| `iscc_search/indexes/lmdb/index.py` | `LmdbIndex` (LMDB storage + inverted prefix search) |
-| `iscc_search/indexes/lmdb/manager.py` | `LmdbIndexManager` (multi-index over .lmdb files) |
-| `iscc_search/indexes/usearch/index.py` | `UsearchIndex` (HNSW + LMDB hybrid) |
-| `iscc_search/indexes/usearch/manager.py` | `UsearchIndexManager` (multi-index over directories) |
-| `iscc_search/indexes/simprint/lmdb_ops.py` | LMDB operations for simprints (pack/unpack, IDF, exact search) |
-| `iscc_search/indexes/simprint/usearch_core.py` | `UsearchSimprintIndex` (ShardedIndex128 approximate search) |
-| `iscc_search/indexes/simprint/models.py` | msgspec structs: `MatchedChunkRaw`, `SimprintMatchRaw` |
-| `iscc_search/cli/` | Typer CLI: `add`, `get`, `search`, `serve`, `index` subcommands |
-| `iscc_search/server/` | FastAPI app: endpoints for indexes, assets, search, auth, health |
-| `iscc_search/remote/client.py` | `IsccSearchClient` (HTTP client for remote servers) |
-| `iscc_search/openapi/` | Modular OpenAPI 3.0 spec (YAML fragments + bundled JSON) |
+| Path                                           | Contains                                                                           |
+| ---------------------------------------------- | ---------------------------------------------------------------------------------- |
+| `iscc_search/__init__.py`                      | Exports `SearchOptions`, `search_opts`, `PlatformDirs`                             |
+| `iscc_search/options.py`                       | `SearchOptions` (Pydantic settings, env vars), `get_index()` factory               |
+| `iscc_search/config.py`                        | `AppConfig`, `ConfigManager` (CLI multi-index JSON config)                         |
+| `iscc_search/models.py`                        | `IsccBase`, `IsccID`, `IsccUnit`, `IsccCode`, `IsccItem`                           |
+| `iscc_search/schema.py`                        | **Auto-generated** Pydantic models from `openapi/openapi.yaml`                     |
+| `iscc_search/processing.py`                    | Text tokenization utilities                                                        |
+| `iscc_search/protocols/index.py`               | `IsccIndexProtocol` (runtime-checkable Protocol)                                   |
+| `iscc_search/indexes/common.py`                | Shared: serialization, ID encoding, validation, query normalization                |
+| `iscc_search/indexes/memory/index.py`          | `MemoryIndex` (dict-based, no persistence)                                         |
+| `iscc_search/indexes/lmdb/index.py`            | `LmdbIndex` (LMDB storage + inverted prefix search)                                |
+| `iscc_search/indexes/lmdb/manager.py`          | `LmdbIndexManager` (multi-index over .lmdb files)                                  |
+| `iscc_search/indexes/usearch/index.py`         | `UsearchIndex` (HNSW + LMDB hybrid)                                                |
+| `iscc_search/indexes/usearch/manager.py`       | `UsearchIndexManager` (multi-index over directories)                               |
+| `iscc_search/indexes/simprint/lmdb_ops.py`     | LMDB operations for simprints (pack/unpack, IDF, exact search)                     |
+| `iscc_search/indexes/simprint/usearch_core.py` | `UsearchSimprintIndex` (ShardedIndex128 approximate search)                        |
+| `iscc_search/indexes/simprint/models.py`       | msgspec structs: `MatchedChunkRaw`, `SimprintMatchRaw`                             |
+| `iscc_search/cli/`                             | Typer CLI: `add`, `datasets`, `get`, `hub`, `search`, `serve`, `index` subcommands |
+| `iscc_search/server/`                          | FastAPI app: endpoints for indexes, assets, search, auth, health                   |
+| `iscc_search/remote/client.py`                 | `IsccSearchClient` (HTTP client for remote servers)                                |
+| `iscc_search/openapi/`                         | Modular OpenAPI 3.0 spec (YAML fragments + bundled JSON)                           |
 
 ### Class Hierarchy
 
@@ -51,47 +51,48 @@ IsccIndexProtocol (typing.Protocol, runtime_checkable)
 
 ### Schema Types (auto-generated, do not edit)
 
-| Class | Purpose |
-|-------|---------|
-| `IsccIndex` | Index metadata (name, assets count, size) |
-| `IsccEntry` | Asset record (iscc_id, iscc_code, units, simprints, metadata) |
-| `IsccQuery` | Search query (iscc_code or units or simprints) |
-| `IsccSearchResult` | Search response (query + global_matches + chunk_matches) |
-| `IsccGlobalMatch` | Per-asset match (iscc_id, score, unit_scores) |
-| `IsccAddResult` | Add response (iscc_id, status: created/updated) |
-| `IsccSimprint` | Simprint with offset and size |
-| `IsccChunk` | Chunk-level match detail |
-| `TextQuery` | Text-based search query |
+| Class              | Purpose                                                       |
+| ------------------ | ------------------------------------------------------------- |
+| `IsccIndex`        | Index metadata (name, assets count, size)                     |
+| `IsccEntry`        | Asset record (iscc_id, iscc_code, units, simprints, metadata) |
+| `IsccQuery`        | Search query (iscc_code or units or simprints)                |
+| `IsccSearchResult` | Search response (query + global_matches + chunk_matches)      |
+| `IsccGlobalMatch`  | Per-asset match (iscc_id, score, unit_scores)                 |
+| `IsccAddResult`    | Add response (iscc_id, status: created/updated)               |
+| `IsccSimprint`     | Simprint with offset and size                                 |
+| `IsccChunk`        | Chunk-level match detail                                      |
+| `TextQuery`        | Text-based search query                                       |
 
 ## Decision Dispatch
 
 ### Which backend?
 
-| Scenario | Backend | URI | Why |
-|----------|---------|-----|-----|
-| Unit tests | Memory | `memory://` | No persistence, no deps |
-| Exact prefix search | LMDB | `lmdb:///path` | Bidirectional prefix matching |
-| Production similarity | USearch | `usearch:///path` | HNSW + LMDB hybrid |
+| Scenario              | Backend | URI               | Why                           |
+| --------------------- | ------- | ----------------- | ----------------------------- |
+| Unit tests            | Memory  | `memory://`       | No persistence, no deps       |
+| Exact prefix search   | LMDB    | `lmdb:///path`    | Bidirectional prefix matching |
+| Production similarity | USearch | `usearch:///path` | HNSW + LMDB hybrid            |
 
 ### Which config system?
 
-| Context | System | Source |
-|---------|--------|--------|
-| `iscc-search serve` | `options.py` (`SearchOptions`) | Env vars `ISCC_SEARCH_*` |
-| `iscc-search add/get/search` | `config.py` (`ConfigManager`) | JSON `~/.iscc-search/config.json` |
+| Context                          | System                         | Source                            |
+| -------------------------------- | ------------------------------ | --------------------------------- |
+| `iscc-search serve`              | `options.py` (`SearchOptions`) | Env vars `ISCC_SEARCH_*`          |
+| `iscc-search add/get/hub/search` | `config.py` (`ConfigManager`)  | JSON `~/.iscc-search/config.json` |
+| `iscc-search datasets`           | none (HF Hub listing only)     | `huggingface_hub.list_datasets`   |
 
 ### Which method for a task?
 
-| Task | Protocol method | HTTP endpoint |
-|------|----------------|---------------|
-| Create index | `create_index(IsccIndex)` | `POST /indexes` |
-| List indexes | `list_indexes()` | `GET /indexes` |
-| Get index info | `get_index(name)` | `GET /indexes/{name}` |
-| Delete index | `delete_index(name)` | `DELETE /indexes/{name}` |
-| Add assets | `add_assets(name, [IsccEntry])` | `POST /indexes/{name}/assets` |
-| Get asset | `get_asset(name, iscc_id)` | `GET /indexes/{name}/assets/{iscc_id}` |
-| Search | `search_assets(name, IsccQuery, limit)` | `POST /indexes/{name}/search` |
-| Health check | N/A | `GET /healthz` (liveness), `GET /readyz` (readiness) |
+| Task           | Protocol method                         | HTTP endpoint                                        |
+| -------------- | --------------------------------------- | ---------------------------------------------------- |
+| Create index   | `create_index(IsccIndex)`               | `POST /indexes`                                      |
+| List indexes   | `list_indexes()`                        | `GET /indexes`                                       |
+| Get index info | `get_index(name)`                       | `GET /indexes/{name}`                                |
+| Delete index   | `delete_index(name)`                    | `DELETE /indexes/{name}`                             |
+| Add assets     | `add_assets(name, [IsccEntry])`         | `POST /indexes/{name}/assets`                        |
+| Get asset      | `get_asset(name, iscc_id)`              | `GET /indexes/{name}/assets/{iscc_id}`               |
+| Search         | `search_assets(name, IsccQuery, limit)` | `POST /indexes/{name}/search`                        |
+| Health check   | N/A                                     | `GET /healthz` (liveness), `GET /readyz` (readiness) |
 
 ## Constraints and Invariants
 
@@ -114,41 +115,41 @@ sets the realm. Subsequent assets with a different realm raise `ValueError`.
 
 ### LMDB Limits
 
-| Backend | `max_dbs` | Reason |
-|---------|-----------|--------|
-| LmdbIndex | 16 | Assets + metadata + up to 14 unit-type indexes |
-| UsearchIndex | 32 | Assets + metadata + instance + ~14 simprint types (2 DBs each) |
+| Backend      | `max_dbs` | Reason                                                         |
+| ------------ | --------- | -------------------------------------------------------------- |
+| LmdbIndex    | 16        | Assets + metadata + up to 14 unit-type indexes                 |
+| UsearchIndex | 32        | Assets + metadata + instance + ~14 simprint types (2 DBs each) |
 
 ### Concurrency
 
-| Backend | Readers | Writers | Multi-process |
-|---------|---------|---------|---------------|
-| Memory | Unlimited | Unlimited | No |
-| LMDB | Multiple | Single (LMDB lock) | Reads only |
-| USearch | Multiple | Single (`threading.RLock`) | No - corrupts `.usearch` files |
+| Backend | Readers   | Writers                    | Multi-process                  |
+| ------- | --------- | -------------------------- | ------------------------------ |
+| Memory  | Unlimited | Unlimited                  | No                             |
+| LMDB    | Multiple  | Single (LMDB lock)         | Reads only                     |
+| USearch | Multiple  | Single (`threading.RLock`) | No - corrupts `.usearch` files |
 
 USearch production: single worker process, use FastAPI async for concurrency.
 
 ### MapFullError Auto-Retry
 
-| Backend | Strategy | Limit |
-|---------|----------|-------|
-| LmdbIndex | Double `map_size` | Unbounded |
+| Backend      | Strategy                           | Limit                |
+| ------------ | ---------------------------------- | -------------------- |
+| LmdbIndex    | Double `map_size`                  | Unbounded            |
 | UsearchIndex | Increment by `min(old_size, 1 GB)` | 10 retries, 1 TB max |
 
 ## Side Effects Catalog
 
 ### UsearchIndex.add_assets()
 
-| Step | Mutation | Atomic with LMDB? |
-|------|----------|--------------------|
-| Store asset JSON in LMDB `__assets__` | Disk write | Yes (inside txn) |
-| Add INSTANCE units to LMDB dupsort | Disk write | Yes (inside txn) |
-| Store simprint data in LMDB | Disk write | Yes (inside txn) |
-| LMDB transaction commits | Disk flush | - |
-| Update ShardedNphdIndex (remove + add) | Memory + dirty flag | No |
-| Update UsearchSimprintIndex | Memory + dirty flag | No |
-| Auto-flush if dirty >= flush_interval | Disk write | No |
+| Step                                   | Mutation            | Atomic with LMDB? |
+| -------------------------------------- | ------------------- | ----------------- |
+| Store asset JSON in LMDB `__assets__`  | Disk write          | Yes (inside txn)  |
+| Add INSTANCE units to LMDB dupsort     | Disk write          | Yes (inside txn)  |
+| Store simprint data in LMDB            | Disk write          | Yes (inside txn)  |
+| LMDB transaction commits               | Disk flush          | -                 |
+| Update ShardedNphdIndex (remove + add) | Memory + dirty flag | No                |
+| Update UsearchSimprintIndex            | Memory + dirty flag | No                |
+| Auto-flush if dirty >= flush_interval  | Disk write          | No                |
 
 LMDB is the source of truth. Derived HNSW indexes can be rebuilt from LMDB if corrupted.
 
@@ -194,32 +195,32 @@ Aggregation:
 ### Add a new index backend
 
 1. Create `iscc_search/indexes/yourbackend/` package
-2. Implement all methods of `IsccIndexProtocol`
-3. Add URI scheme handling in `options.get_index()`
-4. Add tests matching pattern `test_indexes_yourbackend_*.py`
-5. Update `docs/howto/index-backends.md` comparison table
+1. Implement all methods of `IsccIndexProtocol`
+1. Add URI scheme handling in `options.get_index()`
+1. Add tests matching pattern `test_indexes_yourbackend_*.py`
+1. Update `docs/howto/index-backends.md` comparison table
 
 ### Add a new API endpoint
 
 1. Add route handler in `iscc_search/server/` (new file or existing)
-2. Add schema models in `iscc_search/openapi/` YAML fragments
-3. Run `uv run poe build` to regenerate `schema.py` and `openapi.json`
-4. Add tests in `tests/test_server*.py`
+1. Add schema models in `iscc_search/openapi/` YAML fragments
+1. Run `uv run poe build` to regenerate `schema.py` and `openapi.json`
+1. Add tests in `tests/test_server*.py`
 
 ### Modify OpenAPI schema
 
 1. Edit YAML fragments in `iscc_search/openapi/`
-2. Run `uv run poe build-schema` to regenerate `iscc_search/schema.py`
-3. Run `uv run poe build-openapi` to bundle `openapi.json`
-4. Run `uv run poe build-validate` to check validity
-5. Never hand-edit `schema.py`
+1. Run `uv run poe build-schema` to regenerate `iscc_search/schema.py`
+1. Run `uv run poe build-openapi` to bundle `openapi.json`
+1. Run `uv run poe build-validate` to check validity
+1. Never hand-edit `schema.py`
 
 ### Add a new CLI command
 
 1. Create handler in `iscc_search/cli/yourcommand.py`
-2. Register with Typer app in `iscc_search/cli/__init__.py`
-3. Use `get_active_index()` from `cli/common.py` for index access
-4. Add tests in `tests/test_cli_*.py`
+1. Register with Typer app in `iscc_search/cli/__init__.py`
+1. Use `get_active_index()` from `cli/common.py` for index access
+1. Add tests in `tests/test_cli_*.py`
 
 ## Change Playbook
 

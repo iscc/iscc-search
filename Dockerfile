@@ -37,7 +37,16 @@ RUN mkdir -p /data
 ENV ISCC_SEARCH_INDEX_URI=usearch:///data
 
 # Single worker only: usearch indexes have no multi-process coordination.
-# 60s graceful shutdown lets large indexes save cleanly.
+#
+# Shutdown timing: uvicorn drains in-flight requests for up to
+# --timeout-graceful-shutdown seconds, THEN runs the FastAPI lifespan handler
+# (which calls index.close() to flush HNSW shards). The lifespan handler is
+# UNBOUNDED in uvicorn — only Docker's stop_grace_period can stop it.
+#
+# Therefore: compose stop_grace_period must be >= this drain timeout PLUS the
+# expected flush duration. Default 60s drain assumes typical request latency
+# under a minute; combine with a generous stop_grace_period (>=300s) on the
+# compose side to leave room for the flush.
 CMD ["uvicorn", "iscc_search.server:app", \
      "--host", "0.0.0.0", \
      "--port", "8000", \

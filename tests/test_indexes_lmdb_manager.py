@@ -4,6 +4,8 @@ Tests for LmdbIndexManager protocol implementation.
 Tests full protocol compliance, index lifecycle management, and multi-index scenarios.
 """
 
+import threading
+
 import pytest
 from iscc_search.schema import IsccIndex, IsccEntry, IsccQuery
 from iscc_search.indexes.lmdb import LmdbIndexManager
@@ -295,6 +297,48 @@ def test_get_file_size_mb(manager, tmp_path, sample_assets):
 
     assert isinstance(size_mb, int)
     assert size_mb >= 0
+
+
+def test_concurrent_get_or_load_index_does_not_race_on_lmdb_open(manager, tmp_path, sample_assets):
+    """
+    Concurrent first-load requests for the same uncached index must serialize
+    on the cache lock so lmdb.open() runs exactly once. Without the lock,
+    a parallel call to lmdb.open on the same path raises:
+    "The environment ... is already open in this process".
+    """
+    # Create the index file on disk and drop the cached instance so the next
+    # access goes through the cache-miss path concurrently. Close the popped
+    # instance because LMDB does not allow the same path to be opened twice in
+    # the same process, which is precisely the race being exercised here.
+    manager.create_index(IsccIndex(name="concurrent"))
+    cached = manager._index_cache.pop("concurrent")
+    cached.close()
+
+    barrier = threading.Barrier(8)
+    results = []  # type: list
+    errors = []  # type: list
+
+    def worker():
+        # type: () -> None
+        try:
+            barrier.wait()
+            idx = manager._get_or_load_index("concurrent")
+            results.append(idx)
+        except Exception as e:  # pragma: no cover - test would fail below if this triggers
+            errors.append(e)
+
+    threads = [threading.Thread(target=worker) for _ in range(8)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    assert errors == []
+    assert len(results) == 8
+    # All workers must observe the same cached instance (i.e. only one was constructed).
+    first = results[0]
+    assert all(r is first for r in results)
+    assert manager._index_cache["concurrent"] is first
 
 
 def test_list_indexes_with_assets(manager, sample_assets):

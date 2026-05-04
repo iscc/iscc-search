@@ -13,12 +13,13 @@ from pathlib import Path
 import typer
 from rich.table import Table
 
-from iscc_search.cli.common import console
+from iscc_search.cli.common import console, get_active_index
 from iscc_search.config import (
     LocalIndexConfig,
     RemoteIndexConfig,
     get_config_manager,
 )
+from iscc_search.indexes.usearch import UsearchIndexManager
 
 
 def add_command(
@@ -166,6 +167,98 @@ def use_command(name: str):
         console.print(f"[red]Error: {e}[/red]")
         console.print("Use 'iscc-search index list' to see available indexes")
         sys.exit(1)
+
+
+def rebuild_command(
+    unit_type: list[str] = typer.Option(
+        [],
+        "--unit-type",
+        help="NPHD unit_type to rebuild (repeatable, e.g. CONTENT_TEXT_V0)",
+    ),
+    simprint_type: list[str] = typer.Option(
+        [],
+        "--simprint-type",
+        help="Simprint type to rebuild (repeatable, e.g. CONTENT_TEXT_V0)",
+    ),
+    all_types: bool = typer.Option(
+        False,
+        "--all",
+        help="Rebuild every NPHD unit_type and simprint type tracked in LMDB",
+    ),
+    index_name: str | None = typer.Option(
+        None,
+        "--index",
+        help="Index name to use (overrides active index)",
+    ),
+):
+    # type: (...) -> None
+    """
+    Rebuild derived NPHD/simprint indexes for a local index from LMDB source data.
+
+    Each rebuild is destructive for the targeted shard directory: it is removed
+    and the index is rebuilt from scratch using the assets stored in LMDB.
+    Search results for a given type are empty while that type is rebuilding.
+
+    Examples:
+
+        # Rebuild a single NPHD unit type
+        iscc-search index rebuild --unit-type CONTENT_TEXT_V0
+
+        # Rebuild a single simprint type
+        iscc-search index rebuild --simprint-type CONTENT_TEXT_V0
+
+        # Rebuild specific types (mix of NPHD and simprint)
+        iscc-search index rebuild --unit-type META_NONE_V0 --simprint-type CONTENT_TEXT_V0
+
+        # Rebuild every tracked type
+        iscc-search index rebuild --all
+
+        # Operate on a specific index instead of the active one
+        iscc-search index rebuild --all --index myindex
+    """
+    if not unit_type and not simprint_type and not all_types:
+        console.print("[red]Error: specify at least one of --unit-type, --simprint-type, or --all[/red]")
+        sys.exit(1)
+
+    if all_types and (unit_type or simprint_type):
+        console.print("[red]Error: --all cannot be combined with --unit-type or --simprint-type[/red]")
+        sys.exit(1)
+
+    try:
+        manager, target_name = get_active_index(index_name)
+    except ValueError as e:
+        console.print(f"[red]Error: {e}[/red]")
+        sys.exit(1)
+
+    if not isinstance(manager, UsearchIndexManager):
+        console.print("[red]Error: rebuild is only supported for local usearch indexes[/red]")
+        sys.exit(1)
+
+    try:
+        if all_types:
+            result = manager.rebuild(target_name)
+        else:
+            result = manager.rebuild(
+                target_name,
+                unit_types=list(unit_type),
+                simprint_types=list(simprint_type),
+            )
+    except FileNotFoundError as e:
+        console.print(f"[red]Error: {e}[/red]")
+        sys.exit(1)
+    finally:
+        manager.close()
+
+    rebuilt_unit = result["unit_types"]
+    rebuilt_sp = result["simprint_types"]
+    if not rebuilt_unit and not rebuilt_sp:
+        console.print(f"[yellow]No tracked types matched - nothing rebuilt for index '{target_name}'.[/yellow]")
+        return
+
+    if rebuilt_unit:
+        console.print(f"[green]Rebuilt NPHD: {', '.join(rebuilt_unit)}[/green]")
+    if rebuilt_sp:
+        console.print(f"[green]Rebuilt simprint: {', '.join(rebuilt_sp)}[/green]")
 
 
 def remove_command(

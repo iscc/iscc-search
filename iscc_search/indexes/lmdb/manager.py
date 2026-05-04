@@ -8,6 +8,7 @@ Implements IsccIndexProtocol for use as backend in CLI and server.
 """
 
 import os
+import threading
 from pathlib import Path
 from iscc_search.schema import IsccIndex
 from iscc_search.indexes.lmdb.index import LmdbIndex
@@ -44,6 +45,9 @@ class LmdbIndexManager:
         self.base_path = Path(base_path)
         self.base_path.mkdir(parents=True, exist_ok=True)
         self._index_cache = {}  # type: dict[str, LmdbIndex]
+        # Serialize first-load construction so concurrent requests don't race on lmdb.open()
+        # (which raises "already open in this process" if two threads call it simultaneously).
+        self._cache_lock = threading.Lock()
 
     def list_indexes(self):
         # type: () -> list[IsccIndex]
@@ -205,16 +209,23 @@ class LmdbIndexManager:
         """
         Get cached index or load from disk.
 
+        Thread-safe: a lock guards the cache-miss construction path so concurrent
+        first-burst requests don't race on lmdb.open() (which raises
+        "already open in this process" if two threads call it simultaneously).
+
         :param name: Index name
         :return: LmdbIndex instance
         """
         if name in self._index_cache:
             return self._index_cache[name]
 
-        index_path = self.base_path / f"{name}.lmdb"
-        idx = LmdbIndex(index_path)
-        self._index_cache[name] = idx
-        return idx
+        with self._cache_lock:
+            if name in self._index_cache:
+                return self._index_cache[name]
+            index_path = self.base_path / f"{name}.lmdb"
+            idx = LmdbIndex(index_path)
+            self._index_cache[name] = idx
+            return idx
 
     def _validate_index_exists(self, name):
         # type: (str) -> None

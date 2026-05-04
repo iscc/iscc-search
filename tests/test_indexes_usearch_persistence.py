@@ -187,9 +187,10 @@ def test_usearch_index_rebuild_with_no_vectors(tmp_path, sample_iscc_ids):
     idx.add_assets([asset])
 
     # Trigger rebuild for non-existent unit_type
-    idx._rebuild_nphd_index("NONEXISTENT_TYPE")
+    rebuilt = idx._rebuild_nphd_index("NONEXISTENT_TYPE")
 
     # Should complete without error, no index created
+    assert rebuilt is False
     assert "NONEXISTENT_TYPE" not in idx._nphd_indexes
 
     idx.close()
@@ -216,8 +217,9 @@ def test_usearch_index_rebuild_without_existing_dir(tmp_path, sample_iscc_ids):
     assert not shard_dir.exists()
 
     # Rebuild — should create directory from scratch (exercises shard_dir.exists()=False branch)
-    idx._rebuild_nphd_index(unit_type)
+    rebuilt = idx._rebuild_nphd_index(unit_type)
 
+    assert rebuilt is True
     assert unit_type in idx._nphd_indexes
     assert idx._nphd_indexes[unit_type].size == 1
 
@@ -246,10 +248,55 @@ def test_usearch_index_rebuild_with_existing_dir(tmp_path, sample_iscc_ids):
     del idx._nphd_indexes[unit_type]
 
     # Rebuild — should remove stale dir first (exercises shard_dir.exists()=True branch)
-    idx._rebuild_nphd_index(unit_type)
+    rebuilt = idx._rebuild_nphd_index(unit_type)
 
+    assert rebuilt is True
     assert unit_type in idx._nphd_indexes
     assert idx._nphd_indexes[unit_type].size == 1
+
+    idx.close()
+
+
+def test_usearch_index_rebuild_resets_cached_nphd_before_delete(tmp_path, sample_iscc_ids, monkeypatch):
+    """Cached NPHD indexes are released before their shard directory is removed."""
+    index_path = tmp_path / "rebuild_cached_release"
+
+    idx = UsearchIndex(index_path, realm_id=0, max_dim=256)
+
+    content_unit = ic.gen_text_code_v0("Test content for cached rebuild release")["iscc"]
+    instance_unit = f"ISCC:{ic.Code.rnd(ic.MT.INSTANCE, bits=128)}"
+    asset = IsccEntry(iscc_id=sample_iscc_ids[0], units=[instance_unit, content_unit])
+    idx.add_assets([asset])
+    idx.flush()
+
+    unit_type = "CONTENT_TEXT_V0"
+    real_index = idx._nphd_indexes[unit_type]
+    real_index.reset()
+
+    reset_called = False
+
+    class CachedIndex:
+        def reset(self):
+            # type: () -> None
+            nonlocal reset_called
+            reset_called = True
+
+    idx._nphd_indexes[unit_type] = CachedIndex()
+
+    original_rmtree = shutil.rmtree
+
+    def rmtree_spy(path):
+        assert reset_called is True
+        original_rmtree(path)
+
+    monkeypatch.setattr("iscc_search.indexes.usearch.index.shutil.rmtree", rmtree_spy)
+
+    rebuilt = idx._rebuild_nphd_index(unit_type)
+
+    assert rebuilt is True
+    assert reset_called is True
+    assert unit_type in idx._nphd_indexes
+    assert idx._nphd_indexes[unit_type] is not real_index
 
     idx.close()
 

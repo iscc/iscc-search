@@ -39,22 +39,15 @@ services:
     image: ghcr.io/iscc/iscc-search:latest
     container_name: iscc-search-api
     ports:
-      - "8000:8000"
+      - 8000:8000
     volumes:
       - iscc-data:/data
     environment:
       - ISCC_SEARCH_INDEX_URI=usearch:///data
-      - ISCC_SEARCH_FLUSH_INTERVAL=100000
       # - ISCC_SEARCH_API_SECRET=your-secret-key
       # - ISCC_SEARCH_CORS_ORIGINS=https://example.com
     restart: unless-stopped
-    stop_grace_period: 120s
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz')"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
+    stop_grace_period: 300s
     deploy:
       resources:
         limits:
@@ -77,46 +70,63 @@ docker compose up -d
 
 ## Graceful shutdown
 
-On shutdown, iscc-search flushes all dirty HNSW indexes to disk. Large indexes can take tens of seconds to
-save. You must give the process enough time to complete.
+On shutdown, iscc-search flushes all dirty HNSW indexes to disk. Large indexes can take a few minutes to
+save. You must give the process enough time to complete the **drain phase plus the flush phase**.
 
-The timing chain works like this:
+uvicorn's shutdown is **strictly sequential**:
 
-1. **uvicorn** `--timeout-graceful-shutdown 60` - stops accepting connections, waits up to 60s for the
-   lifespan handler to flush indexes.
-2. **Docker** `stop_grace_period: 120s` - sends SIGTERM, then waits 120s before SIGKILL. Must be longer
-   than uvicorn's timeout.
+1. **uvicorn** stops accepting new connections (immediate).
+1. **uvicorn** waits for in-flight requests to complete, bounded by `--timeout-graceful-shutdown`.
+1. **uvicorn** runs the FastAPI lifespan handler, which calls `index.close()` to flush HNSW shards.
+    This step has **no timeout in uvicorn** — only Docker's `stop_grace_period` can stop it.
+1. **Docker** sends SIGKILL once `stop_grace_period` elapses since the initial SIGTERM.
 
-The Dockerfile sets `--timeout-graceful-shutdown 60` by default. Set `stop_grace_period` in your compose file
-to at least double that value.
+This means:
+
+```
+stop_grace_period >= timeout_graceful_shutdown + expected_flush_duration + buffer
+```
+
+If `stop_grace_period` equals `timeout_graceful_shutdown`, a slow request can consume the entire grace
+window and Docker SIGKILLs the process the moment the lifespan flush tries to start, **losing all dirty
+HNSW state**. This is a real failure mode, not a theoretical one.
+
+Defaults:
+
+- Dockerfile: `--timeout-graceful-shutdown 60` (drain timeout)
+- compose.yaml: `stop_grace_period 300s` (60s drain + 240s flush headroom)
+
+For very large indexes (10M+ vectors), raise `stop_grace_period` to `600s` or more — the drain timeout
+stays at `60s` because it bounds request latency, not flush latency.
 
 ## Environment variables
 
-| Variable | Default | Production recommendation |
-|---|---|---|
-| `ISCC_SEARCH_INDEX_URI` | `usearch://` + platform dir | `usearch:///data` (explicit path) |
-| `ISCC_SEARCH_API_SECRET` | None (public) | Set a strong secret |
-| `ISCC_SEARCH_CORS_ORIGINS` | `*` | Restrict to your domains |
-| `ISCC_SEARCH_FLUSH_INTERVAL` | 0 (disabled) | `100000` (flush every 100K mutations) |
-| `ISCC_SEARCH_LOG_LEVEL` | `info` | `info` or `warning` |
-| `ISCC_SEARCH_SENTRY_DSN` | None | Set for error tracking |
-| `ISCC_SEARCH_HOST` | `0.0.0.0` | `0.0.0.0` |
-| `ISCC_SEARCH_PORT` | 8000 | 8000 |
+| Variable                     | Default                     | Production recommendation                             |
+| ---------------------------- | --------------------------- | ----------------------------------------------------- |
+| `ISCC_SEARCH_INDEX_URI`      | `usearch://` + platform dir | `usearch:///data` (explicit path)                     |
+| `ISCC_SEARCH_API_SECRET`     | None (public)               | Set a strong secret                                   |
+| `ISCC_SEARCH_CORS_ORIGINS`   | `*`                         | Restrict to your domains                              |
+| `ISCC_SEARCH_FLUSH_INTERVAL` | `100000`                    | Keep at default, or raise for higher write throughput |
+| `ISCC_SEARCH_LOG_LEVEL`      | `info`                      | `info` or `warning`                                   |
+| `ISCC_SEARCH_SENTRY_DSN`     | None                        | Set for error tracking                                |
+| `ISCC_SEARCH_HOST`           | `0.0.0.0`                   | `0.0.0.0`                                             |
+| `ISCC_SEARCH_PORT`           | 8000                        | 8000                                                  |
 
 !!! tip "Flush interval"
 
-    `FLUSH_INTERVAL=0` means indexes are only saved on graceful shutdown. If the process is killed (OOM,
-    SIGKILL, power loss), all mutations since the last save are lost. Setting a non-zero value reduces the
-    blast radius of hard crashes.
+    The default `FLUSH_INTERVAL=100000` auto-flushes derived HNSW indexes every 100,000 mutations, capping
+    data loss on hard crashes (OOM, SIGKILL, power loss). Setting it to `0` disables auto-flush and means
+    indexes are only saved on graceful shutdown — faster ingestion but unbounded loss on crash. Raise the
+    value for slightly higher write throughput at the cost of a larger loss window.
 
 ## Sizing profiles
 
-| Profile | Assets | RAM | CPU | Notes |
-|---|---|---|---|---|
-| Sandbox | up to 100K | 4 GB | 2 cores | Development and testing |
-| Validation | up to 500K | 64 GB | 4 cores | Pre-production validation |
-| Launch | up to 1M | 128 GB | 8 cores | Initial production deployment |
-| Growth | 5M+ | 256 GB+ | 16+ cores | Large-scale production |
+| Profile    | Assets     | RAM     | CPU       | Notes                         |
+| ---------- | ---------- | ------- | --------- | ----------------------------- |
+| Sandbox    | up to 100K | 4 GB    | 2 cores   | Development and testing       |
+| Validation | up to 500K | 64 GB   | 4 cores   | Pre-production validation     |
+| Launch     | up to 1M   | 128 GB  | 8 cores   | Initial production deployment |
+| Growth     | 5M+        | 256 GB+ | 16+ cores | Large-scale production        |
 
 HNSW indexes are memory-mapped. RAM requirements grow with index size. Monitor RSS and adjust limits.
 
@@ -177,10 +187,11 @@ Before going live, verify the following:
 
 - [ ] `ISCC_SEARCH_INDEX_URI` points to a persistent volume
 - [ ] Worker count is 1 (or unset)
-- [ ] `ISCC_SEARCH_FLUSH_INTERVAL` is non-zero (e.g., `100000`)
+- [ ] `ISCC_SEARCH_FLUSH_INTERVAL` is non-zero (default `100000`)
 - [ ] `ISCC_SEARCH_API_SECRET` is set
 - [ ] `ISCC_SEARCH_CORS_ORIGINS` is restricted to your domains
-- [ ] `stop_grace_period` is at least 2x the uvicorn graceful shutdown timeout
+- [ ] `stop_grace_period` is `>= timeout_graceful_shutdown + expected_flush_duration` (default `300s`
+    covers ~60s drain + ~240s flush; raise for indexes over 10M vectors)
 - [ ] Health probes are configured in your orchestrator
 - [ ] Each instance has its own data volume (no sharing)
 - [ ] Resource limits (CPU, memory) match your sizing profile
@@ -189,15 +200,46 @@ Before going live, verify the following:
 
 ## Troubleshooting
 
-### Index corruption
+### Derived indexes out of sync
 
-**Symptom**: Server crashes on startup, search returns errors, or asset counts are wrong.
+**Symptom**: Boot logs show `ShardedNphdIndex 'X' out of sync: expected N vectors, found M` or
+`UsearchSimprintIndex 'X' out of sync: expected N, found M`. Search results are stale or empty for affected
+unit/simprint types. Asset counts in `/indexes` reflect LMDB and may be larger than what searches return.
 
-**Cause**: Multiple processes wrote to the same data directory, or the process was killed during a write
-(SIGKILL, OOM).
+**Cause**: The process was killed (SIGKILL, OOM, host crash, `stop_grace_period` too short) before the
+lifespan handler could flush dirty HNSW shards to disk. LMDB is the source of truth and survives unclean
+exits; derived HNSW shards do not unless they were saved by `flush_interval` rotation, shard-size rotation,
+or graceful `close()`.
 
-**Fix**: Stop the server. Delete the corrupted `.usearch` files from the index directory. Restart the server.
-It will rebuild HNSW indexes from the LMDB data on next access. Re-index if LMDB is also corrupted.
+**Fix**: Stop the server, then run an explicit rebuild from the intact LMDB data. Auto-rebuild on startup is
+intentionally disabled because rebuilding large indexes can OOM the container.
+
+```python
+# One-shot rebuild from a Python REPL or script (until the CLI command lands)
+from iscc_search.indexes.usearch.index import UsearchIndex
+
+idx = UsearchIndex("/path/to/index-dir")
+for unit_type in ("META_NONE_V0", "DATA_NONE_V0", "CONTENT_TEXT_V0", "SEMANTIC_TEXT_V0"):
+    idx._rebuild_nphd_index(unit_type)
+for sp_type in ("CONTENT_TEXT_V0", "SEMANTIC_TEXT_V0"):
+    idx._rebuild_simprint_index(sp_type)
+idx.close()
+```
+
+Restart the server. To prevent recurrence, ensure `ISCC_SEARCH_FLUSH_INTERVAL` is set to a non-zero value
+(default `100000`) and `stop_grace_period` is sized as
+`timeout_graceful_shutdown + expected_flush_duration + buffer` (default `60s + 240s = 300s`).
+
+### LMDB corruption
+
+**Symptom**: Server crashes on startup with `lmdb.Error` reading `index.lmdb`, or asset retrieval returns
+malformed data.
+
+**Cause**: Disk corruption, killed mid-write at the LMDB layer (very rare — LMDB uses MVCC and is
+crash-safe by design), or downgrading the LMDB version with on-disk format incompatibility.
+
+**Fix**: Restore `index.lmdb` from backup, then run the rebuild procedure above to regenerate derived
+indexes. Re-ingest if no backup is available.
 
 ### Slow shutdown
 
@@ -205,8 +247,10 @@ It will rebuild HNSW indexes from the LMDB data on next access. Re-index if LMDB
 
 **Cause**: Large HNSW indexes need time to flush to disk. The grace period is too short.
 
-**Fix**: Increase `stop_grace_period` in your compose file. For indexes over 1M assets, use 300s or more.
-Monitor shutdown logs to find the actual flush duration.
+**Fix**: Raise `stop_grace_period` in your compose file. Keep `--timeout-graceful-shutdown` at the default
+`60s` (it bounds request drain, not flush). Use the formula
+`stop_grace_period = 60s + measured_flush_duration + 60s buffer`. Monitor shutdown logs
+(`Saved ShardedNphdIndex`, `Saved UsearchSimprintIndex`) to measure actual flush duration.
 
 ### Out of memory
 

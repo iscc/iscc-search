@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Breaking default**: `ISCC_SEARCH_FLUSH_INTERVAL` default raised from `0` (disabled) to `100000`. Derived
+    HNSW indexes (NPHD, simprint) now auto-flush every 100,000 dirty mutations, capping data loss on hard
+    crashes (OOM, SIGKILL, power loss). Previously, indexes were only saved on graceful `close()` — small
+    indexes that never reached the shard-size rotation threshold could lose every vector added since process
+    start. Set `ISCC_SEARCH_FLUSH_INTERVAL=0` to restore the old behavior if you need maximum ingestion
+    throughput and can tolerate unbounded loss on crash.
+- Repo `compose.yaml` `stop_grace_period` raised from `90s` to `300s`. uvicorn shutdown is sequential —
+    request drain (bounded by `--timeout-graceful-shutdown`, kept at `60s`) runs first, then the lifespan
+    handler runs the HNSW flush with no uvicorn-side timeout. Docker's `stop_grace_period` is the only
+    outer bound on the flush, so it must be `>= timeout_graceful_shutdown + expected_flush_duration`. The
+    new `300s` covers `60s` drain plus `~240s` flush headroom; raise to `600s+` for indexes over 10M
+    vectors. If your production compose file overrides `stop_grace_period`, recalculate using this formula.
+
+### Fixed
+
+- Deployment troubleshooting docs no longer instruct operators to delete `.usearch` files to trigger an
+    auto-rebuild on restart. Auto-rebuild on startup was disabled in v0.1.0 to prevent OOM restart loops on
+    large indexes; the docs now describe the explicit rebuild procedure from LMDB instead.
+
 ## [0.1.0] - 2026-04-16
 
 Initial release of iscc-search.

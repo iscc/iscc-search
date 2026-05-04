@@ -16,30 +16,30 @@ use the `ISCC_SEARCH_` prefix and follow 12-factor app principles.
 You can set these through environment variables, a `.env` file in the working directory, or
 direct instantiation in code.
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `ISCC_SEARCH_INDEX_URI` | `usearch://{data_dir}` | Backend URI (`memory://`, `lmdb://`, `usearch://`) |
-| `ISCC_SEARCH_API_SECRET` | `None` | API authentication secret (unset = public access) |
-| `ISCC_SEARCH_CORS_ORIGINS` | `*` | Comma-separated allowed origins |
-| `ISCC_SEARCH_HOST` | `0.0.0.0` | Server bind address |
-| `ISCC_SEARCH_PORT` | `8000` | Server bind port |
-| `ISCC_SEARCH_WORKERS` | `None` | Number of worker processes |
-| `ISCC_SEARCH_SHARD_SIZE_UNITS` | `1024` | Max shard size for unit indexes (MB) |
-| `ISCC_SEARCH_SHARD_SIZE_SIMPRINTS` | `1024` | Max shard size for simprint indexes (MB) |
-| `ISCC_SEARCH_HNSW_EXPANSION_ADD_UNITS` | `128` | Build-time search depth for unit HNSW |
-| `ISCC_SEARCH_HNSW_EXPANSION_SEARCH_UNITS` | `64` | Query-time search depth for unit HNSW |
-| `ISCC_SEARCH_HNSW_CONNECTIVITY_UNITS` | `16` | Graph connectivity (M) for unit HNSW |
-| `ISCC_SEARCH_HNSW_EXPANSION_ADD_SIMPRINTS` | `16` | Build-time search depth for simprint HNSW |
-| `ISCC_SEARCH_HNSW_EXPANSION_SEARCH_SIMPRINTS` | `512` | Query-time search depth for simprint HNSW |
-| `ISCC_SEARCH_HNSW_CONNECTIVITY_SIMPRINTS` | `8` | Graph connectivity (M) for simprint HNSW |
-| `ISCC_SEARCH_MATCH_THRESHOLD_UNITS` | `0.75` | Minimum score for unit matches (0.0-1.0) |
-| `ISCC_SEARCH_MATCH_THRESHOLD_SIMPRINTS` | `0.75` | Minimum score for simprint matches (0.0-1.0) |
-| `ISCC_SEARCH_CONFIDENCE_EXPONENT` | `4` | Exponent for confidence-weighted scoring |
-| `ISCC_SEARCH_OVERSAMPLING_FACTOR` | `20` | Oversampling multiplier for simprint search |
-| `ISCC_SEARCH_FLUSH_INTERVAL` | `0` | Auto-flush after N mutations (0 = disabled) |
-| `ISCC_SEARCH_LOG_LEVEL` | `info` | Log level (`debug`, `info`, `warning`, `error`) |
-| `ISCC_SEARCH_SENTRY_DSN` | `None` | Sentry error tracking DSN |
-| `ISCC_SEARCH_SENTRY_TRACES_SAMPLE_RATE` | `0.05` | Sentry performance sampling rate (0.0-1.0) |
+| Variable                                      | Default                | Description                                        |
+| --------------------------------------------- | ---------------------- | -------------------------------------------------- |
+| `ISCC_SEARCH_INDEX_URI`                       | `usearch://{data_dir}` | Backend URI (`memory://`, `lmdb://`, `usearch://`) |
+| `ISCC_SEARCH_API_SECRET`                      | `None`                 | API authentication secret (unset = public access)  |
+| `ISCC_SEARCH_CORS_ORIGINS`                    | `*`                    | Comma-separated allowed origins                    |
+| `ISCC_SEARCH_HOST`                            | `0.0.0.0`              | Server bind address                                |
+| `ISCC_SEARCH_PORT`                            | `8000`                 | Server bind port                                   |
+| `ISCC_SEARCH_WORKERS`                         | `None`                 | Number of worker processes                         |
+| `ISCC_SEARCH_SHARD_SIZE_UNITS`                | `1024`                 | Max shard size for unit indexes (MB)               |
+| `ISCC_SEARCH_SHARD_SIZE_SIMPRINTS`            | `1024`                 | Max shard size for simprint indexes (MB)           |
+| `ISCC_SEARCH_HNSW_EXPANSION_ADD_UNITS`        | `128`                  | Build-time search depth for unit HNSW              |
+| `ISCC_SEARCH_HNSW_EXPANSION_SEARCH_UNITS`     | `64`                   | Query-time search depth for unit HNSW              |
+| `ISCC_SEARCH_HNSW_CONNECTIVITY_UNITS`         | `16`                   | Graph connectivity (M) for unit HNSW               |
+| `ISCC_SEARCH_HNSW_EXPANSION_ADD_SIMPRINTS`    | `16`                   | Build-time search depth for simprint HNSW          |
+| `ISCC_SEARCH_HNSW_EXPANSION_SEARCH_SIMPRINTS` | `512`                  | Query-time search depth for simprint HNSW          |
+| `ISCC_SEARCH_HNSW_CONNECTIVITY_SIMPRINTS`     | `8`                    | Graph connectivity (M) for simprint HNSW           |
+| `ISCC_SEARCH_MATCH_THRESHOLD_UNITS`           | `0.75`                 | Minimum score for unit matches (0.0-1.0)           |
+| `ISCC_SEARCH_MATCH_THRESHOLD_SIMPRINTS`       | `0.75`                 | Minimum score for simprint matches (0.0-1.0)       |
+| `ISCC_SEARCH_CONFIDENCE_EXPONENT`             | `4`                    | Exponent for confidence-weighted scoring           |
+| `ISCC_SEARCH_OVERSAMPLING_FACTOR`             | `20`                   | Oversampling multiplier for simprint search        |
+| `ISCC_SEARCH_FLUSH_INTERVAL`                  | `100000`               | Auto-flush after N mutations (0 = disabled)        |
+| `ISCC_SEARCH_LOG_LEVEL`                       | `info`                 | Log level (`debug`, `info`, `warning`, `error`)    |
+| `ISCC_SEARCH_SENTRY_DSN`                      | `None`                 | Sentry error tracking DSN                          |
+| `ISCC_SEARCH_SENTRY_TRACES_SAMPLE_RATE`       | `0.05`                 | Sentry performance sampling rate (0.0-1.0)         |
 
 ### .env file support
 
@@ -117,9 +117,9 @@ Local indexes store `path` (directory on disk). Remote indexes store `url` and o
 These configuration systems are intentionally separate.
 
 - **`SearchOptions`** drives the server. One index per deployment, configured through
-  environment variables. Used by `iscc-search serve`.
+    environment variables. Used by `iscc-search serve`.
 - **`AppConfig`** drives the CLI. Multiple named indexes with an active selection, persisted
-  in JSON. Used by `iscc-search add`, `search`, `get`.
+    in JSON. Used by `iscc-search add`, `search`, `get`.
 
 See [Architecture](../explanation/architecture.md) for how these systems fit into the
 overall design.

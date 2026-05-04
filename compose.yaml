@@ -21,9 +21,15 @@ services:
     restart: unless-stopped
 
     # Graceful shutdown configuration (CRITICAL for data integrity)
-    # Gives container 90s to save indexes before forced kill
-    # Must be > uvicorn's --timeout-graceful-shutdown (60s)
-    stop_grace_period: 90s
+    #
+    # uvicorn shutdown is sequential: drain in-flight requests (up to
+    # --timeout-graceful-shutdown=60s in the Dockerfile), THEN run the lifespan
+    # handler that flushes HNSW shards (unbounded in uvicorn).
+    #
+    # Required: stop_grace_period >= 60s drain + expected flush + buffer.
+    # 300s = 60s drain + 240s flush headroom. Sufficient for indexes up to
+    # several million vectors; raise to 600s+ for 10M+ vector deployments.
+    stop_grace_period: 300s
 
     # Health check monitors application availability
     healthcheck:

@@ -164,7 +164,7 @@ class SearchOptions(BaseSettings):
 
     # Flush control
     flush_interval: int = Field(
-        0,
+        100000,
         ge=0,
         description="ISCC_SEARCH_FLUSH_INTERVAL - Auto-flush sub-indexes after N dirty key "
         "mutations (0 = disabled). Only safe with a single writer process.",

@@ -85,13 +85,13 @@ class SearchOptions(BaseSettings):
 
     # Shard sizes (in MB)
     shard_size_units: int = Field(
-        1024,
+        512,
         ge=1,
         description="ISCC_SEARCH_SHARD_SIZE_UNITS - Maximum shard file size for unit indexes in MB",
     )
 
     shard_size_simprints: int = Field(
-        1024,
+        512,
         ge=1,
         description="ISCC_SEARCH_SHARD_SIZE_SIMPRINTS - Maximum shard file size for simprint indexes in MB",
     )

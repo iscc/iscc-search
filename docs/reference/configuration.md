@@ -24,8 +24,8 @@ direct instantiation in code.
 | `ISCC_SEARCH_HOST`                            | `0.0.0.0`              | Server bind address                                |
 | `ISCC_SEARCH_PORT`                            | `8000`                 | Server bind port                                   |
 | `ISCC_SEARCH_WORKERS`                         | `None`                 | Number of worker processes                         |
-| `ISCC_SEARCH_SHARD_SIZE_UNITS`                | `1024`                 | Max shard size for unit indexes (MB)               |
-| `ISCC_SEARCH_SHARD_SIZE_SIMPRINTS`            | `1024`                 | Max shard size for simprint indexes (MB)           |
+| `ISCC_SEARCH_SHARD_SIZE_UNITS`                | `512`                  | Max shard size for unit indexes (MB)               |
+| `ISCC_SEARCH_SHARD_SIZE_SIMPRINTS`            | `512`                  | Max shard size for simprint indexes (MB)           |
 | `ISCC_SEARCH_HNSW_EXPANSION_ADD_UNITS`        | `128`                  | Build-time search depth for unit HNSW              |
 | `ISCC_SEARCH_HNSW_EXPANSION_SEARCH_UNITS`     | `64`                   | Query-time search depth for unit HNSW              |
 | `ISCC_SEARCH_HNSW_CONNECTIVITY_UNITS`         | `16`                   | Graph connectivity (M) for unit HNSW               |

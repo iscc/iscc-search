@@ -77,20 +77,20 @@ Each index is a directory containing an LMDB file plus `.usearch` shard files fo
 
 You can tune HNSW parameters via environment variables:
 
-| Variable | Default | Purpose |
-|---|---|---|
-| `ISCC_SEARCH_HNSW_CONNECTIVITY_UNITS` | 16 | Graph connectivity (M) for unit indexes |
-| `ISCC_SEARCH_HNSW_EXPANSION_ADD_UNITS` | 128 | Build-time search depth (efConstruction) |
-| `ISCC_SEARCH_HNSW_EXPANSION_SEARCH_UNITS` | 64 | Query-time search depth (ef) |
-| `ISCC_SEARCH_SHARD_SIZE_UNITS` | 1024 | Max shard file size in MB |
+| Variable                                  | Default | Purpose                                  |
+| ----------------------------------------- | ------- | ---------------------------------------- |
+| `ISCC_SEARCH_HNSW_CONNECTIVITY_UNITS`     | 16      | Graph connectivity (M) for unit indexes  |
+| `ISCC_SEARCH_HNSW_EXPANSION_ADD_UNITS`    | 128     | Build-time search depth (efConstruction) |
+| `ISCC_SEARCH_HNSW_EXPANSION_SEARCH_UNITS` | 64      | Query-time search depth (ef)             |
+| `ISCC_SEARCH_SHARD_SIZE_UNITS`            | 512     | Max shard file size in MB                |
 
 ## Choosing a backend
 
-| Backend | URI | Persistence | Search type | Best for |
-|---|---|---|---|---|
-| Memory | `memory://` | None | Exact | Tests, demos, prototyping |
-| LMDB | `lmdb:///path` | Disk | Prefix search | Small datasets, exact lookup |
-| USearch | `usearch:///path` | Disk | HNSW similarity | Production similarity search |
+| Backend | URI               | Persistence | Search type     | Best for                     |
+| ------- | ----------------- | ----------- | --------------- | ---------------------------- |
+| Memory  | `memory://`       | None        | Exact           | Tests, demos, prototyping    |
+| LMDB    | `lmdb:///path`    | Disk        | Prefix search   | Small datasets, exact lookup |
+| USearch | `usearch:///path` | Disk        | HNSW similarity | Production similarity search |
 
 For most production deployments, use the usearch backend. Use LMDB when you need prefix-based lookup without
 similarity search. Use memory for automated tests.

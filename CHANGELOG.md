@@ -29,6 +29,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     planned. Trade-off: ~25× write amplification on heavy SIMPRINT ingestion. Set
     `ISCC_SEARCH_FLUSH_INTERVAL=0` to restore the old behavior if you need maximum ingestion throughput
     and accept unbounded loss on crash.
+- **Breaking default**: `ISCC_SEARCH_SHARD_SIZE_UNITS` and `ISCC_SEARCH_SHARD_SIZE_SIMPRINTS` defaults
+    lowered from `1024` MB to `512` MB. Smaller rotation threshold means active shards seal to immutable
+    on-disk artifacts roughly twice as often, so the worst-case "active shard lost on crash" window shrinks
+    by ~50% for high-volume simprint ingestion. Complementary to the `flush_interval` change above:
+    `flush_interval` bounds loss by *mutation count* on the live active shard; `shard_size_*` bounds loss
+    by *bytes sealed*. Trade-off: ~2× the number of sealed shard files on disk, marginally more I/O on
+    rotation. Existing deployments need no migration: sealed shards from the old 1024 MB era stay
+    untouched (they are never split or rewritten), and an active shard already above 512 MB simply
+    rotates on its next `add()`. Expect heterogeneous shard sizes in directories that span the
+    transition. Set explicitly to `1024` to restore the old behavior.
 - Repo `compose.yaml` `stop_grace_period` raised from `90s` to `300s`. uvicorn shutdown is sequential —
     request drain (bounded by `--timeout-graceful-shutdown`, kept at `60s`) runs first, then the lifespan
     handler runs the HNSW flush with no uvicorn-side timeout. Docker's `stop_grace_period` is the only

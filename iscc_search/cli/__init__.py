@@ -31,6 +31,7 @@ index_app.command(name="add")(index.add_command)
 index_app.command(name="list")(index.list_command)
 index_app.command(name="use")(index.use_command)
 index_app.command(name="remove")(index.remove_command)
+index_app.command(name="rebuild")(index.rebuild_command)
 
 # Register commands
 app.add_typer(index_app, name="index")

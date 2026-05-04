@@ -698,6 +698,44 @@ class UsearchIndex:
         """Get current LMDB map_size."""
         return self.env.info()["map_size"]
 
+    @property
+    def tracked_unit_types(self):
+        # type: () -> list[str]
+        """Sorted list of NPHD unit_types tracked in LMDB metadata."""
+        return sorted(self._get_all_tracked_unit_types())
+
+    @property
+    def tracked_simprint_types(self):
+        # type: () -> list[str]
+        """Sorted list of simprint types tracked in LMDB metadata."""
+        return sorted(self._get_sp_types())
+
+    def rebuild(self, unit_types, simprint_types):
+        # type: (list[str], list[str]) -> dict[str, list[str]]
+        """
+        Rebuild specified derived indexes from LMDB source data.
+
+        Each NPHD unit_type and simprint_type is rebuilt fresh: the existing shard
+        directory is removed and a new index is built from LMDB entries. Use the
+        ``tracked_unit_types`` and ``tracked_simprint_types`` properties to discover
+        what is currently tracked.
+
+        :param unit_types: NPHD unit_types to rebuild (e.g., ["CONTENT_TEXT_V0"])
+        :param simprint_types: Simprint types to rebuild (e.g., ["CONTENT_TEXT_V0"])
+        :return: Dict with lists of types that were actually rebuilt
+        """
+        rebuilt_unit_types = []  # type: list[str]
+        for unit_type in unit_types:
+            if self._rebuild_nphd_index(unit_type):
+                rebuilt_unit_types.append(unit_type)
+
+        rebuilt_simprint_types = []  # type: list[str]
+        for sp_type in simprint_types:
+            if self._rebuild_simprint_index(sp_type):
+                rebuilt_simprint_types.append(sp_type)
+
+        return {"unit_types": rebuilt_unit_types, "simprint_types": rebuilt_simprint_types}
+
     def _search_simprints(self, query, limit, exact=False):
         # type: (IsccQuery, int, bool) -> list[IsccChunkMatch]
         """
@@ -1248,7 +1286,8 @@ class UsearchIndex:
                     logger.warning(
                         f"ShardedNphdIndex '{unit_type}' out of sync: "
                         f"expected {expected_count} vectors, found {actual_count}. "
-                        f"Skipping auto-rebuild (use CLI rebuild command to fix)."
+                        f"Skipping auto-rebuild. Run 'iscc-search index rebuild "
+                        f"--unit-type {unit_type}' (or '--all') to repair."
                     )
                     # Accept stale index rather than risk OOM during rebuild
                     self._nphd_indexes[unit_type] = nphd_index
@@ -1260,7 +1299,7 @@ class UsearchIndex:
                 logger.warning(f"Failed to load ShardedNphdIndex '{unit_type}': {e}. Skipping.")
 
     def _rebuild_nphd_index(self, unit_type):
-        # type: (str) -> None
+        # type: (str) -> bool
         """
         Rebuild ShardedNphdIndex from LMDB asset data.
 
@@ -1268,6 +1307,7 @@ class UsearchIndex:
         and creates fresh ShardedNphdIndex. Automatically saves and updates metadata.
 
         :param unit_type: Unit type identifier to rebuild
+        :return: True if an index was rebuilt, False if no source vectors exist
         """
         import time as time_module
 
@@ -1297,10 +1337,13 @@ class UsearchIndex:
 
         if not keys:
             logger.info(f"No vectors found for unit_type '{unit_type}' - skipping rebuild")
-            return
+            return False
 
         # Remove stale/corrupt shard directory before creating fresh index
         shard_dir = self.path / unit_type
+        old_index = self._nphd_indexes.pop(unit_type, None)
+        if old_index is not None:
+            old_index.reset()
         if shard_dir.exists():
             shutil.rmtree(shard_dir)
 
@@ -1326,6 +1369,7 @@ class UsearchIndex:
 
         elapsed = time_module.time() - start_time
         logger.info(f"Rebuilt ShardedNphdIndex for unit_type '{unit_type}': {len(keys)} vectors in {elapsed:.2f}s")
+        return True
 
     def _get_or_create_nphd_index(self, unit_type):
         # type: (str) -> ShardedNphdIndex
@@ -1411,7 +1455,8 @@ class UsearchIndex:
                     logger.warning(
                         f"UsearchSimprintIndex '{sp_type}' out of sync: "
                         f"expected {expected_count}, found {actual_count}. "
-                        f"Skipping auto-rebuild (use CLI rebuild command to fix)."
+                        f"Skipping auto-rebuild. Run 'iscc-search index rebuild "
+                        f"--simprint-type {sp_type}' (or '--all') to repair."
                     )
                     # Accept stale index rather than risk OOM during rebuild
                     self._simprint_indexes[sp_type] = sp_index
@@ -1423,18 +1468,19 @@ class UsearchIndex:
                 logger.warning(f"Failed to load UsearchSimprintIndex '{sp_type}': {e}. Skipping.")
 
     def _rebuild_simprint_index(self, sp_type):
-        # type: (str) -> None
+        # type: (str) -> bool
         """
         Rebuild ShardedIndex128 for a simprint type from LMDB source of truth.
 
         :param sp_type: Simprint type identifier to rebuild
+        :return: True if an index was rebuilt, False if no source vectors exist
         """
         start_time = time.time()
         logger.info(f"Rebuilding UsearchSimprintIndex for type '{sp_type}'...")
 
         if sp_type not in self._sp_data_dbs:
             logger.warning(f"No LMDB database for simprint type '{sp_type}' - skipping rebuild")
-            return
+            return False
 
         data_db = self._sp_data_dbs[sp_type]
 
@@ -1450,7 +1496,7 @@ class UsearchIndex:
         ndim = self._detect_sp_ndim(sp_type)
         if ndim is None:
             logger.info(f"No vectors found for simprint type '{sp_type}' - skipping rebuild")
-            return
+            return False
 
         # Iterate LMDB in batches to avoid loading all vectors into RAM
         sp_index = UsearchSimprintIndex(
@@ -1476,6 +1522,7 @@ class UsearchIndex:
 
         elapsed = time.time() - start_time
         logger.info(f"Rebuilt UsearchSimprintIndex for type '{sp_type}': {total_vectors} vectors in {elapsed:.2f}s")
+        return True
 
     def _update_sp_metadata(self, sp_type, vector_count):
         # type: (str, int) -> None

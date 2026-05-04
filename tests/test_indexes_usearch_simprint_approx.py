@@ -948,7 +948,8 @@ def test_rebuild_simprint_index_no_data(tmp_path, sample_iscc_ids):
         txn.drop(data_db, delete=False)  # Clear all entries
 
     # Rebuild should handle empty gracefully
-    idx._rebuild_simprint_index(sp_type)
+    rebuilt = idx._rebuild_simprint_index(sp_type)
+    assert rebuilt is False
 
     idx.close()
 
@@ -959,7 +960,8 @@ def test_rebuild_simprint_index_unknown_type(tmp_path, sample_iscc_ids):
     idx = UsearchIndex(index_path, realm_id=0, max_dim=256)
 
     # Rebuild for type that doesn't exist in _sp_data_dbs
-    idx._rebuild_simprint_index("NONEXISTENT_V0")
+    rebuilt = idx._rebuild_simprint_index("NONEXISTENT_V0")
+    assert rebuilt is False
 
     idx.close()
 
@@ -1143,9 +1145,10 @@ def test_rebuild_with_existing_directory(tmp_path, sample_iscc_ids):
     assert sp_dir.exists()
 
     # Rebuild with existing directory
-    idx._rebuild_simprint_index(sp_type)
+    rebuilt = idx._rebuild_simprint_index(sp_type)
 
     # Verify rebuild succeeded
+    assert rebuilt is True
     assert sp_type in idx._simprint_indexes
     assert idx._simprint_indexes[sp_type].size == 1
 

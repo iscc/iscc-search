@@ -5,6 +5,8 @@ Tests full protocol compliance, index lifecycle management, hybrid LMDB/NphdInde
 and INSTANCE special handling.
 """
 
+import threading
+
 import iscc_core as ic
 import pytest
 from iscc_search.schema import IsccIndex, IsccEntry, IsccQuery, Status
@@ -407,6 +409,142 @@ def test_persistence_after_close(manager, tmp_path, sample_iscc_ids, sample_cont
         assert len(result.global_matches) > 0
     finally:
         manager2.close()
+
+
+def test_concurrent_get_or_load_index_does_not_race_on_lmdb_open(manager, sample_iscc_ids, sample_content_units):
+    """
+    Concurrent first-load requests for the same uncached index must serialize
+    on the cache lock so lmdb.open() runs exactly once. Without the lock,
+    the second concurrent lmdb.open on the same path raises:
+    "The environment ... is already open in this process".
+    """
+    # Create the index on disk WITHOUT keeping it cached, so the next access
+    # goes through the cache-miss path concurrently from multiple threads.
+    manager.create_index(IsccIndex(name="concurrent"))
+    cached = manager._index_cache.pop("concurrent")
+    cached.close()
+
+    barrier = threading.Barrier(8)
+    results = []  # type: list
+    errors = []  # type: list
+
+    def worker():
+        # type: () -> None
+        try:
+            barrier.wait()
+            idx = manager._get_or_load_index("concurrent")
+            results.append(idx)
+        except Exception as e:  # pragma: no cover - test would fail below if this triggers
+            errors.append(e)
+
+    threads = [threading.Thread(target=worker) for _ in range(8)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    assert errors == []
+    assert len(results) == 8
+    first = results[0]
+    assert all(r is first for r in results)
+    assert manager._index_cache["concurrent"] is first
+
+
+def test_rebuild_all_known_types(manager, sample_iscc_ids, sample_content_units):
+    """Rebuild with both lists None should rebuild every tracked type."""
+    manager.create_index(IsccIndex(name="rebuildme"))
+    asset = IsccEntry(
+        iscc_id=sample_iscc_ids[0],
+        units=[sample_content_units[0], sample_content_units[1]],
+    )
+    manager.add_assets("rebuildme", [asset])
+
+    result = manager.rebuild("rebuildme")
+
+    # Two CONTENT-type units → both go to NPHD; no simprints provided
+    assert sorted(result["unit_types"]) == sorted(set(result["unit_types"]))
+    assert any(ut.startswith("CONTENT_") for ut in result["unit_types"])
+    assert result["simprint_types"] == []
+
+
+def test_rebuild_specific_unit_type_only(manager, sample_iscc_ids, sample_content_units):
+    """Rebuild with explicit unit_types should only rebuild those types."""
+    manager.create_index(IsccIndex(name="rebuildme"))
+    asset = IsccEntry(
+        iscc_id=sample_iscc_ids[0],
+        units=[sample_content_units[0], sample_content_units[1]],
+    )
+    manager.add_assets("rebuildme", [asset])
+
+    # Pick the first NPHD unit_type that exists
+    idx = manager._get_or_load_index("rebuildme")
+    target = idx.tracked_unit_types[0]
+
+    result = manager.rebuild("rebuildme", unit_types=[target], simprint_types=[])
+
+    assert result == {"unit_types": [target], "simprint_types": []}
+
+
+def test_rebuild_explicit_unknown_types_returns_empty(manager, sample_iscc_ids, sample_content_units):
+    """Explicit typo targets should not be reported as rebuilt."""
+    manager.create_index(IsccIndex(name="rebuildme"))
+    asset = IsccEntry(
+        iscc_id=sample_iscc_ids[0],
+        units=[sample_content_units[0], sample_content_units[1]],
+    )
+    manager.add_assets("rebuildme", [asset])
+
+    result = manager.rebuild(
+        "rebuildme",
+        unit_types=["CONTENT_TXT_V0"],
+        simprint_types=["CONTENT_TXT_V0"],
+    )
+
+    assert result == {"unit_types": [], "simprint_types": []}
+
+
+def test_rebuild_all_skips_tracked_unit_type_without_vectors(manager):
+    """Tracked NPHD metadata without LMDB source vectors should not count as rebuilt."""
+    manager.create_index(IsccIndex(name="rebuildme"))
+    idx = manager._get_or_load_index("rebuildme")
+    idx._update_nphd_metadata("CONTENT_TEXT_V0", 1)
+
+    result = manager.rebuild("rebuildme")
+
+    assert result == {"unit_types": [], "simprint_types": []}
+
+
+def test_rebuild_all_skips_tracked_simprint_type_without_database(manager):
+    """Tracked simprint metadata without an opened LMDB source DB should not count as rebuilt."""
+    manager.create_index(IsccIndex(name="rebuildme"))
+    idx = manager._get_or_load_index("rebuildme")
+    with idx.env.begin(write=True) as txn:
+        metadata_db = idx.env.open_db(b"__metadata__", txn=txn)
+        txn.put(b"sp_types", b'["CONTENT_TEXT_V0"]', db=metadata_db)
+
+    result = manager.rebuild("rebuildme")
+
+    assert result == {"unit_types": [], "simprint_types": []}
+
+
+def test_rebuild_index_not_found(manager):
+    """rebuild on missing index raises FileNotFoundError."""
+    with pytest.raises(FileNotFoundError, match="not found"):
+        manager.rebuild("ghost")
+
+
+def test_rebuild_simprint_types(manager, sample_assets_with_simprints):
+    """Rebuild simprint types — exercises the second loop in UsearchIndex.rebuild."""
+    manager.create_index(IsccIndex(name="rebuildsp"))
+    manager.add_assets("rebuildsp", sample_assets_with_simprints)
+
+    idx = manager._get_or_load_index("rebuildsp")
+    sp_targets = idx.tracked_simprint_types
+    assert sp_targets, "fixture should add at least one simprint type"
+
+    result = manager.rebuild("rebuildsp", unit_types=[], simprint_types=sp_targets)
+
+    assert result == {"unit_types": [], "simprint_types": sp_targets}
 
 
 def test_multiple_indexes_isolation(manager, sample_iscc_ids, sample_content_units):

@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- New CLI command `iscc-search index rebuild [--unit-type X] [--simprint-type Y] [--all] [--index NAME]`
+    that rebuilds derived NPHD and simprint indexes for a local usearch-backed index from LMDB source data.
+    The "out-of-sync" startup warnings now point at this command instead of an imaginary one. Operators no
+    longer need a Python REPL to recover after a crash that left LMDB ahead of the on-disk shards.
+
 ### Changed
 
 - **Breaking default**: `ISCC_SEARCH_FLUSH_INTERVAL` default raised from `0` (disabled) to `100000`. Derived
@@ -31,6 +38,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `UsearchIndexManager` and `LmdbIndexManager` now serialize first-load construction in
+    `_get_or_load_index` with a `threading.Lock`. Previously, a concurrent burst against an uncached index
+    (typical first-burst-after-restart) could race two threads into `lmdb.open()` on the same path,
+    producing `lmdb.Error: The environment '...index.lmdb' is already open in this process` and a 500
+    response. Once one thread populated the cache, subsequent requests were fine — so this only affected
+    first bursts, but those are exactly when operators are paying attention.
 - Deployment troubleshooting docs no longer instruct operators to delete `.usearch` files to trigger an
     auto-rebuild on restart. Auto-rebuild on startup was disabled in v0.1.0 to prevent OOM restart loops on
     large indexes; the docs now describe the explicit rebuild procedure from LMDB instead.

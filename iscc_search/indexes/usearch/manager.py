@@ -8,6 +8,7 @@ Implements IsccIndexProtocol for use as backend in CLI and server.
 """
 
 import shutil
+import threading
 from pathlib import Path
 from typing import TYPE_CHECKING
 from loguru import logger
@@ -59,6 +60,9 @@ class UsearchIndexManager:
         self.base_path.mkdir(parents=True, exist_ok=True)
         self.max_dim = max_dim
         self._index_cache = {}  # type: dict[str, UsearchIndex]
+        # Serialize first-load construction so concurrent requests don't race on lmdb.open()
+        # (which raises "already open in this process" if two threads call it simultaneously).
+        self._cache_lock = threading.Lock()
 
     def list_indexes(self):
         # type: () -> list[IsccIndex]
@@ -212,6 +216,28 @@ class UsearchIndexManager:
         idx = self._get_or_load_index(index_name)
         return idx.search_assets(query, limit)
 
+    def rebuild(self, name, unit_types=None, simprint_types=None):
+        # type: (str, list[str] | None, list[str] | None) -> dict
+        """
+        Rebuild derived NPHD/simprint indexes for the named index from LMDB source.
+
+        ``None`` for ``unit_types`` or ``simprint_types`` means "rebuild every type
+        of that kind currently tracked in LMDB metadata".
+
+        :param name: Target index name
+        :param unit_types: NPHD unit_types to rebuild, or None for all tracked
+        :param simprint_types: Simprint types to rebuild, or None for all tracked
+        :return: Dict with ``unit_types`` and ``simprint_types`` lists actually rebuilt
+        :raises FileNotFoundError: If index doesn't exist
+        """
+        self._validate_index_exists(name)
+        idx = self._get_or_load_index(name)
+        if unit_types is None:
+            unit_types = idx.tracked_unit_types
+        if simprint_types is None:
+            simprint_types = idx.tracked_simprint_types
+        return idx.rebuild(unit_types, simprint_types)
+
     def close(self):
         # type: () -> None
         """
@@ -234,16 +260,23 @@ class UsearchIndexManager:
         """
         Get cached index or load from disk.
 
+        Thread-safe: a lock guards the cache-miss construction path so concurrent
+        first-burst requests don't race on lmdb.open() (which raises
+        "already open in this process" if two threads call it simultaneously).
+
         :param name: Index name
         :return: UsearchIndex instance
         """
         if name in self._index_cache:
             return self._index_cache[name]
 
-        index_path = self.base_path / name
-        idx = UsearchIndex(index_path, max_dim=self.max_dim)
-        self._index_cache[name] = idx
-        return idx
+        with self._cache_lock:
+            if name in self._index_cache:
+                return self._index_cache[name]
+            index_path = self.base_path / name
+            idx = UsearchIndex(index_path, max_dim=self.max_dim)
+            self._index_cache[name] = idx
+            return idx
 
     def _validate_index_exists(self, name):
         # type: (str) -> None

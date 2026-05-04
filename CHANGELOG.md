@@ -10,11 +10,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **Breaking default**: `ISCC_SEARCH_FLUSH_INTERVAL` default raised from `0` (disabled) to `100000`. Derived
-    HNSW indexes (NPHD, simprint) now auto-flush every 100,000 dirty mutations, capping data loss on hard
-    crashes (OOM, SIGKILL, power loss). Previously, indexes were only saved on graceful `close()` — small
-    indexes that never reached the shard-size rotation threshold could lose every vector added since process
-    start. Set `ISCC_SEARCH_FLUSH_INTERVAL=0` to restore the old behavior if you need maximum ingestion
-    throughput and can tolerate unbounded loss on crash.
+    HNSW indexes (NPHD, simprint) now auto-flush every 100,000 dirty mutations. Previously, indexes were
+    only saved on graceful `close()` — small indexes that never reached the shard-size rotation threshold
+    could lose every vector added since process start, leaving the server with 0% of recent data searchable
+    after a crash until a manual rebuild completed. With the new default, the post-crash gap is bounded to
+    ~100K vectors per sub-index, so the server remains in degraded-but-mostly-functional state and can
+    serve queries while a rebuild is scheduled. Note: this **does not reduce rebuild cost** — current
+    `_rebuild_nphd_index` / `_rebuild_simprint_index` are destructive (rmtree the shard dir, re-add
+    everything from LMDB) and rebuild the full per-type vector set regardless of how much was already
+    persisted. An incremental repair path that exploits the persisted state via per-shard bloom filters is
+    planned. Trade-off: ~25× write amplification on heavy SIMPRINT ingestion. Set
+    `ISCC_SEARCH_FLUSH_INTERVAL=0` to restore the old behavior if you need maximum ingestion throughput
+    and accept unbounded loss on crash.
 - Repo `compose.yaml` `stop_grace_period` raised from `90s` to `300s`. uvicorn shutdown is sequential —
     request drain (bounded by `--timeout-graceful-shutdown`, kept at `60s`) runs first, then the lifespan
     handler runs the HNSW flush with no uvicorn-side timeout. Docker's `stop_grace_period` is the only

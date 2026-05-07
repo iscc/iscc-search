@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-05-07
+
+### Added
+
+- Remote client retries batch requests on transient network errors (connection refused, timeout,
+    read/write failures) with exponential backoff (3 attempts, 1s/2s/4s delays). Previously, a
+    server restart during ingestion silently dropped every in-flight batch with no recovery.
+- NPHD and simprint index loaders log vector count and shard count at info level on startup,
+    giving operators visibility into shard proliferation and expected startup I/O.
+- `UsearchSimprintIndex.shard_count` property exposes the underlying `ShardedIndex128` shard count.
+- Deployment docs: "Memory budget under container limits" section documenting the three-way
+    competition between Python heap, LMDB mmap, and shard mmap pages under cgroup memory limits,
+    with concrete sizing guidance from stress testing at 2 GB / 3000 IOPS.
+
 ### Changed
 
 - **Dependency**: `iscc-usearch` minimum bumped from `0.6.1` to `0.8.0` (includes `usearch-iscc` 2.24.2 → 2.24.5).
@@ -138,3 +152,4 @@ Initial release of iscc-search.
 - CI workflows for tests (Linux, macOS, Windows), Docker image publishing, and docs deployment
 
 [0.1.0]: https://github.com/iscc/iscc-search/releases/tag/0.1.0
+[0.2.0]: https://github.com/iscc/iscc-search/releases/tag/0.2.0

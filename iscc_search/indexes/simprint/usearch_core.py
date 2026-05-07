@@ -263,6 +263,12 @@ class UsearchSimprintIndex:
         """Return number of vectors in the index."""
         return len(self._index)
 
+    @property
+    def shard_count(self):
+        # type: () -> int
+        """Number of shards (sealed + active)."""
+        return self._index.shard_count
+
     def save(self):
         # type: () -> None
         """Save derived index to disk."""

@@ -260,3 +260,33 @@ indexes. Re-ingest if no backup is available.
 
 **Fix**: Increase the memory limit in your container configuration. Refer to the sizing profiles table above.
 Consider sharding data across multiple instances.
+
+## Memory budget under container limits
+
+When running with a container memory limit (e.g., `mem_limit: 2g`), three components compete for the budget:
+
+| Component   | What it is                                              | Grows with                    |
+| ----------- | ------------------------------------------------------- | ----------------------------- |
+| Python heap | Process memory (buffers, active shards, Python objects) | Concurrent writes, batch size |
+| LMDB mmap   | Memory-mapped pages of `index.lmdb`                     | Total assets stored           |
+| Shard mmaps | Memory-mapped views of sealed `.usearch` shard files    | Number and size of shards     |
+
+All three count against the cgroup memory limit. The kernel reclaims file-backed pages (LMDB and shard mmaps)
+under pressure, but reclaimed pages cause additional read I/O when accessed again. Under tight limits this
+creates a feedback loop: reclaim page, re-read from disk, reclaim again.
+
+Stress testing at a 2 GB limit with ~9K assets showed:
+
+- Python heap: ~910 MB
+- LMDB mmap (file-backed): ~470 MB
+- Kernel overhead: ~22 MB
+- 3,616 page reclamation events, zero OOM kills
+
+The server survived at the absolute ceiling, but I/O increased significantly from re-reading evicted pages.
+
+**Recommendations**:
+
+- Set memory limits to at least **2x the expected LMDB size** plus headroom for Python heap
+- Monitor `memory.stat` (anonymous vs file-backed) to understand where memory goes
+- With many small shards (e.g., low `SHARD_SIZE_*` settings), each sealed shard is mmap'd on load — hundreds
+    of shard files increase file-backed memory pressure and slow startup on IOPS-limited storage

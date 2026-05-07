@@ -1,7 +1,9 @@
 """Tests for remote index client."""
 
 from typing import TYPE_CHECKING
+from unittest.mock import patch
 
+import httpx
 import pytest
 from fastapi.testclient import TestClient
 
@@ -477,3 +479,69 @@ def test_remote_index_handle_response_errors_400(remote_client):
 
     with pytest.raises(ValueError, match="Invalid request"):
         remote_client._handle_response_errors(MockResponse())
+
+
+# Retry tests
+
+
+def test_remote_add_assets_retry_on_connect_error(remote_client, test_server, sample_content_units, sample_iscc_ids):
+    # type: (RemoteIndex, TestClient, list[str], list[str]) -> None
+    """Test that _add_assets_batch retries on ConnectError and succeeds."""
+    from iscc_search.schema import IsccEntry
+
+    test_server.post("/indexes", json={"name": "test"})
+
+    assets = [IsccEntry(iscc_id=sample_iscc_ids[0], units=[sample_content_units[0], sample_content_units[1]])]
+    call_count = 0
+    original_post = remote_client.client.post
+
+    def flaky_post(*args, **kwargs):
+        # type: (*object, **object) -> object
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            raise httpx.ConnectError("Connection refused")
+        return original_post(*args, **kwargs)
+
+    with patch.object(remote_client, "_client", wraps=remote_client.client) as mock_client:
+        mock_client.post = flaky_post
+        remote_client._client = mock_client
+
+        with patch("iscc_search.remote.client.time.sleep"):
+            results = remote_client._add_assets_batch("test", assets)
+
+    assert len(results) == 1
+    assert call_count == 2
+
+
+def test_remote_add_assets_retry_exhausted(remote_client, test_server, sample_content_units, sample_iscc_ids):
+    # type: (RemoteIndex, TestClient, list[str], list[str]) -> None
+    """Test that _add_assets_batch raises after all retries exhausted."""
+    from iscc_search.schema import IsccEntry
+
+    test_server.post("/indexes", json={"name": "test"})
+
+    assets = [IsccEntry(iscc_id=sample_iscc_ids[0], units=[sample_content_units[0], sample_content_units[1]])]
+
+    def always_fail(*args, **kwargs):
+        # type: (*object, **object) -> object
+        raise httpx.ConnectError("Connection refused")
+
+    with patch.object(remote_client, "_client", wraps=remote_client.client) as mock_client:
+        mock_client.post = always_fail
+        remote_client._client = mock_client
+
+        with patch("iscc_search.remote.client.time.sleep"):
+            with pytest.raises(httpx.ConnectError, match="Connection refused"):
+                remote_client._add_assets_batch("test", assets)
+
+
+def test_remote_add_assets_no_retry_on_app_error(remote_client, test_server, sample_content_units, sample_iscc_ids):
+    # type: (RemoteIndex, TestClient, list[str], list[str]) -> None
+    """Test that application errors (4xx) are not retried."""
+    from iscc_search.schema import IsccEntry
+
+    assets = [IsccEntry(iscc_id=sample_iscc_ids[0], units=[sample_content_units[0], sample_content_units[1]])]
+
+    with pytest.raises(FileNotFoundError):
+        remote_client._add_assets_batch("nonexistent", assets)

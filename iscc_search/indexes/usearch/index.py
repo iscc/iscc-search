@@ -1288,6 +1288,8 @@ class UsearchIndex:
                 expected_count = self._get_nphd_metadata(unit_type)
                 actual_count = nphd_index.size
 
+                shards = nphd_index.shard_count
+
                 if expected_count is not None and expected_count != actual_count:
                     logger.warning(
                         f"ShardedNphdIndex '{unit_type}' out of sync: "
@@ -1299,7 +1301,8 @@ class UsearchIndex:
                     self._nphd_indexes[unit_type] = nphd_index
                 else:
                     self._nphd_indexes[unit_type] = nphd_index
-                    logger.debug(f"Loaded ShardedNphdIndex for unit_type '{unit_type}' ({actual_count} vectors)")
+
+                logger.info(f"Loaded NPHD index '{unit_type}': {actual_count} vectors, {shards} shards")
 
             except Exception as e:  # pragma: no cover
                 logger.warning(f"Failed to load ShardedNphdIndex '{unit_type}': {e}. Skipping.")
@@ -1460,6 +1463,7 @@ class UsearchIndex:
                 # Check sync with LMDB
                 expected_count = self._get_sp_metadata(sp_type)
                 actual_count = sp_index.size
+                shards = sp_index.shard_count
 
                 if expected_count is not None and expected_count != actual_count:
                     logger.warning(
@@ -1472,7 +1476,8 @@ class UsearchIndex:
                     self._simprint_indexes[sp_type] = sp_index
                 else:
                     self._simprint_indexes[sp_type] = sp_index
-                    logger.debug(f"Loaded UsearchSimprintIndex for type '{sp_type}' ({actual_count} vectors)")
+
+                logger.info(f"Loaded simprint index '{sp_type}': {actual_count} vectors, {shards} shards")
 
             except Exception as e:  # pragma: no cover
                 logger.warning(f"Failed to load UsearchSimprintIndex '{sp_type}': {e}. Skipping.")

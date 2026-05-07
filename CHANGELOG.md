@@ -5,6 +5,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- **Dependency**: `iscc-usearch` minimum bumped from `0.6.1` to `0.8.0` (includes `usearch-iscc` 2.24.2 → 2.24.5).
+    This upgrade brings critical upstream bug fixes (heap buffer overflow in HNSW search, double-free in
+    add/remove cycles, stale vector references during refine operations) and two architectural improvements
+    that directly address operational issues documented in the v0.1.1 post-incident analysis:
+    - **Durable writes**: `save()` now serializes to an in-memory buffer and writes via a single `os.write()` +
+        `fdatasync` + atomic rename. Write syscalls drop from ~30,000 to 3 per save, collapsing the IOPS-bound
+        save duration on gp3 default storage from ~80 s to sub-second. This directly mitigates the lock-convoy
+        freeze under sustained ingest (previously requiring a background flush worker or IOPS provisioning).
+    - **Crash-safe persistence ordering**: `save()` and shard rotation now persist bloom → shard → tombstones,
+        preventing deleted keys from reappearing after a crash between shard and tombstone writes.
+    - **Bloom filter auto-recovery**: Missing or corrupt `bloom.isbf` files are automatically rebuilt from
+        shard keys on load, reducing the stale-bloom false-negative risk during incremental repair.
+    - **Stale shard cleanup**: Empty shard files after removals are cleaned up on `save()`.
+    - **Duplicate key handling**: `add()` with an already-present key now silently skips instead of raising
+        `RuntimeError` with partial commit. The remove-before-add pattern in `add_assets` is retained for
+        update semantics.
+    - New `stats()`, `close()`, and `drain_rotations()` APIs available for future use.
+- Shutdown sequence uses upstream `close()` (save + resource release) instead of manual `save()` + `reset()`.
+
+### Fixed
+
+- `/healthz` and `/readyz` probes converted from sync to async handlers. Sync probes shared the
+    anyio threadpool with `add_assets` writers and became unreachable during threadpool saturation.
+
 ## [0.1.1] - 2026-05-04
 
 ### Added

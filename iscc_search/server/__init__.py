@@ -227,7 +227,7 @@ def root():
 
 
 @app.get("/healthz", include_in_schema=False)
-def healthz():
+async def healthz():
     # type: () -> dict
     """
     Liveness probe: 200 as long as the process can respond.
@@ -239,7 +239,7 @@ def healthz():
 
 
 @app.get("/readyz", include_in_schema=False)
-def readyz(request: Request):
+async def readyz(request: Request):
     # type: (Request) -> JSONResponse
     """
     Readiness probe: 200 only when the index is initialized and list_indexes() works.

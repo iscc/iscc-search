@@ -271,7 +271,7 @@ class UsearchIndexManager:
             return self._index_cache[name]
 
         with self._cache_lock:
-            if name in self._index_cache:
+            if name in self._index_cache:  # pragma: no cover - race condition guard
                 return self._index_cache[name]
             index_path = self.base_path / name
             idx = UsearchIndex(index_path, max_dim=self.max_dim)

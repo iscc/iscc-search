@@ -318,7 +318,8 @@ class UsearchIndex:
                     nphd_add_t += time.perf_counter() - _t
                     batch_nphd_vectors += len(keys)
 
-                    # Update metadata with new vector count
+                    # Drain pending rotations so .size reflects all vectors
+                    nphd_index.drain_rotations()
                     self._update_nphd_metadata(unit_type, nphd_index.size)
                 nphd_elapsed = time.perf_counter() - nphd_t0
 
@@ -338,6 +339,7 @@ class UsearchIndex:
                     sp_index.add_raw(composite_keys, sp_vectors)
                     sp_add_t += time.perf_counter() - _t
                     batch_sp_vectors += len(composite_keys)
+                    sp_index.drain_rotations()
                     self._update_sp_metadata(sp_type, sp_index.size)
 
                 # Remove stale vectors for types with only deletions (no new vectors)
@@ -648,8 +650,9 @@ class UsearchIndex:
             # Close ShardedNphdIndex instances (saves if dirty, releases resources)
             for unit_type, nphd_index in list(self._nphd_indexes.items()):
                 try:
-                    size = nphd_index.size
                     dirty = nphd_index.dirty > 0
+                    nphd_index.drain_rotations()
+                    size = nphd_index.size
                     nphd_index.close()
                     if dirty:
                         self._update_nphd_metadata(unit_type, size)
@@ -662,8 +665,9 @@ class UsearchIndex:
             # Close derived simprint indexes (ShardedIndex128)
             for sp_type, sp_index in list(self._simprint_indexes.items()):
                 try:
-                    size = sp_index.size
                     dirty = sp_index.dirty > 0
+                    sp_index.drain_rotations()
+                    size = sp_index.size
                     sp_index.close()
                     if dirty:
                         self._update_sp_metadata(sp_type, size)

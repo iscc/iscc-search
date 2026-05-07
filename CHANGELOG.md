@@ -33,6 +33,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Drain pending background rotations before reading `.size` for metadata counts. Without draining,
+    `add_assets()` and `close()` could persist stale vector counts (e.g. 0 instead of 50), causing
+    false "out of sync" warnings on next index load.
 - `/healthz` and `/readyz` probes converted from sync to async handlers. Sync probes shared the
     anyio threadpool with `add_assets` writers and became unreachable during threadpool saturation.
 

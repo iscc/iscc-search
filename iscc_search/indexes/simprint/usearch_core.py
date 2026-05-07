@@ -273,6 +273,11 @@ class UsearchSimprintIndex:
         """Release all in-memory resources."""
         self._index.reset()
 
+    def drain_rotations(self):
+        # type: () -> None
+        """Wait for pending background shard rotations to complete."""
+        self._index.drain_rotations()
+
     def close(self):
         # type: () -> None
         """Save and release resources."""

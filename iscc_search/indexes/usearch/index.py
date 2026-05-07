@@ -481,12 +481,8 @@ class UsearchIndex:
         query_iscc_id = None  # Track original query iscc_id for self-exclusion
         if query.iscc_id:
             query_iscc_id = query.iscc_id
-            # Look up asset by iscc_id (raises FileNotFoundError if not found -> HTTP 404)
             asset = self.get_asset(query.iscc_id)
-            # Create new query with extracted iscc_code, units and simprints
-            from iscc_search.schema import IsccQuery
-
-            query = IsccQuery(iscc_code=asset.iscc_code, units=asset.units, simprints=asset.simprints)
+            query = common.query_from_asset(asset)
 
         # Normalize query
         query = common.normalize_query(query)

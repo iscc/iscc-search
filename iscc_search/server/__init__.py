@@ -1,5 +1,6 @@
 """FastAPI server for ISCC-Search API."""
 
+import asyncio
 import atexit
 import sys
 import typing  # noqa: F401
@@ -254,7 +255,7 @@ async def readyz(request: Request):
             content={"status": "not_ready", "reason": "index_not_initialized"},
         )
     try:
-        index.list_indexes()
+        await asyncio.to_thread(index.list_indexes)
     except Exception as exc:
         logger.warning(f"/readyz: list_indexes() failed: {exc}")
         return JSONResponse(

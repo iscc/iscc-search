@@ -51,8 +51,9 @@ class UsearchSimprintIndex:
         expansion_search=512,
         shard_size=1024 * 1024 * 1024,
         oversampling_factor=20,
+        background_rotation=False,
     ):
-        # type: (str | Path, int, int, int, int, int, int) -> None
+        # type: (str | Path, int, int, int, int, int, int, bool) -> None
         """
         Create or open derived simprint index.
 
@@ -63,6 +64,7 @@ class UsearchSimprintIndex:
         :param expansion_search: Search depth for HNSW queries
         :param shard_size: Maximum shard file size in bytes
         :param oversampling_factor: Oversampling multiplier for asset diversity
+        :param background_rotation: Serialize full shards in a background thread
         """
         self.path = Path(path)
         self.ndim = ndim
@@ -76,6 +78,7 @@ class UsearchSimprintIndex:
             expansion_add=expansion_add,
             expansion_search=expansion_search,
             shard_size=shard_size,
+            background_rotation=background_rotation,
         )
 
     def add_raw(self, composite_keys, vectors):
@@ -273,5 +276,4 @@ class UsearchSimprintIndex:
     def close(self):
         # type: () -> None
         """Save and release resources."""
-        self.save()
-        self.reset()
+        self._index.close()

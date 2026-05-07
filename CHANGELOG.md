@@ -27,6 +27,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
         update semantics.
     - New `stats()`, `close()`, and `drain_rotations()` APIs available for future use.
 - Shutdown sequence uses upstream `close()` (save + resource release) instead of manual `save()` + `reset()`.
+- Enable background shard rotation for all NPHD and simprint indexes. When an active shard reaches
+    `shard_size`, serialization runs in a background thread so `add()` returns immediately instead of
+    blocking for the full write. Backpressure limits pending rotations to 2.
 
 ### Fixed
 

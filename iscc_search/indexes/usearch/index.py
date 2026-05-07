@@ -296,9 +296,8 @@ class UsearchIndex:
                 for unit_type, (keys, vectors) in nphd_batches.items():
                     nphd_index = self._get_or_create_nphd_index(unit_type)
 
-                    # Deduplicate keys (keep last occurrence for each duplicate)
-                    # This handles cases where multiple assets share the same ISCC-ID
-                    # TODO Review Duplicate Key Handling
+                    # Deduplicate keys within batch (keep last occurrence for each duplicate).
+                    # Remove-before-add at line 314 is still needed for update semantics.
                     if len(keys) != len(set(keys)):
                         # Build dict with key -> (last) vector mapping
                         unique_items = {}  # type: dict[int, np.ndarray]
@@ -646,29 +645,31 @@ class UsearchIndex:
             if self._closed:  # pragma: no cover - race condition guard
                 return
 
-            # Save dirty ShardedNphdIndex instances before closing
+            # Close ShardedNphdIndex instances (saves if dirty, releases resources)
             for unit_type, nphd_index in list(self._nphd_indexes.items()):
                 try:
-                    if nphd_index.dirty > 0:
-                        nphd_index.save()
-                        self._update_nphd_metadata(unit_type, nphd_index.size)
-                        logger.info(f"Saved ShardedNphdIndex '{unit_type}' ({nphd_index.size} vectors)")
-                    nphd_index.reset()
+                    size = nphd_index.size
+                    dirty = nphd_index.dirty > 0
+                    nphd_index.close()
+                    if dirty:
+                        self._update_nphd_metadata(unit_type, size)
+                        logger.info(f"Saved ShardedNphdIndex '{unit_type}' ({size} vectors)")
                 except Exception:  # pragma: no cover
-                    logger.exception(f"Failed to save ShardedNphdIndex '{unit_type}' on close")
+                    logger.exception(f"Failed to close ShardedNphdIndex '{unit_type}'")
 
             self._nphd_indexes.clear()
 
-            # Save dirty derived simprint indexes (ShardedIndex128)
+            # Close derived simprint indexes (ShardedIndex128)
             for sp_type, sp_index in list(self._simprint_indexes.items()):
                 try:
-                    if sp_index.dirty > 0:
-                        sp_index.save()
-                        self._update_sp_metadata(sp_type, sp_index.size)
-                        logger.info(f"Saved UsearchSimprintIndex '{sp_type}' ({sp_index.size} vectors)")
-                    sp_index.reset()
+                    size = sp_index.size
+                    dirty = sp_index.dirty > 0
+                    sp_index.close()
+                    if dirty:
+                        self._update_sp_metadata(sp_type, size)
+                        logger.info(f"Saved UsearchSimprintIndex '{sp_type}' ({size} vectors)")
                 except Exception:  # pragma: no cover
-                    logger.exception(f"Failed to save UsearchSimprintIndex '{sp_type}' on close")
+                    logger.exception(f"Failed to close UsearchSimprintIndex '{sp_type}'")
 
             self._simprint_indexes.clear()
 
@@ -1276,6 +1277,7 @@ class UsearchIndex:
                     expansion_add=self._opts.hnsw_expansion_add_units,
                     expansion_search=self._opts.hnsw_expansion_search_units,
                     shard_size=self._opts.shard_size_units * 1024 * 1024,
+                    background_rotation=True,
                 )
 
                 # Check if index is in sync with LMDB
@@ -1355,6 +1357,7 @@ class UsearchIndex:
             expansion_add=self._opts.hnsw_expansion_add_units,
             expansion_search=self._opts.hnsw_expansion_search_units,
             shard_size=self._opts.shard_size_units * 1024 * 1024,
+            background_rotation=True,
         )
         nphd_index.add(keys, vectors)
 
@@ -1382,6 +1385,7 @@ class UsearchIndex:
                 expansion_add=self._opts.hnsw_expansion_add_units,
                 expansion_search=self._opts.hnsw_expansion_search_units,
                 shard_size=self._opts.shard_size_units * 1024 * 1024,
+                background_rotation=True,
             )
             self._nphd_indexes[unit_type] = nphd_index
             logger.debug(f"Created new ShardedNphdIndex for unit_type '{unit_type}'")
@@ -1401,6 +1405,7 @@ class UsearchIndex:
                 expansion_search=self._opts.hnsw_expansion_search_simprints,
                 shard_size=self._opts.shard_size_simprints * 1024 * 1024,
                 oversampling_factor=self._opts.oversampling_factor,
+                background_rotation=True,
             )
             self._simprint_indexes[sp_type] = sp_index
             logger.debug(f"Created new UsearchSimprintIndex for type '{sp_type}' (ndim={ndim})")
@@ -1445,6 +1450,7 @@ class UsearchIndex:
                     expansion_search=self._opts.hnsw_expansion_search_simprints,
                     shard_size=self._opts.shard_size_simprints * 1024 * 1024,
                     oversampling_factor=self._opts.oversampling_factor,
+                    background_rotation=True,
                 )
 
                 # Check sync with LMDB
@@ -1507,6 +1513,7 @@ class UsearchIndex:
             expansion_search=self._opts.hnsw_expansion_search_simprints,
             shard_size=self._opts.shard_size_simprints * 1024 * 1024,
             oversampling_factor=self._opts.oversampling_factor,
+            background_rotation=True,
         )
         total_vectors = 0
         with self.env.begin() as txn:

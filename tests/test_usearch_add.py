@@ -8,7 +8,6 @@ Confirm the expected behavior of usearch Index.add() with
 """
 
 import numpy as np
-import pytest
 from numpy.testing import assert_array_equal
 from usearch.index import Index, MetricKind, ScalarKind
 
@@ -51,14 +50,16 @@ def test_add_multiple_different_keys_returns_respective_keys():
     assert_array_equal(result3, expected3)
 
 
-def test_add_duplicate_key_raises_runtime_error():
-    """Adding to same key twice with multi=False raises RuntimeError."""
+def test_add_duplicate_key_silently_skips():
+    """Adding to same key twice with multi=False silently skips (keeps original vector)."""
     idx = Index(ndim=32, metric=MetricKind.Hamming, dtype=ScalarKind.B1, multi=False)
 
-    idx.add(1, np.array([178, 204, 60, 240], dtype=np.uint8))
+    original = np.array([178, 204, 60, 240], dtype=np.uint8)
+    idx.add(1, original)
+    idx.add(1, np.array([100, 150, 200, 250], dtype=np.uint8))
 
-    with pytest.raises(RuntimeError, match="Duplicate keys not allowed"):
-        idx.add(1, np.array([100, 150, 200, 250], dtype=np.uint8))
+    assert len(idx) == 1
+    assert_array_equal(idx.get(1), original)
 
 
 def test_add_with_key_none_generates_key():
@@ -424,9 +425,9 @@ def test_autokey_can_collide_with_explicit_keys():
     assert_array_equal(result, expected)
     assert len(idx) == expected_size
 
-    # Next autokey would be 4, but key 4 already exists!
-    with pytest.raises(RuntimeError, match="Duplicate keys not allowed"):
-        idx.add(None, np.array([11, 11, 11, 11], dtype=np.uint8))
+    # Next autokey would be 4, but key 4 already exists — silently skipped
+    idx.add(None, np.array([11, 11, 11, 11], dtype=np.uint8))
+    assert len(idx) == expected_size  # size unchanged, duplicate was skipped
 
 
 def test_autokey_batch_uses_sequential_sizes():

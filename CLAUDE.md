@@ -128,7 +128,7 @@ Don't conflate them. The serve command uses `options.py`; CLI data commands use 
 
 ### Key Dependencies
 
-- `iscc-usearch>=0.6.1` - Provides `NphdIndex` and the NPHD metric (previously vendored into this repo as
+- `iscc-usearch>=0.8.0` - Provides `NphdIndex` and the NPHD metric (previously vendored into this repo as
     `nphd.py` / `metrics.py`; now an external package)
 - `iscc-core>=1.2.1` - ISCC code generation and manipulation
 - `iscc-sct>=0.1.3` - Semantic content-code generator

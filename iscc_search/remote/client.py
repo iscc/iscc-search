@@ -5,6 +5,7 @@ Provides HTTP client for interacting with remote ISCC-Search API servers,
 implementing the IsccIndexProtocol interface.
 """
 
+import time
 from typing import TYPE_CHECKING
 
 import httpx
@@ -19,6 +20,10 @@ if TYPE_CHECKING:
 
 
 __all__ = ["RemoteIndex"]
+
+TRANSIENT_ERRORS = (httpx.TransportError, ConnectionError)
+MAX_RETRIES = 3
+RETRY_BASE_DELAY = 1.0
 
 
 class RemoteIndex:
@@ -186,7 +191,10 @@ class RemoteIndex:
     def _add_assets_batch(self, index_name, assets):
         # type: (str, list[IsccEntry]) -> list[IsccAddResult]
         """
-        Add a single batch of assets.
+        Add a single batch of assets with retry on transient errors.
+
+        Retries up to MAX_RETRIES times with exponential backoff on connection,
+        timeout, and protocol errors. Application errors (4xx, 5xx) are not retried.
 
         :param index_name: Target index name
         :param assets: List of IsccEntry objects to add
@@ -196,14 +204,25 @@ class RemoteIndex:
         """
         from iscc_search.schema import IsccAddResult
 
-        # Convert to dict for JSON serialization
         assets_data = [asset.model_dump(exclude_unset=True) for asset in assets]
 
-        response = self.client.post(f"/indexes/{index_name}/assets", json=assets_data)
-        self._handle_response_errors(response)
+        last_error = None  # type: Exception | None
+        for attempt in range(1, MAX_RETRIES + 1):
+            try:
+                response = self.client.post(f"/indexes/{index_name}/assets", json=assets_data)
+                self._handle_response_errors(response)
+                data = response.json()
+                return [IsccAddResult(**result) for result in data]
+            except TRANSIENT_ERRORS as exc:
+                last_error = exc
+                if attempt < MAX_RETRIES:
+                    delay = RETRY_BASE_DELAY * (2 ** (attempt - 1))
+                    logger.warning(
+                        f"Batch request failed (attempt {attempt}/{MAX_RETRIES}): {exc}. Retrying in {delay:.0f}s"
+                    )
+                    time.sleep(delay)
 
-        data = response.json()
-        return [IsccAddResult(**result) for result in data]
+        raise last_error  # type: ignore[misc]
 
     def get_asset(self, index_name, iscc_id):
         # type: (str, str) -> IsccEntry

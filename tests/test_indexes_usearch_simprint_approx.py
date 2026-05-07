@@ -58,6 +58,22 @@ def test_usearch_simprint_index_init(tmp_path):
     idx.close()
 
 
+def test_usearch_simprint_index_shard_count(tmp_path):
+    """shard_count property reflects persisted shards after save."""
+    sp_dir = tmp_path / "sp_shards"
+    idx = UsearchSimprintIndex(path=sp_dir, ndim=64)
+    assert idx.shard_count == 0
+
+    sp_bytes = b"\xaa" * 8
+    asset_id = b"\x00" * 8
+    key = lmdb_ops.pack_chunk_pointer(asset_id, 0, 100)
+    vector = np.frombuffer(sp_bytes, dtype=np.uint8)
+    idx.add_raw([key], [vector])
+    idx.save()
+    assert idx.shard_count == 1
+    idx.close()
+
+
 def test_usearch_simprint_index_dirty(tmp_path):
     """dirty property tracks unsaved key mutations."""
     sp_dir = tmp_path / "sp_dirty"

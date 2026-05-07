@@ -220,7 +220,7 @@ class LmdbIndexManager:
             return self._index_cache[name]
 
         with self._cache_lock:
-            if name in self._index_cache:
+            if name in self._index_cache:  # pragma: no cover - race condition guard
                 return self._index_cache[name]
             index_path = self.base_path / f"{name}.lmdb"
             idx = LmdbIndex(index_path)

@@ -1,5 +1,6 @@
 """FastAPI server for ISCC-Search API."""
 
+import asyncio
 import atexit
 import sys
 import typing  # noqa: F401
@@ -227,7 +228,7 @@ def root():
 
 
 @app.get("/healthz", include_in_schema=False)
-def healthz():
+async def healthz():
     # type: () -> dict
     """
     Liveness probe: 200 as long as the process can respond.
@@ -239,7 +240,7 @@ def healthz():
 
 
 @app.get("/readyz", include_in_schema=False)
-def readyz(request: Request):
+async def readyz(request: Request):
     # type: (Request) -> JSONResponse
     """
     Readiness probe: 200 only when the index is initialized and list_indexes() works.
@@ -254,7 +255,7 @@ def readyz(request: Request):
             content={"status": "not_ready", "reason": "index_not_initialized"},
         )
     try:
-        index.list_indexes()
+        await asyncio.to_thread(index.list_indexes)
     except Exception as exc:
         logger.warning(f"/readyz: list_indexes() failed: {exc}")
         return JSONResponse(

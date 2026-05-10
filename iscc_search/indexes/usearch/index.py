@@ -248,6 +248,7 @@ class UsearchIndex:
 
                     # Prepare vectors for batch add to ShardedNphdIndex
                     nphd_batches = {}  # type: dict[str, tuple[list[int], list[bytes]]]
+                    nphd_updated_keys = set()  # type: set[int]
                     # Prepare vectors for batch add to derived ShardedIndex128 simprint indexes
                     sp_batches = {}  # type: dict[str, tuple[list[bytes], list[np.ndarray]]]
                     sp_deleted_keys = {}  # type: dict[str, list[bytes]]
@@ -276,6 +277,8 @@ class UsearchIndex:
                         # Check if asset exists (for status)
                         existing = txn.get(key_bytes, db=assets_db)
                         status = Status.updated if existing else Status.created
+                        if existing:
+                            nphd_updated_keys.add(key)
 
                         # Store asset
                         _t = time.perf_counter()
@@ -358,19 +361,18 @@ class UsearchIndex:
                         keys = list(unique_items.keys())
                         vectors = list(unique_items.values())
 
-                    # Remove existing keys first (for updates)
-                    # remove() handles non-existent keys gracefully (returns 0)
-                    _t = time.perf_counter()
-                    nphd_index.remove(keys)
-                    nphd_remove_t += time.perf_counter() - _t
+                    # Remove existing vectors only for updated assets
+                    keys_to_remove = [k for k in keys if k in nphd_updated_keys]
+                    if keys_to_remove:
+                        _t = time.perf_counter()
+                        nphd_index.remove(keys_to_remove)
+                        nphd_remove_t += time.perf_counter() - _t
 
                     _t = time.perf_counter()
                     nphd_index.add(keys, vectors)
                     nphd_add_t += time.perf_counter() - _t
                     batch_nphd_vectors += len(keys)
 
-                    # Drain pending rotations so .size reflects all vectors
-                    nphd_index.drain_rotations()
                     self._update_nphd_metadata(unit_type, nphd_index.size)
                 nphd_elapsed = time.perf_counter() - nphd_t0
 
@@ -390,7 +392,6 @@ class UsearchIndex:
                     sp_index.add_raw(composite_keys, sp_vectors)
                     sp_add_t += time.perf_counter() - _t
                     batch_sp_vectors += len(composite_keys)
-                    sp_index.drain_rotations()
                     self._update_sp_metadata(sp_type, sp_index.size)
 
                 # Remove stale vectors for types with only deletions (no new vectors)

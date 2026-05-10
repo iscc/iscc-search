@@ -813,3 +813,125 @@ def test_usearch_index_filters_low_confidence_matches(tmp_path, sample_iscc_ids)
     # Should have no matches because score is below 0.99 threshold
     assert len(result.global_matches) == 0
     idx.close()
+
+
+def test_max_readers_sufficient_for_concurrent_access(tmp_path):
+    """
+    Regression test: max_readers=4 is too low for concurrent FastAPI threadpool access.
+
+    FastAPI runs sync endpoints in a thread pool. With max_readers=4, even a few
+    concurrent requests exhaust all reader slots, causing ReadersFullError.
+    LmdbIndex uses max_readers=126; UsearchIndex should match.
+    """
+    import threading
+    import time
+
+    index_path = tmp_path / "readers_test"
+    idx = UsearchIndex(index_path, realm_id=0, max_dim=256)
+
+    errors = []  # type: list[tuple[str, str, str]]
+    stop = threading.Event()
+
+    def reader_loop(thread_id):
+        # type: (int) -> None
+        """Simulate concurrent read requests from FastAPI threadpool."""
+        while not stop.is_set():
+            try:
+                with idx.env.begin() as txn:
+                    metadata_db = idx.env.open_db(b"__metadata__", txn=txn)
+                    txn.get(b"realm_id", db=metadata_db)
+                    time.sleep(0.005)
+            except Exception as e:
+                errors.append((f"reader-{thread_id}", type(e).__name__, str(e)))
+
+    readers = [threading.Thread(target=reader_loop, args=(i,), daemon=True) for i in range(8)]
+    for r in readers:
+        r.start()
+
+    time.sleep(0.1)
+    stop.set()
+    for r in readers:
+        r.join(timeout=5)
+
+    idx.close()
+
+    assert not errors, f"Concurrent reader errors (max_readers too low): {errors}"
+
+
+def test_set_mapsize_with_concurrent_readers(tmp_path):
+    """
+    Regression test: set_mapsize during active read transactions is undefined behavior.
+
+    LMDB docs state set_mapsize "may be called at later times if no transactions
+    are active in this process". The unfixed code calls set_mapsize from the
+    MapFullError handler without blocking concurrent readers. On Windows this
+    unmaps the file mapping while readers still reference it; on Linux it can
+    corrupt internal LMDB state. Both produce BadDbiError or data corruption.
+
+    This test forces MapFullError (tiny map_size) while reader threads
+    continuously hold active read transactions, then verifies data integrity.
+    """
+    import threading
+    import time
+
+    index_path = tmp_path / "resize_race"
+    idx = UsearchIndex(
+        index_path,
+        realm_id=0,
+        max_dim=256,
+        lmdb_options={"map_size": 128 * 1024, "max_readers": 126},
+    )
+
+    errors = []  # type: list[tuple[str, str, str]]
+    stop = threading.Event()
+
+    def reader_loop(thread_id):
+        # type: (int) -> None
+        """Continuously open read transactions to collide with set_mapsize."""
+        while not stop.is_set():
+            try:
+                with idx._read_txn() as txn:
+                    metadata_db = idx.env.open_db(b"__metadata__", txn=txn)
+                    txn.get(b"realm_id", db=metadata_db)
+                    time.sleep(0.005)
+            except Exception as e:
+                errors.append((f"reader-{thread_id}", type(e).__name__, str(e)))
+
+    readers = [threading.Thread(target=reader_loop, args=(i,), daemon=True) for i in range(4)]
+    for r in readers:
+        r.start()
+
+    time.sleep(0.02)
+
+    added_ids = []
+    for i in range(20):
+        if errors:
+            break
+        try:
+            iscc_id = ic.gen_iscc_id(timestamp=5000000 + i, hub_id=i, realm_id=0)["iscc"]
+            content_unit = ic.gen_text_code_v0(f"Resize test content {i}")["iscc"]
+            instance_unit = f"ISCC:{ic.Code.rnd(ic.MT.INSTANCE, bits=128)}"
+            asset = IsccEntry(
+                iscc_id=iscc_id,
+                units=[instance_unit, content_unit],
+                metadata={"i": i, "pad": "x" * 500},
+            )
+            idx.add_assets([asset])
+            added_ids.append(iscc_id)
+        except Exception as e:
+            errors.append(("writer", type(e).__name__, str(e)))
+
+    stop.set()
+    for r in readers:
+        r.join(timeout=5)
+
+    # Verify data integrity: every successfully added asset must be readable
+    for iscc_id in added_ids:
+        try:
+            idx.get_asset(iscc_id)
+        except Exception as e:
+            errors.append(("verify", type(e).__name__, str(e)))
+
+    idx.close()
+
+    assert not errors, f"Concurrent resize errors: {errors}"

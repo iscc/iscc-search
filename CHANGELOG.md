@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- LMDB `set_mapsize` race condition in `UsearchIndex`: calling `set_mapsize` during active read
+    transactions is undefined behavior per LMDB docs, causing `BadDbiError` and deadlocks under
+    concurrent load. Added a writer-preference readers-writer lock that drains active readers before
+    resizing and blocks new readers while the resize is in progress.
+- LMDB `max_readers` restored from 4 to 126 in `UsearchIndex`. The value was lowered in a
+    micro-optimization (saving ~21 KB of shared memory) but broke under FastAPI's thread pool
+    concurrency, causing `ReadersFullError` when more than 4 concurrent requests hit the index.
+- LMDB `max_spare_txns` restored from 1 to 16 in `UsearchIndex`, re-enabling py-lmdb's transaction
+    object cache to avoid unnecessary Python object allocation on every read.
+
+### Changed
+
+- LMDB default `map_size` set to 1 TB (sparse virtual allocation, no physical disk or memory cost
+    on 64-bit). Eliminates `MapFullError` resize cycles during normal operation, making the resize
+    path a safety net rather than a regular event.
+
 ## [0.2.0] - 2026-05-07
 
 ### Added

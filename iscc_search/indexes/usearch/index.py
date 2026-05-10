@@ -20,6 +20,7 @@ import shutil
 import struct
 import threading
 import time
+from contextlib import contextmanager
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -36,6 +37,50 @@ import iscc_core as ic
 
 if TYPE_CHECKING:
     from iscc_search.schema import IsccEntry, IsccQuery, IsccChunkMatch  # noqa: F401
+
+
+class _RWLock:
+    """Readers-writer lock with writer preference for LMDB resize safety."""
+
+    def __init__(self):
+        # type: () -> None
+        self._cond = threading.Condition(threading.Lock())
+        self._readers = 0
+        self._writer = False
+        self._writer_waiting = False
+
+    def acquire_read(self):
+        # type: () -> None
+        """Acquire shared read access (blocks while a writer holds or waits for the lock)."""
+        with self._cond:
+            while self._writer or self._writer_waiting:
+                self._cond.wait()
+            self._readers += 1
+
+    def release_read(self):
+        # type: () -> None
+        """Release shared read access."""
+        with self._cond:
+            self._readers -= 1
+            if self._readers == 0:
+                self._cond.notify_all()
+
+    def acquire_write(self):
+        # type: () -> None
+        """Acquire exclusive write access (drains active readers, blocks new ones)."""
+        with self._cond:
+            self._writer_waiting = True
+            while self._writer or self._readers > 0:
+                self._cond.wait()
+            self._writer_waiting = False
+            self._writer = True
+
+    def release_write(self):
+        # type: () -> None
+        """Release exclusive write access."""
+        with self._cond:
+            self._writer = False
+            self._cond.notify_all()
 
 
 class UsearchIndex:
@@ -65,8 +110,9 @@ class UsearchIndex:
         "writemap": False,
         "meminit": False,
         "map_async": False,
-        "max_readers": 4,
-        "max_spare_txns": 1,
+        "map_size": 1024 * 1024 * 1024 * 1024,  # 1 TB (sparse — no disk cost on 64-bit)
+        "max_readers": 126,
+        "max_spare_txns": 16,
         "lock": True,
     }
 
@@ -109,6 +155,11 @@ class UsearchIndex:
         # RLock allows reentrant acquisition (e.g., _rebuild_simprint_index → _update_sp_metadata
         # both need the lock, and _update_sp_metadata is also called from within add_assets/flush/close).
         self._write_lock = threading.RLock()
+
+        # Coordinate set_mapsize with concurrent read transactions.
+        # LMDB requires no active transactions during set_mapsize (undefined behavior otherwise).
+        # Read operations acquire shared access; set_mapsize acquires exclusive access.
+        self._env_rwlock = _RWLock()
 
         # Setup LMDB
         lmdb_path = self.path / "index.lmdb"
@@ -409,7 +460,7 @@ class UsearchIndex:
                     f"Resizing LMDB from {old_size:,} to {new_size:,} bytes (increase: {increase:,}) "
                     f"(retry {retry_count}/{self.MAX_RESIZE_RETRIES})"
                 )
-                self.env.set_mapsize(new_size)
+                self._safe_resize(new_size)
                 # py-lmdb 2.2.0 invalidates cached named-db handles on set_mapsize.
                 # Repopulate simprint db caches from metadata before retry.
                 self._sp_data_dbs = {}
@@ -440,7 +491,7 @@ class UsearchIndex:
         key_bytes = struct.pack(">Q", key)
 
         try:
-            with self.env.begin() as txn:
+            with self._read_txn() as txn:
                 assets_db = self.env.open_db(b"__assets__", txn=txn)
                 asset_bytes = txn.get(key_bytes, db=assets_db)
         except lmdb.ReadonlyError:  # pragma: no cover
@@ -560,7 +611,7 @@ class UsearchIndex:
 
             # Enrich with metadata
             try:
-                with self.env.begin() as txn:
+                with self._read_txn() as txn:
                     assets_db = self.env.open_db(b"__assets__", txn=txn)
 
                     for key, total_score, unit_scores in scored_results:
@@ -690,7 +741,7 @@ class UsearchIndex:
         # type: () -> int
         """Return number of assets in index."""
         try:
-            with self.env.begin() as txn:
+            with self._read_txn() as txn:
                 assets_db = self.env.open_db(b"__assets__", txn=txn)
                 return txn.stat(db=assets_db)["entries"]
         except lmdb.ReadonlyError:
@@ -702,6 +753,40 @@ class UsearchIndex:
         # type: () -> int
         """Get current LMDB map_size."""
         return self.env.info()["map_size"]
+
+    @contextmanager
+    def _read_txn(self):
+        # type: () -> Iterator[lmdb.Transaction]
+        """
+        Open an LMDB read transaction, blocking during resize.
+
+        Acquires shared access on ``_env_rwlock`` so that ``set_mapsize``
+        (which requires exclusive access) waits for all active readers.
+
+        :yield: Active LMDB read transaction
+        """
+        self._env_rwlock.acquire_read()
+        try:
+            with self.env.begin() as txn:
+                yield txn
+        finally:
+            self._env_rwlock.release_read()
+
+    def _safe_resize(self, new_size):
+        # type: (int) -> None
+        """
+        Resize LMDB map with exclusive access (no active transactions).
+
+        Acquires exclusive ``_env_rwlock``, draining all active read
+        transactions before calling ``set_mapsize``.
+
+        :param new_size: New map size in bytes
+        """
+        self._env_rwlock.acquire_write()
+        try:
+            self.env.set_mapsize(new_size)
+        finally:
+            self._env_rwlock.release_write()
 
     @property
     def tracked_unit_types(self):
@@ -898,7 +983,7 @@ class UsearchIndex:
         :return: List of registered simprint type identifiers
         """
         try:
-            with self.env.begin() as txn:
+            with self._read_txn() as txn:
                 metadata_db = self.env.open_db(b"__metadata__", txn=txn)
                 return self._get_sp_types_from_txn(txn, metadata_db)
         except lmdb.ReadonlyError:  # pragma: no cover
@@ -937,7 +1022,7 @@ class UsearchIndex:
         # asset_type_results: iscc_id_body -> {sp_type: TypeMatchResult}
         asset_type_results = {}  # type: dict[bytes, dict[str, TypeMatchResult]]
 
-        with self.env.begin() as txn:
+        with self._read_txn() as txn:
             for sp_type, simprint_objs in query.simprints.items():
                 if sp_type not in self._sp_data_dbs:
                     continue
@@ -1002,7 +1087,7 @@ class UsearchIndex:
         # Convert to IsccChunkMatch with metadata enrichment (reuse existing converter)
         chunk_matches = []  # type: list[IsccChunkMatch]
         try:
-            with self.env.begin() as txn:
+            with self._read_txn() as txn:
                 assets_db = self.env.open_db(b"__assets__", txn=txn)
                 for raw_match in multi_matches:
                     chunk_match = self._convert_simprint_match(raw_match, assets_db, txn)
@@ -1058,7 +1143,7 @@ class UsearchIndex:
 
                 def doc_freq_fn(sp_key, _db=data_db):
                     # type: (bytes, object) -> int
-                    with self.env.begin() as txn:
+                    with self._read_txn() as txn:
                         return lmdb_ops.count_doc_freq(txn, _db, sp_key)
 
             else:
@@ -1111,7 +1196,7 @@ class UsearchIndex:
         # Convert to IsccChunkMatch with metadata enrichment
         chunk_matches = []  # type: list[IsccChunkMatch]
         try:
-            with self.env.begin() as txn:
+            with self._read_txn() as txn:
                 assets_db = self.env.open_db(b"__assets__", txn=txn)
                 for raw_match in multi_matches:
                     chunk_match = self._convert_simprint_match(raw_match, assets_db, txn)
@@ -1217,7 +1302,7 @@ class UsearchIndex:
         :return: Expected vector count, or None if not tracked
         """
         try:
-            with self.env.begin() as txn:
+            with self._read_txn() as txn:
                 metadata_db = self.env.open_db(b"__metadata__", txn=txn)
                 key = f"nphd_count:{unit_type}".encode()
                 value = txn.get(key, db=metadata_db)
@@ -1240,7 +1325,7 @@ class UsearchIndex:
         prefix = b"nphd_count:"
 
         try:
-            with self.env.begin() as txn:
+            with self._read_txn() as txn:
                 metadata_db = self.env.open_db(b"__metadata__", txn=txn)
                 cursor = txn.cursor(metadata_db)
 
@@ -1327,7 +1412,7 @@ class UsearchIndex:
         keys = []  # type: list[int]
         vectors = []  # type: list[bytes]
 
-        with self.env.begin() as txn:
+        with self._read_txn() as txn:
             assets_db = self.env.open_db(b"__assets__", txn=txn)
             cursor = txn.cursor(assets_db)
 
@@ -1525,7 +1610,7 @@ class UsearchIndex:
             background_rotation=True,
         )
         total_vectors = 0
-        with self.env.begin() as txn:
+        with self._read_txn() as txn:
             for keys, vectors in lmdb_ops.iter_simprint_vectors(txn, data_db):
                 sp_index.add_raw(keys, vectors)
                 total_vectors += len(keys)
@@ -1562,7 +1647,7 @@ class UsearchIndex:
         :return: Expected vector count, or None if not tracked
         """
         try:
-            with self.env.begin() as txn:
+            with self._read_txn() as txn:
                 metadata_db = self.env.open_db(b"__metadata__", txn=txn)
                 key = f"sp_count:{sp_type}".encode()
                 value = txn.get(key, db=metadata_db)
@@ -1582,7 +1667,7 @@ class UsearchIndex:
         :return: Total asset count
         """
         try:
-            with self.env.begin() as txn:
+            with self._read_txn() as txn:
                 assets_db = self.env.open_db(b"__assets__", txn=txn)
                 return txn.stat(db=assets_db)["entries"]
         except lmdb.ReadonlyError:  # pragma: no cover
@@ -1602,7 +1687,7 @@ class UsearchIndex:
             return None
         data_db = self._sp_data_dbs[sp_type]
         try:
-            with self.env.begin() as txn:
+            with self._read_txn() as txn:
                 cursor = txn.cursor(data_db)
                 if cursor.first():
                     return len(cursor.key()) * 8
@@ -1627,7 +1712,7 @@ class UsearchIndex:
         """
         results = {}  # type: dict[int, float]
 
-        with self.env.begin() as txn:
+        with self._read_txn() as txn:
             instance_db = self.env.open_db(
                 b"__instance__",
                 txn=txn,

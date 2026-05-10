@@ -47,11 +47,15 @@ jobs:
         run: uv run poe test
 
   test-smoke:
-    name: Test (${{ matrix.os }}, py3.12)
+    name: Test (${{ matrix.os }}, py${{ matrix.python-version }})
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [windows-latest, macos-latest]
+        include:
+          - os: windows-latest
+            python-version: "3.12"
+          - os: macos-latest
+            python-version: "3.13"
       fail-fast: false
     defaults:
       run:
@@ -63,7 +67,7 @@ jobs:
 
       - uses: ./.github/actions/setup-python-env
         with:
-          python-version: "3.12"
+          python-version: ${{ matrix.python-version }}
 
       - name: Cache iscc-sct model
         uses: actions/cache@v5
@@ -118,7 +122,13 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        include:
+          - os: ubuntu-latest
+            python-version: "3.12"
+          - os: windows-latest
+            python-version: "3.12"
+          - os: macos-latest
+            python-version: "3.13"
       fail-fast: false
     defaults:
       run:
@@ -126,7 +136,7 @@ jobs:
     steps:
       - uses: actions/setup-python@v6
         with:
-          python-version: "3.12"
+          python-version: ${{ matrix.python-version }}
 
       - uses: actions/download-artifact@v7
         with:

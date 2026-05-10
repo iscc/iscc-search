@@ -369,8 +369,6 @@ class UsearchIndex:
                     nphd_add_t += time.perf_counter() - _t
                     batch_nphd_vectors += len(keys)
 
-                    # Drain pending rotations so .size reflects all vectors
-                    nphd_index.drain_rotations()
                     self._update_nphd_metadata(unit_type, nphd_index.size)
                 nphd_elapsed = time.perf_counter() - nphd_t0
 
@@ -390,7 +388,6 @@ class UsearchIndex:
                     sp_index.add_raw(composite_keys, sp_vectors)
                     sp_add_t += time.perf_counter() - _t
                     batch_sp_vectors += len(composite_keys)
-                    sp_index.drain_rotations()
                     self._update_sp_metadata(sp_type, sp_index.size)
 
                 # Remove stale vectors for types with only deletions (no new vectors)

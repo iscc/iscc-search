@@ -5,7 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.2.2] - 2026-05-10
+
+### Performance
+
+- Remove blocking `drain_rotations()` calls from `add_assets()` hot path. Background shard rotation
+    in `ShardedNphdIndex` was being synchronously drained after every batch add, causing 6–15 second
+    stalls as shards approached the rotation threshold. The `add()` method already handles rotation
+    non-blockingly via `_register_completed_rotations()`.
+- Skip NPHD `remove()` for newly created assets. `ShardedIndex.remove()` calls `drain_rotations()`
+    internally to ensure cross-shard visibility. For pure-insert workloads (all new assets), this was
+    pure overhead — searching the HNSW graph for keys that don't exist while blocking on pending
+    rotations. Now only assets with status "updated" trigger the remove path.
+
+## [0.2.1] - 2026-05-10
 
 ### Fixed
 
@@ -169,5 +182,8 @@ Initial release of iscc-search.
 - Comprehensive pytest test suite with 100% coverage requirement (parallelized via `pytest-xdist`)
 - CI workflows for tests (Linux, macOS, Windows), Docker image publishing, and docs deployment
 
-[0.1.0]: https://github.com/iscc/iscc-search/releases/tag/0.1.0
-[0.2.0]: https://github.com/iscc/iscc-search/releases/tag/0.2.0
+[0.1.0]: https://github.com/iscc/iscc-search/releases/tag/v0.1.0
+[0.1.1]: https://github.com/iscc/iscc-search/releases/tag/v0.1.1
+[0.2.0]: https://github.com/iscc/iscc-search/releases/tag/v0.2.0
+[0.2.1]: https://github.com/iscc/iscc-search/releases/tag/v0.2.1
+[0.2.2]: https://github.com/iscc/iscc-search/releases/tag/v0.2.2

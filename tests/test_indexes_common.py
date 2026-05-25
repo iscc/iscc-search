@@ -6,7 +6,7 @@ Tests serialization, ISCC parsing, validation, and error handling.
 
 import pytest
 import iscc_core as ic
-from iscc_search.schema import IsccEntry, IsccQuery
+from iscc_search.schema import IsccEntry, IsccQuery, IsccSimprint
 from iscc_search.indexes import common
 
 
@@ -286,6 +286,67 @@ def test_roundtrip_iscc_id_body_reconstruction(sample_iscc_ids):
 
     # Should match original
     assert reconstructed == original_iscc_id
+
+
+def test_query_from_asset_without_simprints(sample_iscc_codes):
+    """Test query_from_asset converts asset without simprints."""
+    asset = IsccEntry(iscc_code=sample_iscc_codes[0])
+    query = common.query_from_asset(asset)
+
+    assert query.iscc_code == sample_iscc_codes[0]
+    assert query.simprints is None
+
+
+def test_query_from_asset_with_simprints(sample_iscc_codes):
+    """Test query_from_asset converts IsccSimprint objects to base64 strings."""
+    sp = IsccSimprint(simprint="AXvu3tp2kF8mN9qL4rT1sZ", offset=0, size=350)
+    asset = IsccEntry(
+        iscc_code=sample_iscc_codes[0],
+        simprints={"CONTENT_TEXT_V0": [sp]},
+    )
+    query = common.query_from_asset(asset)
+
+    assert query.iscc_code == sample_iscc_codes[0]
+    assert query.simprints is not None
+    assert query.simprints["CONTENT_TEXT_V0"][0].root == "AXvu3tp2kF8mN9qL4rT1sZ"
+
+
+def test_cap_simprints_no_simprints():
+    """Test cap_simprints passes through query without simprints."""
+    query = IsccQuery(iscc_code="ISCC:KACT4EBWK27737D2AYCJRAL5Z36G76RFRMO4554RQ55OSRMQSJVQ")
+    result = common.cap_simprints(query)
+    assert result.simprints is None
+
+
+def test_cap_simprints_within_limit():
+    """Test cap_simprints passes through simprints within limit."""
+    sps = [f"AXvu3tp2kF8m{i:04d}" for i in range(10)]
+    query = IsccQuery(simprints={"CONTENT_TEXT_V0": sps})
+    result = common.cap_simprints(query)
+    assert len(result.simprints["CONTENT_TEXT_V0"]) == 10
+
+
+def test_cap_simprints_over_limit():
+    """Test cap_simprints randomly samples when over MAX_SIMPRINTS_PER_TYPE."""
+    sps = [f"AXvu3tp2kF8m{i:04d}" for i in range(50)]
+    query = IsccQuery(simprints={"CONTENT_TEXT_V0": sps})
+    result = common.cap_simprints(query)
+    capped = result.simprints["CONTENT_TEXT_V0"]
+    assert len(capped) == common.MAX_SIMPRINTS_PER_TYPE
+    # All sampled simprints must come from the original set
+    original_roots = {sp.root if hasattr(sp, "root") else sp for sp in sps}
+    for sp in capped:
+        assert (sp.root if hasattr(sp, "root") else sp) in original_roots
+
+
+def test_cap_simprints_mixed_types():
+    """Test cap_simprints caps per type independently."""
+    small = [f"AXvu3tp2kF8m{i:04d}" for i in range(5)]
+    large = [f"BYwu4uq3lG9n{i:04d}" for i in range(30)]
+    query = IsccQuery(simprints={"CONTENT_TEXT_V0": small, "CONTENT_IMAGE_V0": large})
+    result = common.cap_simprints(query)
+    assert len(result.simprints["CONTENT_TEXT_V0"]) == 5
+    assert len(result.simprints["CONTENT_IMAGE_V0"]) == common.MAX_SIMPRINTS_PER_TYPE
 
 
 def test_normalize_query_with_iscc_code_only(sample_iscc_codes):

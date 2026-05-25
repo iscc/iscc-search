@@ -10,9 +10,14 @@ Provides reusable functions for:
 
 import re
 import json
+import random
 import iscc_core as ic
-from iscc_search.schema import IsccEntry
+from loguru import logger
+from iscc_search.schema import IsccEntry, IsccQuery
 from iscc_search.models import IsccUnit, IsccCode
+
+
+MAX_SIMPRINTS_PER_TYPE = 20
 
 
 # Validation patterns
@@ -212,6 +217,57 @@ def validate_iscc_id(iscc_id, expected_realm=None):
         )
 
 
+def query_from_asset(asset):
+    # type: (IsccEntry) -> IsccQuery
+    """
+    Build an IsccQuery from a stored IsccEntry.
+
+    Converts IsccSimprint objects to bare base64 strings expected by IsccQuery.
+
+    :param asset: Stored asset entry
+    :return: IsccQuery with iscc_code, units, and simprints from the asset
+    """
+    simprints = None
+    if asset.simprints:
+        simprints = {sp_type: [sp.simprint for sp in sp_list] for sp_type, sp_list in asset.simprints.items()}
+    return IsccQuery(iscc_code=asset.iscc_code, units=asset.units, simprints=simprints)
+
+
+def cap_simprints(query):
+    # type: (IsccQuery) -> IsccQuery
+    """
+    Cap simprints to MAX_SIMPRINTS_PER_TYPE per type via random sampling.
+
+    When a query contains more than MAX_SIMPRINTS_PER_TYPE simprints for any type,
+    a random subset is selected to keep search load bounded. This provides a
+    representative sample of the content rather than biasing toward any position.
+
+    :param query: Query that may contain simprints
+    :return: Query with simprints capped (unchanged if already within limit)
+    """
+    if not query.simprints:
+        return query
+
+    capped = {}
+    changed = False
+    for sp_type, sp_list in query.simprints.items():
+        if len(sp_list) > MAX_SIMPRINTS_PER_TYPE:
+            capped[sp_type] = random.sample(sp_list, MAX_SIMPRINTS_PER_TYPE)
+            logger.info(
+                "Capped {} simprints from {} to {} (random sample)",
+                sp_type,
+                len(sp_list),
+                MAX_SIMPRINTS_PER_TYPE,
+            )
+            changed = True
+        else:
+            capped[sp_type] = sp_list
+
+    if changed:
+        return query.model_copy(update={"simprints": capped})
+    return query
+
+
 def normalize_query(query):
     # type: (IsccQuery) -> IsccQuery
     """
@@ -229,15 +285,21 @@ def normalize_query(query):
     4. If query has only simprints → return as is (simprints-only query)
     5. If query has neither units, iscc_code, nor simprints → raise error
 
+    Simprints are capped to MAX_SIMPRINTS_PER_TYPE per type via random sampling
+    to keep search load bounded.
+
     Note: Not all unit combinations form valid ISCC-CODEs. Units-only queries
     that don't form valid codes (e.g., missing DATA/INSTANCE) will work with
     LMDB backend but return no matches with memory backend.
 
     :param query: Query object (may have iscc_code, units, simprints, or combination)
-    :return: Query with units and/or iscc_code populated (simprints passed through)
+    :return: Query with units and/or iscc_code populated, simprints capped
     :raises ValueError: If query has neither iscc_code, units, nor simprints
     """
     import iscc_core as ic
+
+    # Cap simprints before further processing
+    query = cap_simprints(query)
 
     # Case 1: Has both - return as is
     if query.units and query.iscc_code:

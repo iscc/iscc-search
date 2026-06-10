@@ -50,6 +50,15 @@ def serve_command(
         )
         raise typer.Exit(1)
 
+    # Reject multi-worker in aggregator mode (any backend): each worker would start its own poller.
+    if workers and workers > 1 and search_opts.aggregator_mode:
+        console.print(
+            "[red]Error:[/red] --workers > 1 is not supported in aggregator mode.\n"
+            "The transparency-log poller runs in-process; multiple workers would poll redundantly.\n"
+            "Run with a single worker (omit --workers or use --workers 1)."
+        )
+        raise typer.Exit(1)
+
     # Configure uvicorn based on mode
     uvicorn_config = {
         "app": "iscc_search.server:app",

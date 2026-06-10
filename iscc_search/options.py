@@ -29,7 +29,7 @@ options.py while CLI data commands use config.py.
 from pathlib import Path
 from urllib.parse import urlparse
 from dotenv import load_dotenv
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 import iscc_search
 
@@ -170,6 +170,29 @@ class SearchOptions(BaseSettings):
         "mutations (0 = disabled). Only safe with a single writer process.",
     )
 
+    # Aggregator mode (IDP transparency-log ingestion)
+    aggregator_network: str | None = Field(
+        None,
+        description="ISCC_SEARCH_AGGREGATOR_NETWORK - Enable aggregator mode for a network (testnet or mainnet)",
+    )
+
+    aggregator_hub_list_url: str | None = Field(
+        None,
+        description="ISCC_SEARCH_AGGREGATOR_HUB_LIST_URL - Override hub-list source (http(s) URL or local file path)",
+    )
+
+    aggregator_poll_interval: int = Field(
+        60,
+        ge=1,
+        description="ISCC_SEARCH_AGGREGATOR_POLL_INTERVAL - Seconds between hub checkpoint polls",
+    )
+
+    aggregator_hub_refresh_interval: int = Field(
+        3600,
+        ge=1,
+        description="ISCC_SEARCH_AGGREGATOR_HUB_REFRESH_INTERVAL - Seconds between hub-list refreshes",
+    )
+
     # Logging
     log_level: str = Field(
         "info",
@@ -189,6 +212,26 @@ class SearchOptions(BaseSettings):
         description="ISCC_SEARCH_SENTRY_TRACES_SAMPLE_RATE - Sentry performance sampling rate (0.0-1.0)",
     )
 
+    @field_validator("aggregator_network")
+    @classmethod
+    def validate_aggregator_network(cls, value):
+        # type: (str | None) -> str | None
+        """
+        Reject any aggregator_network outside {None, "", "testnet", "mainnet"}.
+
+        An empty string (e.g. a valueless ISCC_SEARCH_AGGREGATOR_NETWORK= line)
+        is normalized to None, meaning aggregator mode is disabled.
+
+        :param value: Configured network name or None (aggregator mode disabled)
+        :return: The validated value, with "" normalized to None
+        :raises ValueError: If the network name is not supported
+        """
+        if not value:
+            return None
+        if value not in ("testnet", "mainnet"):
+            raise ValueError(f"aggregator_network must be 'testnet' or 'mainnet', got: '{value}'")
+        return value
+
     @property
     def cors_origins_list(self):
         # type: () -> list[str]
@@ -198,6 +241,41 @@ class SearchOptions(BaseSettings):
         :return: List of allowed origin strings
         """
         return [origin.strip() for origin in self.cors_origins.split(",")]
+
+    @property
+    def aggregator_mode(self):
+        # type: () -> bool
+        """
+        Whether aggregator mode is enabled (a network is configured).
+
+        :return: True if aggregator_network is set
+        """
+        return self.aggregator_network is not None
+
+    @property
+    def aggregator_index_name(self):
+        # type: () -> str
+        """
+        Index name derived from the configured network.
+
+        :return: "idp" for mainnet, "idptest" otherwise
+        """
+        return "idp" if self.aggregator_network == "mainnet" else "idptest"
+
+    @property
+    def aggregator_hub_list_source(self):
+        # type: () -> str
+        """
+        Hub-list source: explicit override or the authoritative GitHub URL.
+
+        An http(s) value is fetched over the network; any other value is read
+        as a local file path (see aggregator.hublist.fetch_hub_list).
+
+        :return: URL or local file path of the {network}.yaml hub list
+        """
+        if self.aggregator_hub_list_url:
+            return self.aggregator_hub_list_url
+        return f"https://raw.githubusercontent.com/iscc/iscc-hub/main/hubs/{self.aggregator_network}.yaml"
 
     model_config = SettingsConfigDict(
         env_prefix="ISCC_SEARCH_",

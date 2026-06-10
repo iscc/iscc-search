@@ -4,13 +4,18 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from iscc_search.protocols.index import IsccIndexProtocol
 from iscc_search.schema import IsccIndex
 from iscc_search.server import get_index_from_state
-from iscc_search.server.auth import verify_api_key
+from iscc_search.server.auth import block_if_aggregator, verify_api_key
 
 
 router = APIRouter(tags=["indexes"])
 
 
-@router.get("/indexes", response_model=list[IsccIndex], response_model_exclude_unset=True)
+@router.get(
+    "/indexes",
+    response_model=list[IsccIndex],
+    response_model_exclude_unset=True,
+    dependencies=[Depends(block_if_aggregator)],
+)
 def list_indexes(
     index: IsccIndexProtocol = Depends(get_index_from_state),
     auth: None = Depends(verify_api_key),
@@ -29,7 +34,11 @@ def list_indexes(
 
 
 @router.post(
-    "/indexes", response_model=IsccIndex, response_model_exclude_unset=True, status_code=status.HTTP_201_CREATED
+    "/indexes",
+    response_model=IsccIndex,
+    response_model_exclude_unset=True,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(block_if_aggregator)],
 )
 def create_index(
     index_data: IsccIndex,
@@ -56,7 +65,12 @@ def create_index(
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
 
 
-@router.get("/indexes/{name}", response_model=IsccIndex, response_model_exclude_unset=True)
+@router.get(
+    "/indexes/{name}",
+    response_model=IsccIndex,
+    response_model_exclude_unset=True,
+    dependencies=[Depends(block_if_aggregator)],
+)
 def get_index(
     name: str,
     index: IsccIndexProtocol = Depends(get_index_from_state),
@@ -80,7 +94,11 @@ def get_index(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
-@router.delete("/indexes/{name}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/indexes/{name}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(block_if_aggregator)],
+)
 def delete_index(
     name: str,
     index: IsccIndexProtocol = Depends(get_index_from_state),

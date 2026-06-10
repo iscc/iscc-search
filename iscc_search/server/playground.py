@@ -1,12 +1,18 @@
 """ISCC-Search API Playground - Interactive testing interface."""
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from fastapi.responses import HTMLResponse
+from iscc_search.server.auth import block_if_aggregator
 
 router = APIRouter()
 
 
-@router.get("/playground", response_class=HTMLResponse, include_in_schema=False)
+@router.get(
+    "/playground",
+    response_class=HTMLResponse,
+    include_in_schema=False,
+    dependencies=[Depends(block_if_aggregator)],
+)
 def playground():
     # type: () -> HTMLResponse
     """

@@ -5,13 +5,18 @@ from iscc_search.processing import text_simprints
 from iscc_search.protocols.index import IsccIndexProtocol
 from iscc_search.schema import IsccQuery, IsccSearchResult, TextQuery
 from iscc_search.server import get_index_from_state
-from iscc_search.server.auth import verify_api_key
+from iscc_search.server.auth import block_foreign_index_if_aggregator, block_if_aggregator, verify_api_key
 
 
 router = APIRouter(tags=["search"])
 
 
-@router.post("/indexes/{name}/search", response_model=IsccSearchResult, response_model_exclude_unset=True)
+@router.post(
+    "/indexes/{name}/search",
+    response_model=IsccSearchResult,
+    response_model_exclude_unset=True,
+    dependencies=[Depends(block_foreign_index_if_aggregator)],
+)
 def search_post(
     name: str,
     query: IsccQuery,
@@ -42,7 +47,12 @@ def search_post(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.get("/indexes/{name}/search", response_model=IsccSearchResult, response_model_exclude_unset=True)
+@router.get(
+    "/indexes/{name}/search",
+    response_model=IsccSearchResult,
+    response_model_exclude_unset=True,
+    dependencies=[Depends(block_foreign_index_if_aggregator)],
+)
 def search_get(
     name: str,
     iscc_code: str = Query(..., description="ISCC-CODE to search for"),
@@ -75,7 +85,12 @@ def search_get(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.post("/indexes/{name}/search/text", response_model=IsccSearchResult, response_model_exclude_unset=True)
+@router.post(
+    "/indexes/{name}/search/text",
+    response_model=IsccSearchResult,
+    response_model_exclude_unset=True,
+    dependencies=[Depends(block_if_aggregator)],
+)
 def search_text(
     name: str,
     text_query: TextQuery,

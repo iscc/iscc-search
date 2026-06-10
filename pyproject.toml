@@ -37,6 +37,7 @@ dependencies = [
     "sentry-sdk[fastapi]>=2.0",
     "huggingface-hub>=1.10",
     "pyarrow>=19",
+    "pyyaml>=6.0.3",
 ]
 
 [project.urls]

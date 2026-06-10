@@ -1714,13 +1714,17 @@ class UsearchIndex:
         results = {}  # type: dict[int, float]
 
         with self._read_txn() as txn:
-            instance_db = self.env.open_db(
-                b"__instance__",
-                txn=txn,
-                dupsort=True,
-                dupfixed=True,
-                integerdup=True,
-            )
+            try:
+                instance_db = self.env.open_db(
+                    b"__instance__",
+                    txn=txn,
+                    dupsort=True,
+                    dupfixed=True,
+                    integerdup=True,
+                )
+            except lmdb.ReadonlyError:
+                # Database doesn't exist yet (fresh index with no assets)
+                return results
 
             cursor = txn.cursor(instance_db)
             # Bidirectional prefix matching (like LmdbIndex)

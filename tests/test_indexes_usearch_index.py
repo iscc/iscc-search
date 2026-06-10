@@ -57,6 +57,15 @@ def test_usearch_index_get_asset_readonly_error(tmp_path):
     idx.close()
 
 
+def test_usearch_index_search_fresh_index_returns_empty(tmp_path):
+    """Search on a freshly created index returns empty results instead of raising ReadonlyError."""
+    idx = UsearchIndex(tmp_path / "fresh_index", realm_id=0, max_dim=256)
+    instance_str = f"ISCC:{ic.Code.rnd(ic.MT.INSTANCE, bits=64)}"
+    result = idx.search_assets(IsccQuery(units=[instance_str]), limit=10)
+    assert not result.global_matches
+    idx.close()
+
+
 def test_usearch_index_bidirectional_instance_matching_256bit(usearch_index, sample_iscc_ids):
     """Test bidirectional prefix matching with 256-bit INSTANCE codes."""
     # Create 256-bit INSTANCE code (32 bytes)

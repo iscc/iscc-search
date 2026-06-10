@@ -49,7 +49,7 @@ assumes you already have `uv` and `Git` installed and ready to go.
 
 1. Fork the `iscc-search` repo on GitHub.
 
-2. Clone your fork locally:
+1. Clone your fork locally:
 
 ```bash
 cd <directory_in_which_repo_should_be_created>
@@ -84,7 +84,7 @@ Now you can make your changes locally.
 
 1. Don't forget to add test cases for your added functionality to the `tests` directory.
 
-2. When you're done making changes, run all pre-commit tasks:
+1. When you're done making changes, run all pre-commit tasks:
 
 ```bash
 uv run poe all
@@ -103,7 +103,7 @@ uv run poe docs-test # Test documentation build
 1. Before raising a pull request, ensure all tests pass. The CI/CD pipeline will test across different Python
     versions automatically.
 
-2. Commit your changes and push your branch to GitHub:
+1. Commit your changes and push your branch to GitHub:
 
 ```bash
 git add .
@@ -119,5 +119,5 @@ Before you submit a pull request, check that it meets these guidelines:
 
 1. The pull request should include tests.
 
-2. If the pull request adds functionality, the docs should be updated. Put your new functionality into a
+1. If the pull request adds functionality, the docs should be updated. Put your new functionality into a
     function with a docstring, and add the feature to the list in `README.md`.

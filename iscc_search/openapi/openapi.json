@@ -782,106 +782,6 @@
           }
         }
       }
-    },
-    "/indexes/{name}/search/text": {
-      "post": {
-        "summary": "Search by plain text",
-        "description": "Generates simprints from the provided text and searches for similar content\nsegments in the index. Returns chunk-level matches based on text similarity.\n\n**Note**: This endpoint will be removed once iscc-web supports dedicated simprint generation.\nSimprint generation requires heavy dependencies and should be handled by a separate service.\n",
-        "operationId": "searchText",
-        "tags": [
-          "search"
-        ],
-        "security": [
-          {
-            "ApiKeyAuth": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "name",
-            "in": "path",
-            "required": true,
-            "description": "Name of the index to search",
-            "schema": {
-              "type": "string",
-              "pattern": "^[a-z][a-z0-9]*$",
-              "minLength": 1,
-              "maxLength": 32,
-              "example": "default"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "description": "Plain text content to search for",
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/TextQuery"
-              },
-              "example": {
-                "text": "This is the content I want to find similar matches for..."
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Search results with matched assets and chunks",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/IsccSearchResult"
-                },
-                "example": {
-                  "query": {
-                    "text": "This is the content I want to find similar matches for..."
-                  },
-                  "global_matches": [],
-                  "chunk_matches": [
-                    {
-                      "iscc_id": "ISCC:MAIGIIFJRDGEQQAA",
-                      "simprint": "AXvu3tp2kF8mN9qL4rT1sZ",
-                      "score": 0.95,
-                      "offset": 12500,
-                      "size": 350
-                    }
-                  ]
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Invalid request",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HttpError"
-                },
-                "example": {
-                  "detail": "Text content cannot be empty"
-                }
-              }
-            }
-          },
-          "401": {
-            "$ref": "#/components/responses/UnauthorizedError"
-          },
-          "404": {
-            "description": "Index not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HttpError"
-                },
-                "example": {
-                  "detail": "Index 'myindex' not found"
-                }
-              }
-            }
-          }
-        }
-      }
     }
   },
   "components": {
@@ -974,6 +874,19 @@
             "minimum": 0,
             "readOnly": true,
             "example": 42
+          },
+          "sizes": {
+            "type": "object",
+            "description": "Size in megabytes per index component (server-generated, read-only). Key \"lmdb\" covers primary key-value storage measured on disk; additional keys are derived similarity sub-indexes named by ISCC-UNIT-TYPE or simprint type, measured as serialized data size from the live index (includes unflushed data).",
+            "additionalProperties": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "readOnly": true,
+            "example": {
+              "lmdb": 30,
+              "CONTENT_TEXT_V0": 12
+            }
           }
         },
         "example": {
@@ -1886,27 +1799,6 @@
           "content": "data:text/plain;base64,VGhpcyBpcyBhIHNhbXBsZSB0ZXh0IGNodW5r",
           "modality": "text",
           "track": 0
-        }
-      },
-      "TextQuery": {
-        "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "$id": "http://purl.org/iscc/schema/text-query.json",
-        "title": "TextQuery",
-        "type": "object",
-        "description": "Query for text-based similarity search using simprints",
-        "required": [
-          "text"
-        ],
-        "properties": {
-          "text": {
-            "type": "string",
-            "description": "Plain text content to generate simprints and search for",
-            "minLength": 1,
-            "example": "This is the content I want to find similar matches for..."
-          }
-        },
-        "example": {
-          "text": "This is the content I want to find similar matches for..."
         }
       }
     }

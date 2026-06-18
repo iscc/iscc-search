@@ -50,7 +50,6 @@ iscc_search/
   config.py        CLI multi-index management (persistent JSON)
   models.py        ISCC data model classes (IsccBase, IsccUnit, IsccCode, IsccID)
   schema.py        Auto-generated Pydantic models from OpenAPI spec
-  processing.py    Text processing utilities
 ```
 
 The `schema.py` file is auto-generated from `openapi/openapi.yaml` via the build system. Edit the YAML source

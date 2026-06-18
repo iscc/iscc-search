@@ -32,6 +32,7 @@ from dotenv import load_dotenv
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 import iscc_search
+from iscc_search.aggregator import NETWORKS
 
 load_dotenv()
 
@@ -217,19 +218,19 @@ class SearchOptions(BaseSettings):
     def validate_aggregator_network(cls, value):
         # type: (str | None) -> str | None
         """
-        Reject any aggregator_network outside {None, "", "testnet", "mainnet"}.
+        Reject any aggregator_network outside {None, ""} | NETWORKS keys.
 
         An empty string (e.g. a valueless ISCC_SEARCH_AGGREGATOR_NETWORK= line)
         is normalized to None, meaning aggregator mode is disabled.
 
         :param value: Configured network name or None (aggregator mode disabled)
         :return: The validated value, with "" normalized to None
-        :raises ValueError: If the network name is not supported
+        :raises ValueError: If the network name is not a known network
         """
         if not value:
             return None
-        if value not in ("testnet", "mainnet"):
-            raise ValueError(f"aggregator_network must be 'testnet' or 'mainnet', got: '{value}'")
+        if value not in NETWORKS:
+            raise ValueError(f"aggregator_network must be one of {sorted(NETWORKS)}, got: '{value}'")
         return value
 
     @property
@@ -256,11 +257,11 @@ class SearchOptions(BaseSettings):
     def aggregator_index_name(self):
         # type: () -> str
         """
-        Index name derived from the configured network.
+        Index name for the configured network (aggregator mode only).
 
-        :return: "idp" for mainnet, "idptest" otherwise
+        :return: "idp" for mainnet, "idptest" for testnet
         """
-        return "idp" if self.aggregator_network == "mainnet" else "idptest"
+        return NETWORKS[self.aggregator_network]["index"]
 
     @property
     def aggregator_hub_list_source(self):

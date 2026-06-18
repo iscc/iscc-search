@@ -2,6 +2,7 @@
 
 import asyncio
 import atexit
+import mimetypes
 import sys
 import typing  # noqa: F401
 from contextlib import asynccontextmanager
@@ -90,6 +91,9 @@ async def lifespan(app):  # type: ignore
     # Startup: Create and store index instance
     index = get_index()
     app.state.index = index
+    # Short-lived snapshot store so the public, polled /status reuses index-size
+    # accounting instead of walking shard files on every request.
+    app.state.status_index_cache = {}  # type: dict[str, tuple[float, dict | None]]
 
     # Capture bound method reference for consistent register/unregister
     close_callback = index.close
@@ -105,7 +109,9 @@ async def lifespan(app):  # type: ignore
         except FileExistsError:
             pass
         stop_event = asyncio.Event()
-        poller_task = asyncio.create_task(poller.run(index, search_opts, stop_event))
+        status = {}  # type: dict[int, poller.HubStatus]
+        app.state.aggregator_status = status
+        poller_task = asyncio.create_task(poller.run(index, search_opts, stop_event, status))
         poller_task.add_done_callback(log_poller_crash)
         app.state.aggregator_poller_task = poller_task
         logger.info(f"Aggregator mode active: network={search_opts.aggregator_network}")
@@ -120,6 +126,8 @@ async def lifespan(app):  # type: ignore
             stop_event.set()
             # return_exceptions retrieves a crashed poller's exception without raising
             await asyncio.gather(poller_task, return_exceptions=True)
+            # Clear published status so a reused app instance never serves stale /status data
+            del app.state.aggregator_status
     finally:
         try:
             index.close()
@@ -163,6 +171,11 @@ app.add_middleware(
 # Mount OpenAPI schema files as static directory
 openapi_dir = Path(__file__).parent.parent / "openapi"
 app.mount("/openapi", StaticFiles(directory=str(openapi_dir)), name="openapi")
+
+# Mount frontend assets; woff2 is missing from stdlib mimetypes on Python 3.11/3.12
+mimetypes.add_type("font/woff2", ".woff2")
+static_dir = Path(__file__).parent / "static"
+app.mount("/static", StaticFiles(directory=str(static_dir), check_dir=False), name="static")
 
 
 @app.get("/docs", response_class=HTMLResponse, include_in_schema=False)
@@ -251,22 +264,6 @@ def custom_docs():
     return HTMLResponse(content=html)
 
 
-@app.get("/", include_in_schema=False)
-def root():
-    # type: () -> dict
-    """
-    Root endpoint with basic API information.
-
-    :return: API information
-    """
-    return {
-        "title": app.title,
-        "description": app.description,
-        "version": app.version,
-        "docs": "/docs",
-    }
-
-
 @app.get("/healthz", include_in_schema=False)
 async def healthz():
     # type: () -> dict
@@ -306,9 +303,9 @@ async def readyz(request: Request):
 
 
 # Include API routers
-from iscc_search.server import indexes, assets, search, playground  # noqa: E402
+from iscc_search.server import indexes, assets, search, frontend  # noqa: E402
 
 app.include_router(indexes.router)
 app.include_router(assets.router)
 app.include_router(search.router)
-app.include_router(playground.router)
+app.include_router(frontend.router)

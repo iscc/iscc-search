@@ -136,9 +136,16 @@ derives the same name from its own network, so both sides meet on the same index
 
 **What is exposed**: only the similarity-search endpoints (`GET`/`POST /indexes/{name}/search`),
 get-asset-by-ID (`GET /indexes/{name}/assets/{iscc_id}`), and the infra routes (`/`, `/healthz`, `/readyz`,
-`/docs`). Index management, asset add, plaintext search, and the playground return 404, as do reads against
+`/docs`, `/status`). Index management and asset add return 404, as do reads against
 any index other than the aggregator index. `ISCC_SEARCH_API_SECRET` still applies if set; the static
 `/docs` spec continues to document the full API even though the suppressed endpoints 404.
+
+**Landing page and status**: browsers opening `/` get a mode-specific HTML landing page (search/lookup plus
+a live ingestion-status panel in aggregator mode); API clients keep getting the JSON summary via content
+negotiation. `GET /status` is public in both modes and reports version, mode, and network — in aggregator
+mode it additionally carries the aggregator index stats and a per-hub ingestion table (cursor, last poll,
+health), useful for monitoring (`curl https://host/status`). The former `/playground` URL permanently
+redirects to `/`.
 
 **Entrypoint**: `iscc-search serve` is the only supported entrypoint in aggregator mode. The poller runs
 in-process, so the serve command rejects `--workers > 1` for any backend; starting uvicorn directly with

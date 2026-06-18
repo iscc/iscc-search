@@ -29,6 +29,13 @@ class IsccIndex(BaseModel):
     size: Annotated[
         int | None, Field(description="Size of index in megabytes (server-generated, read-only)", examples=[42], ge=0)
     ] = None
+    sizes: Annotated[
+        dict[str, int] | None,
+        Field(
+            description='Size in megabytes per index component (server-generated, read-only). Key "lmdb" covers primary key-value storage measured on disk; additional keys are derived similarity sub-indexes named by ISCC-UNIT-TYPE or simprint type, measured as serialized data size from the live index (includes unflushed data).',
+            examples=[{"lmdb": 30, "CONTENT_TEXT_V0": 12}],
+        ),
+    ] = None
 
 
 class IsccSimprint(BaseModel):
@@ -297,17 +304,6 @@ class IsccChunk(BaseModel):
     ] = None
 
 
-class TextQuery(BaseModel):
-    text: Annotated[
-        str,
-        Field(
-            description="Plain text content to generate simprints and search for",
-            examples=["This is the content I want to find similar matches for..."],
-            min_length=1,
-        ),
-    ]
-
-
 class IsccEntry(BaseModel):
     iscc_id: Annotated[
         str | None,
@@ -386,6 +382,7 @@ class IsccGlobalMatch(BaseModel):
         Field(
             description='Per-unit-type similarity breakdown. Keys are unit type identifiers\n(e.g., "META_NONE_V0", "CONTENT_TEXT_V0"), values are similarity scores (0.0-1.0).\n\n**Missing keys**: Unit types that were queried but not found in this asset\nare omitted (implicitly 0.0).\n\n**Score semantics** (normalized against query unit length):\n- 1.0: Perfect match (all query bits matched)\n- 0.0-1.0: Partial match (NPHD distance for similarity-preserving units)\n- INSTANCE units: Binary scoring (1.0 = identity match, 0.0 = no match)\n\nA 64-bit query with perfect 64-bit match scores 1.0, same as 256-bit perfect match.\nScore reflects "how well does this match MY query", not absolute bit count.\n',
             examples=[{"META_NONE_V0": 1.0, "CONTENT_TEXT_V0": 1.0, "DATA_NONE_V0": 1.0, "INSTANCE_NONE_V0": 0.25}],
+            min_length=1,
         ),
     ]
     metadata: Annotated[
@@ -495,6 +492,7 @@ class IsccChunkMatch(BaseModel):
                     },
                 }
             ],
+            min_length=1,
         ),
     ]
     source: Annotated[

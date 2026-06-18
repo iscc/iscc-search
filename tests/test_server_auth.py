@@ -90,12 +90,6 @@ def test_public_mode_no_auth_required(client_public):
     )
     assert response.status_code == 200
 
-    response = client_public.post(
-        "/indexes/testindex/search/text",
-        json={"text": "This is a test query"},
-    )
-    assert response.status_code == 200
-
     # Cleanup
     response = client_public.delete("/indexes/testindex")
     assert response.status_code == 204
@@ -147,13 +141,6 @@ def test_protected_mode_valid_key(client_protected):
     )
     assert response.status_code == 200
 
-    response = client_protected.post(
-        "/indexes/testindex/search/text",
-        json={"text": "This is a test query"},
-        headers=headers,
-    )
-    assert response.status_code == 200
-
     # Cleanup
     response = client_protected.delete("/indexes/testindex", headers=headers)
     assert response.status_code == 204
@@ -201,13 +188,6 @@ def test_protected_mode_invalid_key(client_protected):
     )
     assert response.status_code == 401
 
-    response = client_protected.post(
-        "/indexes/testindex/search/text",
-        json={"text": "test"},
-        headers=headers,
-    )
-    assert response.status_code == 401
-
     # Cleanup
     client_protected.delete("/indexes/testindex", headers=valid_headers)
 
@@ -249,12 +229,6 @@ def test_protected_mode_missing_key(client_protected):
     )
     assert response.status_code == 401
 
-    response = client_protected.post(
-        "/indexes/testindex/search/text",
-        json={"text": "test"},
-    )
-    assert response.status_code == 401
-
     # Cleanup
     client_protected.delete("/indexes/testindex", headers=headers)
 
@@ -270,8 +244,13 @@ def test_public_endpoints_always_accessible(client_protected):
     response = client_protected.get("/docs")
     assert response.status_code == 200
 
-    # Playground endpoint
-    response = client_protected.get("/playground")
+    # Retired playground redirects to the landing page
+    response = client_protected.get("/playground", follow_redirects=False)
+    assert response.status_code == 301
+    assert response.headers["location"] == "/"
+
+    # Status endpoint is public even in protected mode
+    response = client_protected.get("/status")
     assert response.status_code == 200
 
     # OpenAPI static files

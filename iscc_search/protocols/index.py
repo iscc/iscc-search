@@ -43,6 +43,8 @@ class IsccIndexProtocol(Protocol):
 
         Scans the backend storage and returns metadata for all existing indexes.
         The metadata includes index name, asset count, and storage size.
+        Backends that can attribute storage to components should also populate
+        the optional ``sizes`` per-component breakdown (others leave it unset).
 
         :return: List of IsccIndex objects with name, assets, and size
         """
@@ -71,7 +73,9 @@ class IsccIndexProtocol(Protocol):
 
         Retrieves current metadata for the specified index, including
         the number of assets and storage size. This is useful for monitoring
-        index growth and health.
+        index growth and health. Backends that can attribute storage to
+        components should also populate the optional ``sizes`` per-component
+        breakdown (others leave it unset).
 
         :param name: Index name (must match pattern ^[a-z][a-z0-9]*$)
         :return: IsccIndex with current metadata

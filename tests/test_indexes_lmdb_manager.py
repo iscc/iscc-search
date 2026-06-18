@@ -285,18 +285,22 @@ def test_index_cache_management(manager, sample_assets):
     assert manager._index_cache["test"] is cached_idx  # Still same instance
 
 
-def test_get_file_size_mb(manager, tmp_path, sample_assets):
-    """Test _get_file_size_mb helper."""
+def test_get_index_size_mb(manager, sample_assets):
+    """_get_index_size_mb reports actual LMDB page usage, not the nominal map size."""
     # Create index with some data
     manager.create_index(IsccIndex(name="test"))
     manager.add_assets("test", [sample_assets[0]])
 
-    # Get size
-    lmdb_file = tmp_path / "test.lmdb"
-    size_mb = manager._get_file_size_mb(lmdb_file)
+    idx = manager._index_cache["test"]
+    size_mb = manager._get_index_size_mb(idx)
 
     assert isinstance(size_mb, int)
-    assert size_mb >= 0
+    # On Windows the data file's st_size equals the nominal map size (>= 10 MB),
+    # while actual page usage for a single asset stays well below 10 MB.
+    assert 0 <= size_mb < 10
+
+    result = manager.get_index("test")
+    assert result.sizes == {"lmdb": result.size}
 
 
 def test_concurrent_get_or_load_index_does_not_race_on_lmdb_open(manager, tmp_path, sample_assets):

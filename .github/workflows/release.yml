@@ -26,20 +26,6 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Cache iscc-sct model
-        uses: actions/cache@v5
-        with:
-          path: |
-            ~/.local/share/iscc-sct
-            ~/Library/Application Support/iscc-sct
-            ~\AppData\Local\iscc\iscc-sct
-          key: iscc-sct-model-${{ runner.os }}-${{ hashFiles('uv.lock') }}
-          restore-keys: |
-            iscc-sct-model-${{ runner.os }}-
-
-      - name: Pre-download iscc-sct model
-        run: uv run python -c "import iscc_sct.code_semantic_text as sct; sct.model()"
-
       - name: OpenAPI build + validation
         run: uv run poe build
 
@@ -68,20 +54,6 @@ jobs:
       - uses: ./.github/actions/setup-python-env
         with:
           python-version: ${{ matrix.python-version }}
-
-      - name: Cache iscc-sct model
-        uses: actions/cache@v5
-        with:
-          path: |
-            ~/.local/share/iscc-sct
-            ~/Library/Application Support/iscc-sct
-            ~\AppData\Local\iscc\iscc-sct
-          key: iscc-sct-model-${{ runner.os }}-${{ hashFiles('uv.lock') }}
-          restore-keys: |
-            iscc-sct-model-${{ runner.os }}-
-
-      - name: Pre-download iscc-sct model
-        run: uv run python -c "import iscc_sct.code_semantic_text as sct; sct.model()"
 
       - name: Run tests
         run: uv run poe test

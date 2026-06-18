@@ -18,16 +18,12 @@ COPY dist/*.whl /tmp/
 RUN uv venv /app/.venv && \
     uv pip install --python /app/.venv/bin/python /tmp/*.whl
 
-# Pre-download iscc-sct model weights so container start is fast and offline-capable.
-RUN /app/.venv/bin/python -c "import iscc_sct.code_semantic_text as sct; sct.model()"
-
 
 FROM python:3.12-slim
 
 WORKDIR /app
 
 COPY --from=builder /app/.venv /app/.venv
-COPY --from=builder /root/.local/share/iscc-sct /root/.local/share/iscc-sct
 
 ENV PATH="/app/.venv/bin:$PATH"
 

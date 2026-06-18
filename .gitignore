@@ -166,3 +166,6 @@ CLAUDE.local.md
 
 # Bubbling, alchemical, where secret raw ingredients transform ;)
 cauldron/
+
+# Local aggregator test rig (hub list, ingested test data)
+.aggregator-local/

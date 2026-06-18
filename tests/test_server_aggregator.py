@@ -3,10 +3,12 @@
 import asyncio
 import typing  # noqa: F401
 import pytest
+from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
 from loguru import logger
 import iscc_search.options
 from iscc_search.server import app, log_poller_crash
+from iscc_search.server.auth import block_foreign_index_if_aggregator, block_if_aggregator
 
 
 ISCC_ID = "ISCC:MAIGIIFJRDGEQQAA"
@@ -80,7 +82,7 @@ def test_aggregator_read_surface_reachable(client_aggregator):
 
 def test_aggregator_suppressed_endpoints_404(client_aggregator):
     # type: (TestClient) -> None
-    """Index management, asset add, text search, and playground return 404."""
+    """Index management and asset add return 404; playground redirects."""
     assert client_aggregator.get("/indexes").status_code == 404
     assert client_aggregator.post("/indexes", json={"name": "newindex"}).status_code == 404
     assert client_aggregator.get("/indexes/idptest").status_code == 404
@@ -90,9 +92,23 @@ def test_aggregator_suppressed_endpoints_404(client_aggregator):
         json=[{"iscc_id": ISCC_ID, "iscc_code": ISCC_CODE}],
     )
     assert response.status_code == 404
-    response = client_aggregator.post("/indexes/idptest/search/text", json={"text": "query"})
-    assert response.status_code == 404
-    assert client_aggregator.get("/playground").status_code == 404
+    response = client_aggregator.get("/playground", follow_redirects=False)
+    assert response.status_code == 301
+    assert response.headers["location"] == "/"
+
+
+def test_all_index_routes_carry_an_aggregator_gate():
+    # type: () -> None
+    """Every /indexes* route declares a mode gate so a new endpoint can't ship ungated."""
+    gates = {block_if_aggregator, block_foreign_index_if_aggregator}
+    ungated = [
+        f"{sorted(route.methods)} {route.path}"
+        for route in app.routes
+        if isinstance(route, APIRoute)
+        and route.path.startswith("/indexes")
+        and not ({dep.dependency for dep in route.dependencies} & gates)
+    ]
+    assert ungated == [], f"ungated /indexes routes reachable in aggregator mode: {ungated}"
 
 
 def test_aggregator_suppressed_404_matches_unknown_route(client_aggregator):
@@ -136,11 +152,12 @@ def test_aggregator_suppressed_404_before_auth_401(client_aggregator):
 
 def test_aggregator_infra_routes_reachable(client_aggregator):
     # type: (TestClient) -> None
-    """Infra endpoints (root, healthz, readyz, docs) remain available."""
+    """Infra endpoints (root, healthz, readyz, docs, status) remain available."""
     assert client_aggregator.get("/").status_code == 200
     assert client_aggregator.get("/healthz").status_code == 200
     assert client_aggregator.get("/readyz").status_code == 200
     assert client_aggregator.get("/docs").status_code == 200
+    assert client_aggregator.get("/status").status_code == 200
 
 
 def test_normal_mode_all_endpoints_reachable(client_normal):
@@ -158,9 +175,9 @@ def test_normal_mode_all_endpoints_reachable(client_normal):
     response = client_normal.get("/indexes/idptest/search", params={"iscc_code": ISCC_CODE})
     assert response.status_code == 200
     assert client_normal.get(f"/indexes/idptest/assets/{ISCC_ID}").status_code == 200
-    response = client_normal.post("/indexes/idptest/search/text", json={"text": "query"})
-    assert response.status_code == 200
-    assert client_normal.get("/playground").status_code == 200
+    response = client_normal.get("/playground", follow_redirects=False)
+    assert response.status_code == 301
+    assert response.headers["location"] == "/"
     assert client_normal.delete("/indexes/idptest").status_code == 204
 
 
@@ -192,7 +209,7 @@ def test_lifespan_aggregator_existing_index(tmp_path):
     hub_file.write_text("version: 1\nnetwork: testnet\nhubs:\n", encoding="utf-8")
     opts = iscc_search.options.search_opts
     original = (opts.index_uri, opts.aggregator_network, opts.aggregator_hub_list_url)
-    opts.index_uri = f"lmdb://{(tmp_path / 'data').as_posix()}"
+    opts.index_uri = f"lmdb:///{(tmp_path / 'data').as_posix()}"
     opts.aggregator_network = "testnet"
     opts.aggregator_hub_list_url = str(hub_file)
     try:

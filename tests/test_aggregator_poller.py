@@ -2,12 +2,13 @@
 
 import asyncio
 import struct
+import time
 import httpx
 import iscc_core as ic
 import pytest
 from iscc_search.aggregator import tlog
 from iscc_search.aggregator.hublist import Hub
-from iscc_search.aggregator.poller import plan_bundles, poll_hub_once, poll_loop, run
+from iscc_search.aggregator.poller import HubStatus, plan_bundles, poll_hub_once, poll_loop, run
 from iscc_search.indexes.memory import MemoryIndex
 from iscc_search.options import SearchOptions
 from iscc_search.schema import IsccIndex
@@ -128,9 +129,10 @@ def test_poll_hub_once_backfill(agg_index, make_log_record):
     result = asyncio.run(poll_once(log.handler, 0, agg_index))
     assert result.last_size == 3
     assert result.counts["ok"] == 3
+    assert result.error is None
     assert agg_index.get_index("idptest").assets == 3
     asset = agg_index.get_asset("idptest", make_iscc_id(0))
-    assert asset.metadata == {"gateway": f"https://example.com/{make_iscc_id(0).removeprefix('ISCC:')}"}
+    assert asset.metadata == {"gateway": f"https://example.com/{make_iscc_id(0).removeprefix('ISCC:').lower()}"}
     assert agg_index.get_asset("idptest", make_iscc_id(1)).metadata is None
 
 
@@ -226,11 +228,12 @@ def test_poll_hub_once_short_bundle_keeps_cursor(agg_index, make_log_record):
 
     result = asyncio.run(poll_once(handler, 0, agg_index))
     assert result.last_size == 0
+    assert result.error is not None
     assert agg_index.get_index("idptest").assets == 0
 
 
 def test_poll_hub_once_bundle_failure_keeps_progress(agg_index, make_log_record):
-    """A failing bundle stops the poll but commits the bundles ingested before it."""
+    """A failing bundle stops the poll but commits the bundles ingested before it and reports the failure."""
     log = FakeLog([make_log_record(iscc_id=make_iscc_id(i)) for i in range(260)])
 
     def handler(request):
@@ -242,6 +245,7 @@ def test_poll_hub_once_bundle_failure_keeps_progress(agg_index, make_log_record)
     result = asyncio.run(poll_once(handler, 0, agg_index))
     assert result.last_size == 256
     assert result.counts["ok"] == 256
+    assert "bundle 1 failed" in result.error
     assert agg_index.get_index("idptest").assets == 256
 
 
@@ -259,12 +263,13 @@ def make_opts(hub_list_source, poll_interval=1, refresh_interval=3600):
     )
 
 
-async def run_loop_until(index, opts, handler, condition, timeout=5.0, extra_sleep=0.0):
-    # type: (MemoryIndex, SearchOptions, typing.Callable, typing.Callable, float, float) -> None
+async def run_loop_until(index, opts, handler, condition, timeout=5.0, extra_sleep=0.0, status=None):
+    # type: (MemoryIndex, SearchOptions, typing.Callable, typing.Callable, float, float, dict|None) -> None
     """Run poll_loop until condition() holds (polling), then stop it."""
     stop = asyncio.Event()
+    status = {} if status is None else status
     async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
-        task = asyncio.create_task(poll_loop(index, opts, stop, client))
+        task = asyncio.create_task(poll_loop(index, opts, stop, client, status))
         deadline = asyncio.get_event_loop().time() + timeout
         while not condition() and asyncio.get_event_loop().time() < deadline:
             await asyncio.sleep(0.02)
@@ -282,6 +287,26 @@ def test_poll_loop_ingests_and_stops(agg_index, make_log_record, tmp_path):
     log = FakeLog([make_log_record(iscc_id=make_iscc_id(i)) for i in range(3)])
     opts = make_opts(str(hub_file))
     asyncio.run(run_loop_until(agg_index, opts, log.handler, lambda: agg_index.get_index("idptest").assets == 3))
+
+
+def test_poll_loop_status_tracks_ingestion(agg_index, make_log_record, tmp_path):
+    """The loop publishes per-hub cursor, health, and cumulative counts into the status mapping."""
+    hub_file = tmp_path / "hubs.yaml"
+    hub_file.write_text(HUBS_YAML, encoding="utf-8")
+    log = FakeLog([make_log_record(iscc_id=make_iscc_id(i)) for i in range(3)])
+    opts = make_opts(str(hub_file))
+    status = {}
+    asyncio.run(
+        run_loop_until(agg_index, opts, log.handler, lambda: agg_index.get_index("idptest").assets == 3, status=status)
+    )
+    hub_status = status[0]
+    assert hub_status.url == "https://sb0.iscc.id"
+    assert hub_status.cursor == 3
+    assert hub_status.ok is True
+    assert hub_status.error is None
+    assert hub_status.counts["ok"] == 3
+    assert hub_status.last_poll is not None
+    assert hub_status.last_poll > time.time() - 60
 
 
 def test_poll_loop_refresh_interval_respected(agg_index, make_log_record):
@@ -311,7 +336,7 @@ def test_poll_loop_empty_hub_list(agg_index, tmp_path):
     async def main():
         stop = asyncio.Event()
         async with httpx.AsyncClient(transport=httpx.MockTransport(lambda r: httpx.Response(500))) as client:
-            task = asyncio.create_task(poll_loop(agg_index, opts, stop, client))
+            task = asyncio.create_task(poll_loop(agg_index, opts, stop, client, {}))
             await asyncio.sleep(0.05)
             stop.set()
             await asyncio.wait_for(task, timeout=5.0)
@@ -359,7 +384,7 @@ def test_poll_loop_refresh_failure_retries_quickly(agg_index, make_log_record):
 
 
 def test_poll_loop_hub_failure_isolated(agg_index, make_log_record, tmp_path):
-    """One unreachable hub does not prevent ingestion from the other."""
+    """One unreachable hub does not prevent ingestion from the other; status reflects both."""
     hub_file = tmp_path / "hubs.yaml"
     hub_file.write_text(
         "version: 1\nnetwork: testnet\nhubs:\n"
@@ -376,7 +401,64 @@ def test_poll_loop_hub_failure_isolated(agg_index, make_log_record, tmp_path):
         return log.handler(request)
 
     opts = make_opts(str(hub_file))
-    asyncio.run(run_loop_until(agg_index, opts, handler, lambda: agg_index.get_index("idptest").assets == 2))
+    status = {}
+    asyncio.run(
+        run_loop_until(agg_index, opts, handler, lambda: agg_index.get_index("idptest").assets == 2, status=status)
+    )
+    assert status[0].ok is False
+    assert "connection refused" in status[0].error
+    assert status[1].ok is True
+    assert status[1].cursor == 2
+
+
+def test_poll_loop_bundle_failure_marks_hub_unhealthy(agg_index, make_log_record, tmp_path):
+    """A bundle-level failure (checkpoint OK, bundle fetch broken) sets ok=False with the error."""
+    hub_file = tmp_path / "hubs.yaml"
+    hub_file.write_text(HUBS_YAML, encoding="utf-8")
+    log = FakeLog([make_log_record(iscc_id=make_iscc_id(i)) for i in range(3)])
+
+    def handler(request):
+        # type: (httpx.Request) -> httpx.Response
+        if "tile/entries" in request.url.path:
+            return httpx.Response(500)
+        return log.handler(request)
+
+    opts = make_opts(str(hub_file))
+    status = {}
+    asyncio.run(run_loop_until(agg_index, opts, handler, lambda: 0 in status and not status[0].ok, status=status))
+    assert "bundle 0 failed" in status[0].error
+    assert status[0].cursor == 0
+    assert agg_index.get_index("idptest").assets == 0
+
+
+def test_poll_loop_prunes_stale_hubs(agg_index, make_log_record, tmp_path):
+    """Hubs that drop out of the refreshed hub list are removed from the status mapping."""
+    hub_file = tmp_path / "hubs.yaml"
+    hub_file.write_text(HUBS_YAML, encoding="utf-8")
+    log = FakeLog([make_log_record(iscc_id=make_iscc_id(0))])
+    opts = make_opts(str(hub_file))
+    status = {99: HubStatus(hub_id=99, url="https://gone.example.com", cursor=42)}
+    asyncio.run(run_loop_until(agg_index, opts, log.handler, lambda: 99 not in status and 0 in status, status=status))
+    assert status[0].cursor == 1
+
+
+def test_poll_loop_empty_refresh_keeps_cursors(agg_index, tmp_path):
+    """An empty/all-inactive hub list is idle and must not prune existing per-hub cursors."""
+    hub_file = tmp_path / "hubs.yaml"
+    hub_file.write_text("version: 1\nnetwork: testnet\nhubs:\n", encoding="utf-8")
+    opts = make_opts(str(hub_file))
+    status = {0: HubStatus(hub_id=0, url="https://sb0.iscc.id", cursor=42)}
+
+    async def main():
+        stop = asyncio.Event()
+        async with httpx.AsyncClient(transport=httpx.MockTransport(lambda r: httpx.Response(500))) as client:
+            task = asyncio.create_task(poll_loop(agg_index, opts, stop, client, status))
+            await asyncio.sleep(0.05)
+            stop.set()
+            await asyncio.wait_for(task, timeout=5.0)
+
+    asyncio.run(main())
+    assert status[0].cursor == 42
 
 
 def test_poll_loop_stops_between_hubs(agg_index, make_log_record, tmp_path):
@@ -402,7 +484,7 @@ def test_poll_loop_stops_between_hubs(agg_index, make_log_record, tmp_path):
             return log.handler(request)
 
         async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
-            await asyncio.wait_for(poll_loop(agg_index, opts, stop, client), timeout=5.0)
+            await asyncio.wait_for(poll_loop(agg_index, opts, stop, client, {}), timeout=5.0)
 
     asyncio.run(main())
     assert seen_hosts == ["sb0.iscc.id"]
@@ -417,6 +499,6 @@ def test_run_smoke(agg_index, tmp_path):
     async def main():
         stop = asyncio.Event()
         stop.set()
-        await asyncio.wait_for(run(agg_index, opts, stop), timeout=5.0)
+        await asyncio.wait_for(run(agg_index, opts, stop, {}), timeout=5.0)
 
     asyncio.run(main())

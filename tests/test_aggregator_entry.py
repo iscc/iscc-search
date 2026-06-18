@@ -32,6 +32,15 @@ def test_declaration_units_merged_and_deduped(make_log_record):
     assert entry.units == DECOMPOSED_UNITS + [extra]
 
 
+def test_declaration_units_dedup_within_note(make_log_record):
+    """Duplicate extra units within note.units collapse to a single entry."""
+    extra = "ISCC:AADWN77F73NA44D6X3N4VEUAPOW5HJKGK5JKLNGLNFPOESXWYDVDVUQ"
+    record = make_log_record(iscc_id=TESTNET_ID, units=[extra, extra])
+    entry, reason = record_to_entry(record, "testnet")
+    assert reason == "ok"
+    assert entry.units == DECOMPOSED_UNITS + [extra]
+
+
 def test_declaration_gateway_plain_url(make_log_record):
     """A plain gateway URL is stored unchanged."""
     record = make_log_record(iscc_id=TESTNET_ID, gateway="https://registry.example.com/metadata")
@@ -45,8 +54,8 @@ def test_declaration_gateway_template_expanded(make_log_record):
     record = make_log_record(iscc_id=TESTNET_ID, gateway="https://example.com/{iscc_id}/{iscc_code}/{datahash}")
     entry, reason = record_to_entry(record, "testnet")
     assert reason == "ok"
-    iscc_id_clean = TESTNET_ID.removeprefix("ISCC:")
-    iscc_code_clean = IDP_ISCC_CODE.removeprefix("ISCC:")
+    iscc_id_clean = TESTNET_ID.removeprefix("ISCC:").lower()
+    iscc_code_clean = IDP_ISCC_CODE.removeprefix("ISCC:").lower()
     assert entry.metadata == {"gateway": f"https://example.com/{iscc_id_clean}/{iscc_code_clean}/{IDP_DATAHASH}"}
 
 
@@ -104,8 +113,8 @@ def test_realm_mismatch(make_log_record):
 def test_expand_gateway_operator_forms():
     """The schema-admitted {/var} and {.var} operator forms expand correctly."""
     url = expand_gateway("https://example.com{/iscc_id}", "ISCC:MAIGG6O2AW3AAAAA", "ISCC:KACW", "1e20ff")
-    assert url == "https://example.com/MAIGG6O2AW3AAAAA"
+    assert url == "https://example.com/maigg6o2aw3aaaaa"
     url = expand_gateway("https://example.com/h{.datahash}", "ISCC:MAIGG6O2AW3AAAAA", "ISCC:KACW", "1e20ff")
     assert url == "https://example.com/h.1e20ff"
     url = expand_gateway("https://example.com/{iscc_code}", "ISCC:MAIGG6O2AW3AAAAA", "ISCC:KACW", "1e20ff")
-    assert url == "https://example.com/KACW"
+    assert url == "https://example.com/kacw"

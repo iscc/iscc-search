@@ -8,6 +8,7 @@ schema version bump is an unknown note type with unreviewed field semantics).
 """
 
 import json
+from iscc_search.aggregator import NETWORKS
 from iscc_search.indexes.common import validate_iscc_id
 from iscc_search.models import IsccCode, IsccID, IsccUnit
 from iscc_search.schema import IsccEntry
@@ -15,9 +16,6 @@ from iscc_search.schema import IsccEntry
 # Pinned note schema URIs — match exactly, do not semver-wildcard (see module docstring).
 DECLARATION_SCHEMA = "http://purl.org/iscc/schema/iscc-note-0.8.0.json"
 DELETION_SCHEMA = "http://purl.org/iscc/schema/iscc-note-delete-0.8.0.json"
-
-# Network name -> ISCC realm id encoded in ISCC-ID header subtypes.
-NETWORK_REALM = {"testnet": 0, "mainnet": 1}
 
 # Skip-reason vocabulary returned by record_to_entry ("ok" = converted).
 REASONS = ("ok", "deletion", "unknown_schema", "malformed", "realm_mismatch")
@@ -29,9 +27,10 @@ def expand_gateway(template, iscc_id, iscc_code, datahash):
     Expand IDP gateway URI-template variables into a concrete URL.
 
     Matches iscc-hub's expansion semantics: {iscc_id} and {iscc_code}
-    substitute the prefix-less base32 form (no "ISCC:"), {datahash} the hex
-    multihash. The schema-admitted operator forms {/var} and {.var} expand to
-    "/value" and ".value". A plain URL passes through unchanged.
+    substitute the lowercase prefix-less base32 form (the iscc: URI body per
+    ISO 24138, no "ISCC:"), {datahash} the lowercase hex multihash. The
+    schema-admitted operator forms {/var} and {.var} expand to "/value" and
+    ".value". A plain URL passes through unchanged.
 
     :param template: Gateway URL or RFC 6570 URI template from the note
     :param iscc_id: Canonical ISCC-ID of the declaration
@@ -40,8 +39,8 @@ def expand_gateway(template, iscc_id, iscc_code, datahash):
     :return: Concrete gateway URL
     """
     values = {
-        "iscc_id": iscc_id.removeprefix("ISCC:"),
-        "iscc_code": iscc_code.removeprefix("ISCC:"),
+        "iscc_id": iscc_id.removeprefix("ISCC:").lower(),
+        "iscc_code": iscc_code.removeprefix("ISCC:").lower(),
         "datahash": datahash,
     }
     for var, value in values.items():
@@ -79,13 +78,14 @@ def record_to_entry(record, network):
     try:
         iscc_id = parsed["iscc_id"]
         validate_iscc_id(iscc_id)
-        if IsccID(iscc_id).realm_id != NETWORK_REALM[network]:
+        if IsccID(iscc_id).realm_id != NETWORKS[network]["realm"]:
             return None, "realm_mismatch"
         iscc_code = note["iscc_code"]
         units = [str(unit) for unit in IsccCode(iscc_code).units]
         # IsccUnit(...).unit_type raises for undecodable units, so a bad extra unit
         # is classified "malformed" here instead of failing the whole batch in add_assets
-        units += [unit for unit in note.get("units", []) if IsccUnit(unit).unit_type and unit not in units]
+        extra = [unit for unit in note.get("units", []) if IsccUnit(unit).unit_type]
+        units = list(dict.fromkeys(units + extra))
         metadata = None
         if note.get("gateway"):
             metadata = {"gateway": expand_gateway(note["gateway"], iscc_id, iscc_code, note["datahash"])}

@@ -1,11 +1,10 @@
 """Search endpoints for ISCC-Search API."""
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from iscc_search.processing import text_simprints
 from iscc_search.protocols.index import IsccIndexProtocol
-from iscc_search.schema import IsccQuery, IsccSearchResult, TextQuery
+from iscc_search.schema import IsccQuery, IsccSearchResult
 from iscc_search.server import get_index_from_state
-from iscc_search.server.auth import block_foreign_index_if_aggregator, block_if_aggregator, verify_api_key
+from iscc_search.server.auth import block_foreign_index_if_aggregator, verify_api_key
 
 
 router = APIRouter(tags=["search"])
@@ -78,53 +77,6 @@ def search_get(
     try:
         # Create query with iscc_code - backend handles decomposition
         query = IsccQuery(iscc_code=iscc_code)
-        return index.search_assets(name, query, limit)
-    except FileNotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-    except ValueError as e:  # pragma: no cover
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-
-
-@router.post(
-    "/indexes/{name}/search/text",
-    response_model=IsccSearchResult,
-    response_model_exclude_unset=True,
-    dependencies=[Depends(block_if_aggregator)],
-)
-def search_text(
-    name: str,
-    text_query: TextQuery,
-    limit: int = 100,
-    index: IsccIndexProtocol = Depends(get_index_from_state),
-    auth: None = Depends(verify_api_key),
-):
-    # type: (...) -> IsccSearchResult
-    """
-    Search for similar content by plain text.
-
-    Generates simprints from the input text and searches for similar content
-    segments in the index. Always generates CONTENT_TEXT_V0 simprints.
-    If iscc-sct is installed, also generates SEMANTIC_TEXT_V0 simprints.
-    Returns chunk-level matches based on text similarity.
-
-    **Note**: TODO - This endpoint will be removed once iscc-web supports dedicated simprint generation.
-    Simprint generation requires heavy dependencies and should be handled by a separate service.
-
-    :param name: Index name
-    :param text_query: TextQuery with plain text content
-    :param limit: Maximum number of results to return (default: 100)
-    :param index: Index instance injected from app state
-    :return: IsccSearchResult with chunk_matches
-    :raises HTTPException: 404 if index not found, 400 for invalid text
-    """
-    try:
-        # Generate simprints from text (dict with CONTENT_TEXT_V0 and optionally SEMANTIC_TEXT_V0)
-        simprints_dict = text_simprints(text_query.text)
-
-        # Create query with generated simprints
-        query = IsccQuery(simprints=simprints_dict)
-
-        # Search using the simprint query
         return index.search_assets(name, query, limit)
     except FileNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))

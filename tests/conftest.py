@@ -42,6 +42,31 @@ def isolate_tests_from_user_data(tmp_path_factory):
     os.environ.pop("ISCC_SEARCH_INDEX_URI", None)
 
 
+# Small LMDB map for the whole test session. UsearchIndex defaults to a 1 TiB map_size;
+# on Windows an LMDB map charges process commit even with writemap=False, so dozens of
+# xdist workers opening 1 TiB maps overflow the page file (ERROR_COMMITMENT_LIMIT). Test
+# datasets are tiny, so 64 MiB is ample (LmdbIndex already relies on the small lmdb default,
+# and auto-resize still covers any growth). Explicit per-test lmdb_options override this.
+TEST_LMDB_MAP_SIZE = 64 * 1024 * 1024  # 64 MiB
+
+
+@pytest.fixture(scope="session", autouse=True)
+def shrink_usearch_lmdb_map():
+    # type: () -> None
+    """
+    Open usearch test indexes with a small LMDB map to avoid Windows commit exhaustion.
+
+    Lowers UsearchIndex's 1 TiB default map_size for the session so parallel workers do
+    not overflow the Windows page file. Restored afterwards; explicit lmdb_options win.
+    """
+    from iscc_search.indexes.usearch.index import UsearchIndex
+
+    original = UsearchIndex.DEFAULT_LMDB_OPTIONS["map_size"]
+    UsearchIndex.DEFAULT_LMDB_OPTIONS["map_size"] = TEST_LMDB_MAP_SIZE
+    yield
+    UsearchIndex.DEFAULT_LMDB_OPTIONS["map_size"] = original
+
+
 @pytest.fixture
 def sample_iscc_ids():
     # type: () -> list[str]

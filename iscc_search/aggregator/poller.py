@@ -27,10 +27,36 @@ HTTP_TIMEOUT = 30.0
 
 
 class PollResult(msgspec.Struct, frozen=True):
-    """Outcome of polling one hub: new cursor position and per-reason record counts."""
+    """
+    Outcome of polling one hub: new cursor position and per-reason record counts.
+
+    ``error`` carries a bundle-level failure (fetch, validation, or indexing)
+    that stopped the poll early — the cursor keeps the progress made, but the
+    hub must not be reported as healthy.
+    """
 
     last_size: int
     counts: dict[str, int]
+    error: str | None = None
+
+
+class HubStatus(msgspec.Struct):
+    """
+    Mutable per-hub ingestion status shared between poll_loop and the /status endpoint.
+
+    ``cursor`` is the single source of truth for poll progress. ``counts`` are
+    cumulative per-reason record counts since process start and double-count
+    after a checkpoint-regression re-backfill (accepted; the cursor stays
+    truthful). ``last_poll`` is wall-clock epoch seconds (time.time()).
+    """
+
+    hub_id: int
+    url: str
+    cursor: int = 0
+    last_poll: float | None = None
+    ok: bool = True
+    error: str | None = None
+    counts: dict[str, int] = msgspec.field(default_factory=dict)
 
 
 def plan_bundles(last_size, tree_size):
@@ -70,7 +96,8 @@ async def poll_hub_once(client, hub, last_size, index, index_name, network, stop
     checkpoint tree-size regression (e.g. a hub database reset) logs a warning
     and resets the cursor to 0 so the next poll re-backfills. A failing bundle
     (fetch error, short bundle, or indexing error) stops the poll but keeps
-    the progress made so far, so the next poll resumes at the failed bundle.
+    the progress made so far, so the next poll resumes at the failed bundle;
+    the failure is surfaced via ``PollResult.error`` for hub-health reporting.
 
     :param client: httpx AsyncClient (injectable for tests)
     :param hub: Hub to poll
@@ -102,7 +129,7 @@ async def poll_hub_once(client, hub, last_size, index, index_name, network, stop
                 raise ValueError(f"{path} has {len(records)} records, expected {expected}")
             bundle_start = bundle_index * tlog.TILE_WIDTH
             entries = []
-            for record in records[max(last_size - bundle_start, 0) : tree_size - bundle_start]:
+            for record in records[max(last_size - bundle_start, 0) :]:
                 converted, reason = record_to_entry(record, network)
                 counts[reason] += 1
                 if converted is not None:
@@ -112,30 +139,35 @@ async def poll_hub_once(client, hub, last_size, index, index_name, network, stop
             await asyncio.to_thread(index.add_assets, index_name, entries)
         except Exception as exc:
             logger.warning(f"aggregator: {hub.url}: bundle {bundle_index} failed, retrying next poll: {exc}")
-            break
+            return PollResult(last_size=processed, counts=counts, error=f"bundle {bundle_index} failed: {exc}")
         processed = min((bundle_index + 1) * tlog.TILE_WIDTH, tree_size)
     return PollResult(last_size=processed, counts=counts)
 
 
-async def poll_loop(index, opts, stop_event, client):
-    # type: (IsccIndexProtocol, SearchOptions, asyncio.Event, httpx.AsyncClient) -> None
+async def poll_loop(index, opts, stop_event, client, status):
+    # type: (IsccIndexProtocol, SearchOptions, asyncio.Event, httpx.AsyncClient, dict[int, HubStatus]) -> None
     """
     Aggregator loop: refresh the hub list and poll each hub until stopped.
 
     A hub-list refresh failure keeps the last-known-good list and retries
     after the poll interval instead of the full refresh interval; an empty hub
     list is a benign idle state (mainnet.yaml may not exist yet). Each hub's
-    poll failure is isolated. Cursors are held in memory per hub_id.
+    poll failure is isolated. Per-hub cursors live in the shared ``status``
+    mapping, which the /status endpoint reads concurrently for observability;
+    hubs that drop out of a non-empty refreshed list are pruned from it so
+    /status never reports decommissioned hubs as live. An empty refresh prunes
+    nothing, so a transient empty/all-inactive hub list cannot discard cursors
+    and force a full re-backfill.
 
     :param index: Index manager implementing IsccIndexProtocol
     :param opts: Deployment options (network, intervals, hub-list source)
     :param stop_event: Set to request shutdown
     :param client: httpx AsyncClient shared across all requests
+    :param status: Mutable hub_id -> HubStatus mapping updated in place
     """
     network = opts.aggregator_network
     index_name = opts.aggregator_index_name
     hubs = []  # type: list[hublist.Hub]
-    cursors = {}  # type: dict[int, int]
     next_refresh = 0.0
     while not stop_event.is_set():
         now = time.monotonic()
@@ -143,24 +175,40 @@ async def poll_loop(index, opts, stop_event, client):
             try:
                 hubs = await hublist.fetch_hub_list(opts.aggregator_hub_list_source, network, client)
                 if not hubs:
+                    # Re-check at the short poll interval: a transient empty/all-inactive list
+                    # must not stall ingestion for a full refresh interval (cursors survive, but
+                    # nothing would be polled until the next hourly refresh).
                     logger.warning("aggregator: hub list is empty, nothing to poll")
-                next_refresh = now + opts.aggregator_hub_refresh_interval
+                    next_refresh = now + opts.aggregator_poll_interval
+                else:
+                    for stale_id in set(status) - {hub.hub_id for hub in hubs}:
+                        del status[stale_id]
+                    next_refresh = now + opts.aggregator_hub_refresh_interval
             except Exception as exc:
                 logger.warning(f"aggregator: hub-list refresh failed, keeping previous list: {exc}")
                 next_refresh = now + opts.aggregator_poll_interval
         for hub in hubs:
             if stop_event.is_set():
                 break
+            if hub.hub_id not in status:
+                status[hub.hub_id] = HubStatus(hub_id=hub.hub_id, url=hub.url)
+            hub_status = status[hub.hub_id]
+            hub_status.url = hub.url  # a hub-list refresh may relocate the hub
+            hub_status.last_poll = time.time()
             try:
-                result = await poll_hub_once(
-                    client, hub, cursors.get(hub.hub_id, 0), index, index_name, network, stop_event
-                )
-                cursors[hub.hub_id] = result.last_size
+                result = await poll_hub_once(client, hub, hub_status.cursor, index, index_name, network, stop_event)
+                hub_status.cursor = result.last_size
+                for reason, count in result.counts.items():
+                    hub_status.counts[reason] = hub_status.counts.get(reason, 0) + count
+                hub_status.ok = result.error is None
+                hub_status.error = result.error
                 if result.counts["ok"]:
                     logger.info(
                         f"aggregator: {hub.url}: indexed {result.counts['ok']} records, cursor {result.last_size}"
                     )
             except Exception as exc:
+                hub_status.ok = False
+                hub_status.error = str(exc)
                 logger.warning(f"aggregator: poll of {hub.url} failed: {exc}")
         try:
             await asyncio.wait_for(stop_event.wait(), timeout=opts.aggregator_poll_interval)
@@ -168,14 +216,15 @@ async def poll_loop(index, opts, stop_event, client):
             pass
 
 
-async def run(index, opts, stop_event):
-    # type: (IsccIndexProtocol, SearchOptions, asyncio.Event) -> None
+async def run(index, opts, stop_event, status):
+    # type: (IsccIndexProtocol, SearchOptions, asyncio.Event, dict[int, HubStatus]) -> None
     """
     Aggregator entry point used by the server lifespan: owns the HTTP client.
 
     :param index: Index manager implementing IsccIndexProtocol
     :param opts: Deployment options
     :param stop_event: Set to request shutdown
+    :param status: Mutable hub_id -> HubStatus mapping updated in place
     """
     async with httpx.AsyncClient(timeout=HTTP_TIMEOUT, follow_redirects=True) as client:
-        await poll_loop(index, opts, stop_event, client)
+        await poll_loop(index, opts, stop_event, client, status)

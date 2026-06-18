@@ -49,26 +49,26 @@ graph TB
 Each unit type serves a specific purpose:
 
 - **META-UNIT** captures similarity in title, creator, and description text. Two works with similar titles
-  produce similar META-UNITs.
+    produce similar META-UNITs.
 - **SEMANTIC-UNIT** captures the conceptual meaning of content using AI embeddings. A text and its translation
-  into another language share a similar SEMANTIC-UNIT.
+    into another language share a similar SEMANTIC-UNIT.
 - **CONTENT-UNIT** captures perceptual features - how content looks or sounds to humans. A cropped photo and
-  the original share a similar CONTENT-UNIT.
+    the original share a similar CONTENT-UNIT.
 - **DATA-UNIT** captures the raw bitstream structure. Re-encoded versions of the same file (e.g., JPEG to PNG)
-  share a similar DATA-UNIT.
+    share a similar DATA-UNIT.
 - **INSTANCE-UNIT** acts as a cryptographic checksum for exact identity. Two byte-identical files produce the
-  same INSTANCE-UNIT.
+    same INSTANCE-UNIT.
 
 Not every ISCC-CODE contains all unit types. DATA and INSTANCE are mandatory. The others depend on what
 information is available during generation.
 
-| Unit Type | What it captures | Example use |
-|-----------|-----------------|-------------|
-| META | Title, creator similarity | Find works by similar titles |
-| SEMANTIC | Conceptual meaning | Find translations or paraphrases |
-| CONTENT | Perceptual features | Find edited versions of an image |
-| DATA | Raw data structure | Find re-encoded versions |
-| INSTANCE | Exact binary identity | Find exact duplicates |
+| Unit Type | What it captures          | Example use                      |
+| --------- | ------------------------- | -------------------------------- |
+| META      | Title, creator similarity | Find works by similar titles     |
+| SEMANTIC  | Conceptual meaning        | Find translations or paraphrases |
+| CONTENT   | Perceptual features       | Find edited versions of an image |
+| DATA      | Raw data structure        | Find re-encoded versions         |
+| INSTANCE  | Exact binary identity     | Find exact duplicates            |
 
 ## ISCC-SIMPRINTs
 
@@ -85,7 +85,7 @@ ISCC codes come in different bit lengths: 64, 128, 192, or 256 bits. The length 
 matching:
 
 - **64-bit** codes are compact and fast to compare. They provide broad matching that catches more candidates but
-  with more false positives.
+    with more false positives.
 - **256-bit** codes are more precise. They reduce false positives but may miss content with larger modifications.
 
 A key property of ISCC: **shorter codes are valid prefixes of longer ones**. A 64-bit code is the first 64 bits

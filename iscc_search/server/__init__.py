@@ -2,6 +2,7 @@
 
 import asyncio
 import atexit
+import mimetypes
 import sys
 import typing  # noqa: F401
 from contextlib import asynccontextmanager
@@ -12,8 +13,10 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from loguru import logger
 from iscc_search import __version__
+from iscc_search.aggregator import poller
 from iscc_search.options import get_index, search_opts
 from iscc_search.protocols.index import IsccIndexProtocol  # noqa: F401
+from iscc_search.schema import IsccIndex
 
 
 # Configure loguru for production logging
@@ -55,6 +58,20 @@ def init_sentry():
 init_sentry()
 
 
+def log_poller_crash(task):
+    # type: (asyncio.Task) -> None
+    """
+    Done-callback for the aggregator poller task: log unexpected crashes.
+
+    A cancelled task or a clean stop-event exit is silent; any escaped
+    exception is logged so a dead poller is visible in the server logs.
+
+    :param task: Completed poller task
+    """
+    if not task.cancelled() and task.exception() is not None:
+        logger.error(f"Aggregator poller crashed: {task.exception()!r}")
+
+
 @asynccontextmanager
 async def lifespan(app):  # type: ignore
     # type: (FastAPI) -> typing.AsyncGenerator[None, None]
@@ -63,8 +80,10 @@ async def lifespan(app):  # type: ignore
 
     On startup: Creates index instance, stores in app.state, and registers atexit
     handler as defense-in-depth for process exit scenarios not covered by lifespan
-    (e.g. unhandled exceptions, SIGTERM during request processing).
-    On shutdown: Closes index and releases resources.
+    (e.g. unhandled exceptions, SIGTERM during request processing). In aggregator
+    mode, additionally ensures the aggregator index exists and starts the
+    transparency-log poller as a background task.
+    On shutdown: Stops the poller (if any), closes index and releases resources.
 
     :param app: FastAPI application instance
     :yield: Control to FastAPI application
@@ -72,19 +91,48 @@ async def lifespan(app):  # type: ignore
     # Startup: Create and store index instance
     index = get_index()
     app.state.index = index
+    # Short-lived snapshot store so the public, polled /status reuses index-size
+    # accounting instead of walking shard files on every request.
+    app.state.status_index_cache = {}  # type: dict[str, tuple[float, dict | None]]
 
     # Capture bound method reference for consistent register/unregister
     close_callback = index.close
     atexit.register(close_callback)
 
+    poller_task = None
+    stop_event = None
+    if search_opts.aggregator_mode:
+        # Ensure the aggregator index exists so search/get-asset don't 404 on a fresh deployment
+        try:
+            index.create_index(IsccIndex(name=search_opts.aggregator_index_name))
+            logger.info(f"Created aggregator index '{search_opts.aggregator_index_name}'")
+        except FileExistsError:
+            pass
+        stop_event = asyncio.Event()
+        status = {}  # type: dict[int, poller.HubStatus]
+        app.state.aggregator_status = status
+        poller_task = asyncio.create_task(poller.run(index, search_opts, stop_event, status))
+        poller_task.add_done_callback(log_poller_crash)
+        app.state.aggregator_poller_task = poller_task
+        logger.info(f"Aggregator mode active: network={search_opts.aggregator_network}")
+
     yield
 
-    # Shutdown: Always unregister atexit handler, even if close() fails
+    # Shutdown: close the index and unregister atexit even if stopping the poller
+    # fails or the lifespan task is cancelled while awaiting it
     logger.info("Lifespan shutdown: closing index...")
     try:
-        index.close()
+        if poller_task is not None:
+            stop_event.set()
+            # return_exceptions retrieves a crashed poller's exception without raising
+            await asyncio.gather(poller_task, return_exceptions=True)
+            # Clear published status so a reused app instance never serves stale /status data
+            del app.state.aggregator_status
     finally:
-        atexit.unregister(close_callback)
+        try:
+            index.close()
+        finally:
+            atexit.unregister(close_callback)
 
 
 def get_index_from_state(request: Request):
@@ -123,6 +171,11 @@ app.add_middleware(
 # Mount OpenAPI schema files as static directory
 openapi_dir = Path(__file__).parent.parent / "openapi"
 app.mount("/openapi", StaticFiles(directory=str(openapi_dir)), name="openapi")
+
+# Mount frontend assets; woff2 is missing from stdlib mimetypes on Python 3.11/3.12
+mimetypes.add_type("font/woff2", ".woff2")
+static_dir = Path(__file__).parent / "static"
+app.mount("/static", StaticFiles(directory=str(static_dir), check_dir=False), name="static")
 
 
 @app.get("/docs", response_class=HTMLResponse, include_in_schema=False)
@@ -211,22 +264,6 @@ def custom_docs():
     return HTMLResponse(content=html)
 
 
-@app.get("/", include_in_schema=False)
-def root():
-    # type: () -> dict
-    """
-    Root endpoint with basic API information.
-
-    :return: API information
-    """
-    return {
-        "title": app.title,
-        "description": app.description,
-        "version": app.version,
-        "docs": "/docs",
-    }
-
-
 @app.get("/healthz", include_in_schema=False)
 async def healthz():
     # type: () -> dict
@@ -266,9 +303,9 @@ async def readyz(request: Request):
 
 
 # Include API routers
-from iscc_search.server import indexes, assets, search, playground  # noqa: E402
+from iscc_search.server import indexes, assets, search, frontend  # noqa: E402
 
 app.include_router(indexes.router)
 app.include_router(assets.router)
 app.include_router(search.router)
-app.include_router(playground.router)
+app.include_router(frontend.router)

@@ -10,9 +10,15 @@ Provides reusable functions for:
 
 import re
 import json
+from typing import TYPE_CHECKING
 import iscc_core as ic
 from iscc_search.schema import IsccEntry
 from iscc_search.models import IsccUnit, IsccCode
+
+if TYPE_CHECKING:
+    from typing import Any  # noqa: F401
+
+    import lmdb  # noqa: F401
 
 
 # Validation patterns
@@ -46,6 +52,60 @@ def deserialize_asset(data):
     """
     asset_dict = json.loads(data.decode("utf-8"))
     return IsccEntry(**asset_dict)
+
+
+def lmdb_used_bytes(env):
+    # type: (lmdb.Environment) -> int
+    """
+    Get bytes actually used by an LMDB environment (pages used x page size).
+
+    The data file's st_size reports the nominal map size on some platforms
+    (sparse file on Windows), so file size cannot be used for disk-usage reporting.
+
+    :param env: Open LMDB environment
+    :return: Number of bytes occupied by used LMDB pages
+    """
+    return (env.info()["last_pgno"] + 1) * env.stat()["psize"]
+
+
+def sharded_data_bytes(sharded):
+    # type: (Any) -> int
+    """
+    Get serialized data size in bytes of a sharded usearch index, unflushed included.
+
+    Sealed shards and auxiliary files (bloom filter, tombstones) are measured by
+    their on-disk file size (O(1) stats). Only when the index carries unsaved
+    mutations is the active shard measured live via usearch serialized_length
+    (O(active-shard vectors), ~8ns each) with its stale on-disk file excluded.
+
+    Files that vanish between listing and stat (concurrent flush or background
+    shard rotation replacing/unlinking files) are skipped — sizes are
+    monitoring data, so a transient undercount beats an error.
+
+    During a background shard rotation the detached full shard lives only in the
+    index's pending-rotation queue until its ``.usearch`` file is written, so it
+    is counted by neither serialized_length (which measures the fresh active
+    shard) nor the file loop — sizes transiently undercount by a whole shard
+    mid-rotation and self-correct once the rotation's file lands.
+
+    Note: reads the iscc-usearch internal ``_active_shard_path`` pending a public
+    data-size API upstream.
+
+    :param sharded: ShardedNphdIndex or ShardedIndex128 instance
+    :return: Total serialized bytes across all shards and auxiliary files
+    """
+    total = 0
+    stale_path = None
+    if sharded.dirty:
+        total += sharded.serialized_length
+        stale_path = sharded._active_shard_path
+    for entry in sharded.path.iterdir():
+        if entry.is_file() and entry != stale_path:
+            try:
+                total += entry.stat().st_size
+            except OSError:  # pragma: no cover - race with concurrent flush/rotation file ops
+                continue
+    return total
 
 
 def extract_iscc_id_body(iscc_id):

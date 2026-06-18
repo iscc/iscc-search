@@ -50,7 +50,6 @@ iscc_search/
   config.py        CLI multi-index management (persistent JSON)
   models.py        ISCC data model classes (IsccBase, IsccUnit, IsccCode, IsccID)
   schema.py        Auto-generated Pydantic models from OpenAPI spec
-  processing.py    Text processing utilities
 ```
 
 The `schema.py` file is auto-generated from `openapi/openapi.yaml` via the build system. Edit the YAML source
@@ -61,13 +60,13 @@ and run `uv run poe build-schema` to regenerate it.
 iscc-search has two independent configuration systems. This is intentional - they serve different users and
 follow different patterns.
 
-| Aspect | `options.py` (SearchOptions) | `config.py` (AppConfig) |
-|--------|------------------------------|-------------------------|
-| **Consumer** | API server (`iscc-search serve`) | CLI commands (`add`, `search`, `get`) |
-| **Source** | Environment variables (`ISCC_SEARCH_*`) | JSON file (`~/.iscc-search/config.json`) |
-| **Scope** | Single index per deployment | Multiple named indexes |
-| **Pattern** | 12-factor app | Git-like workflow |
-| **Index selection** | `ISCC_SEARCH_INDEX_URI` env var | `iscc-search index use <name>` |
+| Aspect              | `options.py` (SearchOptions)            | `config.py` (AppConfig)                  |
+| ------------------- | --------------------------------------- | ---------------------------------------- |
+| **Consumer**        | API server (`iscc-search serve`)        | CLI commands (`add`, `search`, `get`)    |
+| **Source**          | Environment variables (`ISCC_SEARCH_*`) | JSON file (`~/.iscc-search/config.json`) |
+| **Scope**           | Single index per deployment             | Multiple named indexes                   |
+| **Pattern**         | 12-factor app                           | Git-like workflow                        |
+| **Index selection** | `ISCC_SEARCH_INDEX_URI` env var         | `iscc-search index use <name>`           |
 
 **SearchOptions** (`options.py`) configures a server deployment. It reads environment variables prefixed with
 `ISCC_SEARCH_` and supports `.env` files. Each deployment serves one index. This follows 12-factor app
@@ -86,11 +85,11 @@ backend based on the `ISCC_SEARCH_INDEX_URI` scheme:
 
 - `memory://` - `MemoryIndex`: Python dicts, no persistence. Useful for tests and demos.
 - `lmdb:///path` - `LmdbIndexManager`: LMDB key-value storage with inverted prefix-search index. Good for
-  exact matching and moderate-scale deployments.
+    exact matching and moderate-scale deployments.
 - `usearch:///path` - `UsearchIndexManager`: HNSW (via
-  [iscc-usearch](https://github.com/iscc/iscc-usearch), a patched fork of
-  [usearch](https://github.com/unum-cloud/usearch)) for similarity search plus LMDB for storage,
-  metadata, and INSTANCE matching. The production backend.
+    [iscc-usearch](https://github.com/iscc/iscc-usearch), a patched fork of
+    [usearch](https://github.com/unum-cloud/usearch)) for similarity search plus LMDB for storage,
+    metadata, and INSTANCE matching. The production backend.
 
 ### USearch backend structure
 

@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ISCC-Search</title>
+    <link rel="icon" type="image/png" href="/static/img/favicon.png">
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body data-mode="normal">
+    <div class="page">
+        <header class="site-header">
+            <div class="container header-inner">
+                <div class="brand">
+                    <img src="/static/img/logo_dark.png" alt="ISCC">
+                    <span class="divider"></span>
+                    <span class="wordmark">SEARCH</span>
+                </div>
+                <div class="header-meta">
+                    <span class="chip">SIMILARITY <span class="accent">SEARCH</span></span>
+                </div>
+            </div>
+        </header>
+
+        <section class="hero">
+            <div class="container">
+                <p class="hero-kicker">ISO 24138 · International Standard Content Code</p>
+                <h1>Content Similarity <span class="accent">Search</span></h1>
+                <p class="hero-sub">
+                    Find identical and similar digital assets across indexed content. Paste an ISCC-CODE or
+                    ISCC-ID to match it against the index.
+                </p>
+                <div class="lookup-card">
+                    <div class="lookup-accent"></div>
+                    <div class="lookup-body">
+                        <span class="lookup-kicker">ISCC Lookup &amp; Search</span>
+                        <form id="lookupForm" class="lookup-row">
+                            <div class="lookup-input">
+                                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor"
+                                     stroke-width="2" aria-hidden="true">
+                                    <circle cx="11" cy="11" r="8"></circle>
+                                    <path d="M21 21l-4.35-4.35" stroke-linecap="round"></path>
+                                </svg>
+                                <input id="lookupInput" type="text" spellcheck="false" autocomplete="off"
+                                       placeholder="ISCC:KACT4EBWK27737D2… (ISCC-CODE or ISCC-ID)">
+                            </div>
+                            <button type="submit">Search</button>
+                        </form>
+                        <p class="lookup-hint">
+                            Paste a full <strong>ISCC-CODE</strong> or an <strong>ISCC-ID</strong>. An ID resolves to
+                            its exact indexed asset; a CODE ranks near-matches by similarity.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <main class="container">
+            <section id="resultsSection" class="card hidden">
+                <h2>Results</h2>
+                <div id="resultsContent"></div>
+                <details id="rawJsonDetails" class="raw-json hidden">
+                    <summary>Raw JSON response</summary>
+                    <pre><code id="rawJsonContent"></code></pre>
+                </details>
+            </section>
+
+            <section class="card">
+                <h2>Indexes</h2>
+                <p class="card-note">Click a row to select the index used for lookup and search.</p>
+                <div class="table-frame">
+                    <div class="table-scroll">
+                        <table>
+                            <thead>
+                                <tr><th>Name</th><th class="num">Assets</th><th class="num">Size</th></tr>
+                            </thead>
+                            <tbody id="indexesTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <details id="apiKeyCard" class="card">
+                <summary>API Access</summary>
+                <div class="api-key-row">
+                    <input id="apiKeyInput" type="password" spellcheck="false" autocomplete="off"
+                           placeholder="X-API-Key (only needed on protected deployments)">
+                    <span class="key-hint">Stored in this browser session only. Full REST API at <a href="/docs">/docs</a>.</span>
+                </div>
+            </details>
+        </main>
+
+        <footer class="site-footer">
+            <div class="container footer-inner">
+                <span class="version">ISCC-Search <span id="versionLabel"></span></span>
+                <nav>
+                    <a href="/docs">API Docs</a>
+                    <a href="https://github.com/iscc/iscc-search" rel="noopener">GitHub</a>
+                    <a href="https://iscc.io" rel="noopener">ISCC Foundation</a>
+                </nav>
+            </div>
+        </footer>
+    </div>
+
+    <script src="/static/js/app.js"></script>
+</body>
+</html>

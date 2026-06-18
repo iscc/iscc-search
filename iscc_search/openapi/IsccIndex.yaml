@@ -25,6 +25,21 @@ properties:
     minimum: 0
     readOnly: true
     example: 42
+  sizes:
+    type: object
+    description: >-
+      Size in megabytes per index component (server-generated, read-only).
+      Key "lmdb" covers primary key-value storage measured on disk; additional
+      keys are derived similarity sub-indexes named by ISCC-UNIT-TYPE or
+      simprint type, measured as serialized data size from the live index
+      (includes unflushed data).
+    additionalProperties:
+      type: integer
+      minimum: 0
+    readOnly: true
+    example:
+      lmdb: 30
+      CONTENT_TEXT_V0: 12
 example:
   name: "production"
   assets: 250000

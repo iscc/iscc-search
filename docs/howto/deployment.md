@@ -119,6 +119,51 @@ stays at `60s` because it bounds request latency, not flush latency.
     indexes are only saved on graceful shutdown — faster ingestion but unbounded loss on crash. Raise the
     value for slightly higher write throughput at the cost of a larger loss window.
 
+## Aggregator mode (IDP)
+
+Aggregator mode turns a deployment into a read-only discovery index for the ISCC Declaration Protocol:
+the server polls the tlog-tiles transparency logs of all active iscc-hubs of one network and indexes their
+declarations automatically. Enable it by setting a network:
+
+```bash
+ISCC_SEARCH_AGGREGATOR_NETWORK=testnet   # or mainnet
+```
+
+**Network selection and index name**: one network per deployment. The index name derives from the network —
+`idptest` for testnet (ISCC realm 0), `idp` for mainnet (realm 1). The iscc-hub similarity-search proxy
+derives the same name from its own network, so both sides meet on the same index without coordination. Use a
+**network-specific data directory**: index realms differ between networks and must not be mixed.
+
+**What is exposed**: only the similarity-search endpoints (`GET`/`POST /indexes/{name}/search`),
+get-asset-by-ID (`GET /indexes/{name}/assets/{iscc_id}`), and the infra routes (`/`, `/healthz`, `/readyz`,
+`/docs`, `/status`). Index management and asset add return 404, as do reads against
+any index other than the aggregator index. `ISCC_SEARCH_API_SECRET` still applies if set; the static
+`/docs` spec continues to document the full API even though the suppressed endpoints 404.
+
+**Landing page and status**: browsers opening `/` get a mode-specific HTML landing page (search/lookup plus
+a live ingestion-status panel in aggregator mode); API clients keep getting the JSON summary via content
+negotiation. `GET /status` is public in both modes and reports version, mode, and network — in aggregator
+mode it additionally carries the aggregator index stats and a per-hub ingestion table (cursor, last poll,
+health), useful for monitoring (`curl https://host/status`). The former `/playground` URL permanently
+redirects to `/`.
+
+**Entrypoint**: `iscc-search serve` is the only supported entrypoint in aggregator mode. The poller runs
+in-process, so the serve command rejects `--workers > 1` for any backend; starting uvicorn directly with
+multiple workers bypasses that guard and starts one redundant poller per worker.
+
+**Ingestion behavior**: full historical backfill from leaf 0 on first run, then forward-only polling.
+Progress cursors are in-memory — a restart re-backfills, which is safe (adds are idempotent upserts) and
+cheap at current log sizes. Deletion entries are counted and skipped (the index is append/upsert-only);
+unknown future note types are skipped, never rejected. Each declaration's `gateway` URL is stored
+(URI templates expanded at ingestion) and returned in search-result `metadata`.
+
+| Variable                                      | Default                      | Notes                                   |
+| --------------------------------------------- | ---------------------------- | --------------------------------------- |
+| `ISCC_SEARCH_AGGREGATOR_NETWORK`              | unset (disabled)             | `testnet` or `mainnet`                  |
+| `ISCC_SEARCH_AGGREGATOR_HUB_LIST_URL`         | GitHub `hubs/{network}.yaml` | http(s) URL or local file path override |
+| `ISCC_SEARCH_AGGREGATOR_POLL_INTERVAL`        | `60`                         | Seconds between hub checkpoint polls    |
+| `ISCC_SEARCH_AGGREGATOR_HUB_REFRESH_INTERVAL` | `3600`                       | Seconds between hub-list refreshes      |
+
 ## Sizing profiles
 
 | Profile    | Assets     | RAM     | CPU       | Notes                         |

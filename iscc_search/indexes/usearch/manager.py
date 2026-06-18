@@ -89,9 +89,9 @@ class UsearchIndexManager:
             try:
                 idx = self._get_or_load_index(name)
                 asset_count = len(idx)
-                size_mb = self._get_directory_size_mb(index_dir)
+                size_mb, sizes_mb = self._get_index_sizes_mb(index_dir, idx)
 
-                indexes.append(IsccIndex(name=name, assets=asset_count, size=size_mb))
+                indexes.append(IsccIndex(name=name, assets=asset_count, size=size_mb, sizes=sizes_mb))
             except Exception as e:
                 # Log and skip corrupted or inaccessible indexes
                 logger.warning(f"Failed to load index '{name}': {type(e).__name__}: {e}")
@@ -141,9 +141,9 @@ class UsearchIndexManager:
         idx = self._get_or_load_index(name)
         asset_count = len(idx)
         index_path = self.base_path / name
-        size_mb = self._get_directory_size_mb(index_path)
+        size_mb, sizes_mb = self._get_index_sizes_mb(index_path, idx)
 
-        return IsccIndex(name=name, assets=asset_count, size=size_mb)
+        return IsccIndex(name=name, assets=asset_count, size=size_mb, sizes=sizes_mb)
 
     def delete_index(self, name):
         # type: (str) -> None
@@ -291,17 +291,45 @@ class UsearchIndexManager:
         if not lmdb_file.exists():
             raise FileNotFoundError(f"Index '{name}' not found")
 
-    def _get_directory_size_mb(self, path):
-        # type: (Path) -> int
+    def _get_index_sizes_mb(self, path, idx):
+        # type: (Path, UsearchIndex) -> tuple[int, dict[str, int]]
         """
-        Get total size of all files in directory in megabytes.
+        Get index size in megabytes, total and per component.
 
-        :param path: Path to directory
-        :return: Total size in MB (rounded down)
+        Component "lmdb" covers the LMDB environment via page accounting (the
+        sparse index.lmdb data file reports the nominal 1 TiB map size as
+        st_size on some platforms) plus auxiliary top-level files like the lock
+        file. Derived components (NPHD unit types, SIMPRINT_* types) report
+        their serialized data size measured from the live index, so unflushed
+        vectors are included. Shard directories that are NOT loaded (failed to
+        load or left over from an interrupted rebuild) are measured raw from
+        disk so the reported size never silently understates disk usage.
+
+        :param path: Path to index directory
+        :param idx: Loaded UsearchIndex providing the LMDB environment
+        :return: (total_mb, component_mb) with values rounded down to MB
         """
-        total_bytes = 0
-        for file_path in path.rglob("*"):
-            if file_path.is_file():  # pragma: no branch
-                total_bytes += file_path.stat().st_size
+        component_bytes = {"lmdb": common.lmdb_used_bytes(idx.env)}
+        derived = idx.derived_sizes
+        for entry in path.iterdir():
+            if entry.is_file() and entry.name != "index.lmdb":
+                try:
+                    component_bytes["lmdb"] += entry.stat().st_size
+                except OSError:  # pragma: no cover - race with concurrent flush/rotation file ops
+                    continue
+            elif entry.is_dir() and entry.name not in derived:
+                dir_bytes = 0
+                for f in entry.rglob("*"):
+                    if f.is_file():  # pragma: no branch
+                        try:
+                            dir_bytes += f.stat().st_size
+                        except OSError:  # pragma: no cover - race with concurrent flush/rotation file ops
+                            continue
+                component_bytes[entry.name] = dir_bytes
+        component_bytes.update(derived)
 
-        return total_bytes // (1024 * 1024)
+        mb = 1024 * 1024
+        component_mb = {name: size // mb for name, size in component_bytes.items()}
+        # Floor the byte total once so the reported size never under-reports vs the
+        # per-component breakdown (which loses each component's sub-MB remainder).
+        return sum(component_bytes.values()) // mb, component_mb

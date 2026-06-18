@@ -5,6 +5,44 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-06-18
+
+### Added
+
+- **Aggregator mode** for the ISCC Declaration Protocol (IDP). Setting
+    `ISCC_SEARCH_AGGREGATOR_NETWORK=testnet|mainnet` turns a deployment into a read-only discovery
+    index that polls the tlog-tiles transparency logs of every active iscc-hub on the network and
+    ingests their declarations into a single network-derived index (`idptest` for testnet, `idp` for
+    mainnet). On startup the poller backfills from leaf 0, then polls forward only; deletions and
+    unknown note types are skipped. New environment variables: `ISCC_SEARCH_AGGREGATOR_HUB_LIST_URL`
+    (override the hub-list source), `ISCC_SEARCH_AGGREGATOR_POLL_INTERVAL` (default `60` s), and
+    `ISCC_SEARCH_AGGREGATOR_HUB_REFRESH_INTERVAL` (default `3600` s). In aggregator mode only the
+    similarity-search and get-asset-by-ID endpoints are exposed — every other route and any foreign
+    index returns a route-hiding 404 — and `serve` rejects `--workers > 1` to prevent redundant
+    in-process pollers.
+- **Web frontend** served at `/`: a lookup/search UI plus a live ingestion-status dashboard (in
+    aggregator mode). It matches indexed assets by a pasted ISCC-CODE or ISCC-ID only — no file
+    upload and no outbound transfer to external services. API clients keep receiving the JSON
+    summary at `/` via content negotiation.
+
+### Changed
+
+- `GET /status` is public in both modes and reports version, mode, and network; in aggregator mode
+    it additionally carries the aggregator index stats and a per-hub ingestion table (cursor, last
+    poll, health) for monitoring.
+- **Dependency**: dropped `iscc-sct`; added `pyyaml` (used for hub-list parsing).
+
+### Removed
+
+- Legacy `processing.py` text-processing module and the `TextQuery` schema (and their tests). The
+    former `/playground` page is gone; `/playground` now permanently redirects to `/`.
+
+### Fixed
+
+- Searching a freshly created `usearch` index no longer raises `lmdb.ReadonlyError`. The
+    `__instance__` database does not exist until the first asset is added; the search path now catches
+    this and returns empty results.
+
 ## [0.2.2] - 2026-05-10
 
 ### Performance
@@ -187,3 +225,4 @@ Initial release of iscc-search.
 [0.2.0]: https://github.com/iscc/iscc-search/releases/tag/v0.2.0
 [0.2.1]: https://github.com/iscc/iscc-search/releases/tag/v0.2.1
 [0.2.2]: https://github.com/iscc/iscc-search/releases/tag/v0.2.2
+[0.3.0]: https://github.com/iscc/iscc-search/releases/tag/v0.3.0

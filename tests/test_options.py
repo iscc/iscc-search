@@ -253,3 +253,60 @@ def test_workers_custom():
     """Test workers field with custom value."""
     options = SearchOptions(workers=4)
     assert options.workers == 4
+
+
+def test_aggregator_defaults():
+    """Aggregator mode is disabled by default with documented intervals."""
+    options = SearchOptions()
+    assert options.aggregator_network is None
+    assert options.aggregator_hub_list_url is None
+    assert options.aggregator_poll_interval == 60
+    assert options.aggregator_hub_refresh_interval == 3600
+    assert options.aggregator_mode is False
+
+
+def test_aggregator_network_testnet():
+    """Testnet network enables aggregator mode with idptest index."""
+    options = SearchOptions(aggregator_network="testnet")
+    assert options.aggregator_mode is True
+    assert options.aggregator_index_name == "idptest"
+
+
+def test_aggregator_network_mainnet():
+    """Mainnet network enables aggregator mode with idp index."""
+    options = SearchOptions(aggregator_network="mainnet")
+    assert options.aggregator_mode is True
+    assert options.aggregator_index_name == "idp"
+
+
+def test_aggregator_network_empty_string_disables():
+    """An empty value (e.g. a valueless env var line) disables aggregator mode instead of crashing."""
+    options = SearchOptions(aggregator_network="")
+    assert options.aggregator_network is None
+    assert options.aggregator_mode is False
+
+
+def test_aggregator_network_invalid():
+    """Invalid network names are rejected by the validator."""
+    import pytest
+
+    with pytest.raises(ValueError, match="aggregator_network"):
+        SearchOptions(aggregator_network="devnet")
+
+
+def test_aggregator_hub_list_source_default():
+    """Hub-list source defaults to the authoritative GitHub URL for the network."""
+    options = SearchOptions(aggregator_network="testnet")
+    assert (
+        options.aggregator_hub_list_source == "https://raw.githubusercontent.com/iscc/iscc-hub/main/hubs/testnet.yaml"
+    )
+    options = SearchOptions(aggregator_network="mainnet")
+    assert (
+        options.aggregator_hub_list_source == "https://raw.githubusercontent.com/iscc/iscc-hub/main/hubs/mainnet.yaml"
+    )
+
+
+def test_aggregator_hub_list_source_override():
+    """An explicit hub-list URL or file path overrides the GitHub default."""
+    options = SearchOptions(aggregator_network="testnet", aggregator_hub_list_url="/path/to/hubs.yaml")
+    assert options.aggregator_hub_list_source == "/path/to/hubs.yaml"

@@ -66,9 +66,9 @@ class LmdbIndexManager:
             try:
                 idx = self._get_or_load_index(name)
                 asset_count = idx.get_asset_count()
-                size_mb = self._get_file_size_mb(lmdb_file)
+                size_mb = self._get_index_size_mb(idx)
 
-                indexes.append(IsccIndex(name=name, assets=asset_count, size=size_mb))
+                indexes.append(IsccIndex(name=name, assets=asset_count, size=size_mb, sizes={"lmdb": size_mb}))
             except Exception:
                 # Skip corrupted or inaccessible indexes
                 continue
@@ -115,10 +115,9 @@ class LmdbIndexManager:
         # Load index and get metadata
         idx = self._get_or_load_index(name)
         asset_count = idx.get_asset_count()
-        index_path = self.base_path / f"{name}.lmdb"
-        size_mb = self._get_file_size_mb(index_path)
+        size_mb = self._get_index_size_mb(idx)
 
-        return IsccIndex(name=name, assets=asset_count, size=size_mb)
+        return IsccIndex(name=name, assets=asset_count, size=size_mb, sizes={"lmdb": size_mb})
 
     def delete_index(self, name):
         # type: (str) -> None
@@ -239,13 +238,15 @@ class LmdbIndexManager:
         if not index_path.exists():
             raise FileNotFoundError(f"Index '{name}' not found")
 
-    def _get_file_size_mb(self, path):
-        # type: (Path) -> int
+    def _get_index_size_mb(self, idx):
+        # type: (LmdbIndex) -> int
         """
-        Get file size in megabytes.
+        Get index disk usage in megabytes via LMDB page accounting.
 
-        :param path: Path to file
-        :return: Size in MB (rounded down)
+        The .lmdb data file's st_size reports the nominal map size on some
+        platforms (sparse file on Windows), not actual usage.
+
+        :param idx: Loaded LmdbIndex providing the LMDB environment
+        :return: Used size in MB (rounded down)
         """
-        size_bytes = os.path.getsize(path)
-        return size_bytes // (1024 * 1024)
+        return common.lmdb_used_bytes(idx.env) // (1024 * 1024)

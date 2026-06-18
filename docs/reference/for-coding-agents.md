@@ -19,7 +19,6 @@ codebase exactly.
 | `iscc_search/config.py`                        | `AppConfig`, `ConfigManager` (CLI multi-index JSON config)                         |
 | `iscc_search/models.py`                        | `IsccBase`, `IsccID`, `IsccUnit`, `IsccCode`, `IsccItem`                           |
 | `iscc_search/schema.py`                        | **Auto-generated** Pydantic models from `openapi/openapi.yaml`                     |
-| `iscc_search/processing.py`                    | Text tokenization utilities                                                        |
 | `iscc_search/protocols/index.py`               | `IsccIndexProtocol` (runtime-checkable Protocol)                                   |
 | `iscc_search/indexes/common.py`                | Shared: serialization, ID encoding, validation, query normalization                |
 | `iscc_search/indexes/memory/index.py`          | `MemoryIndex` (dict-based, no persistence)                                         |
@@ -61,7 +60,6 @@ IsccIndexProtocol (typing.Protocol, runtime_checkable)
 | `IsccAddResult`    | Add response (iscc_id, status: created/updated)               |
 | `IsccSimprint`     | Simprint with offset and size                                 |
 | `IsccChunk`        | Chunk-level match detail                                      |
-| `TextQuery`        | Text-based search query                                       |
 
 ## Decision Dispatch
 

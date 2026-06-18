@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ISCC-Search · IDP Aggregator</title>
+    <link rel="icon" type="image/png" href="/static/img/favicon.png">
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body data-mode="aggregator">
+    <div class="page">
+        <header class="site-header">
+            <div class="container header-inner">
+                <div class="brand">
+                    <img src="/static/img/logo_dark.png" alt="ISCC">
+                    <span class="divider"></span>
+                    <span class="wordmark">SEARCH</span>
+                </div>
+                <div class="header-meta">
+                    <span id="liveAge" class="live hidden">
+                        <span class="pulse-dot"></span><span id="liveAgeText">updated just now</span>
+                    </span>
+                    <span id="modeBadge" class="chip net-testnet">
+                        <span class="chip-dot"></span>IDP AGGREGATOR
+                    </span>
+                </div>
+            </div>
+        </header>
+
+        <section class="hero">
+            <div class="container">
+                <p class="hero-kicker">ISCC Integrated Discovery Protocol</p>
+                <h1>Transparency-Log <span class="accent">Aggregator</span></h1>
+                <p class="hero-sub">
+                    Continuously indexes content declarations from every <strong id="networkName">network</strong>
+                    hub and makes them discoverable by <strong>ISCC similarity search</strong>.
+                </p>
+                <div class="lookup-card">
+                    <div class="lookup-accent"></div>
+                    <div class="lookup-body">
+                        <span class="lookup-kicker">ISCC Lookup &amp; Search</span>
+                        <form id="lookupForm" class="lookup-row">
+                            <div class="lookup-input">
+                                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor"
+                                     stroke-width="2" aria-hidden="true">
+                                    <circle cx="11" cy="11" r="8"></circle>
+                                    <path d="M21 21l-4.35-4.35" stroke-linecap="round"></path>
+                                </svg>
+                                <input id="lookupInput" type="text" spellcheck="false" autocomplete="off"
+                                       placeholder="ISCC:KACT4EBWK27737D2… (ISCC-CODE or ISCC-ID)">
+                            </div>
+                            <button type="submit">Search</button>
+                        </form>
+                        <p class="lookup-hint">
+                            Paste a full <strong>ISCC-CODE</strong> or an <strong>ISCC-ID</strong>. An ID resolves to
+                            its exact declaration; a CODE ranks near-matches across all hubs by similarity.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <main class="container">
+            <section id="resultsSection" class="card hidden">
+                <h2>Results</h2>
+                <div id="resultsContent"></div>
+                <details id="rawJsonDetails" class="raw-json hidden">
+                    <summary>Raw JSON response</summary>
+                    <pre><code id="rawJsonContent"></code></pre>
+                </details>
+            </section>
+
+            <section class="status-section">
+                <div class="status-head">
+                    <h2>Ingestion Status</h2>
+                    <span class="live"><span class="pulse-dot"></span>live · refreshes every 10s</span>
+                </div>
+                <p class="card-note">
+                    A live, public record of content declarations ingested from independent hubs across the network.
+                </p>
+
+                <div class="stat-grid">
+                    <div class="stat-card">
+                        <div class="stat-card-label">Indexed assets</div>
+                        <div class="stat-card-value" id="statAssets">–</div>
+                        <div class="sparkline" id="sparkline"></div>
+                        <div class="stat-card-sub" id="statAssetsDelta"></div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-card-label">Index size</div>
+                        <div class="stat-card-value" id="statSize">–</div>
+                        <div class="stat-card-sub" id="statSizeDetail"></div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-card-label">Active hubs</div>
+                        <div class="stat-card-value" id="statHubs">–</div>
+                        <div class="stat-card-sub" id="statHubsDetail"></div>
+                    </div>
+                </div>
+
+                <button type="button" class="disclosure" id="networkToggle" aria-expanded="true"
+                        aria-controls="operatorDetail">
+                    <span class="disclosure-label"><span class="disclosure-chevron">▸</span>Network</span>
+                    <span class="disclosure-rule"></span>
+                    <span class="disclosure-hint" id="networkToggleHint">operator detail — hide</span>
+                </button>
+
+                <div class="operator-detail" id="operatorDetail">
+                    <div class="table-frame">
+                        <div class="table-scroll">
+                            <table class="hub-table">
+                                <thead>
+                                    <tr>
+                                        <th>Hub</th>
+                                        <th>Endpoint</th>
+                                        <th class="num">Records</th>
+                                        <th class="num">Last poll</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="hubsTableBody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <details id="apiKeyCard" class="card">
+                <summary>API Access</summary>
+                <div class="api-key-row">
+                    <input id="apiKeyInput" type="password" spellcheck="false" autocomplete="off"
+                           placeholder="X-API-Key (only needed on protected deployments)">
+                    <span class="key-hint">Stored in this browser session only. Full REST API at <a href="/docs">/docs</a>.</span>
+                </div>
+            </details>
+        </main>
+
+        <footer class="site-footer">
+            <div class="container footer-inner">
+                <span class="version">ISCC-Search <span id="versionLabel"></span></span>
+                <nav>
+                    <a href="/docs">API Docs</a>
+                    <a href="https://github.com/iscc/iscc-search" rel="noopener">GitHub</a>
+                    <a href="https://iscc.io" rel="noopener">ISCC Foundation</a>
+                </nav>
+            </div>
+        </footer>
+    </div>
+
+    <script src="/static/js/app.js"></script>
+</body>
+</html>

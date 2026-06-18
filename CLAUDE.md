@@ -89,7 +89,7 @@ same `IsccIndexProtocol` regardless of the backend.
     - `utils.py` - Shared utilities
     - `log_config.json` - Loguru logging configuration
     - `cli/` - Typer CLI (`add`, `get`, `search`, `serve`, `index` subcommands)
-    - `server/` - FastAPI application (`assets`, `auth`, `indexes`, `search`, `playground`)
+    - `server/` - FastAPI application (`assets`, `auth`, `indexes`, `search`, `frontend` + `static/` assets)
     - `remote/` - HTTP client (`IsccSearchClient`) for talking to a remote server
     - `protocols/` - `IsccIndexProtocol` Protocol definition
     - `indexes/` - Backend implementations (see below)
@@ -131,7 +131,6 @@ Don't conflate them. The serve command uses `options.py`; CLI data commands use 
 - `iscc-usearch>=0.8.0` - Provides `NphdIndex` and the NPHD metric (previously vendored into this repo as
     `nphd.py` / `metrics.py`; now an external package)
 - `iscc-core>=1.2.1` - ISCC code generation and manipulation
-- `iscc-sct>=0.1.3` - Semantic content-code generator
 - `lmdb>=1.7.5` - Persistent key-value storage for entries, metadata, and inverted indexes
 - `msgspec>=0.19.0` - Fast (de)serialization for simprint models
 - `pysimdjson` - Fast JSON parsing
@@ -159,7 +158,7 @@ Don't conflate them. The serve command uses `options.py`; CLI data commands use 
 
 1. **Prefer library functions over manual implementations**
     - Use `ic.decode_base64()` instead of manual base64 padding + `urlsafe_b64decode()`
-    - Leverage domain-specific libraries (iscc-core, iscc-usearch, iscc-sct) for ISCC operations
+    - Leverage domain-specific libraries (iscc-core, iscc-usearch) for ISCC operations
 1. **Use list comprehensions** over explicit append loops
 1. **Thin wrappers over manual reconstruction** - CLI/API layers should serialize internal results directly
     rather than rebuilding schemas by hand
@@ -168,8 +167,8 @@ Don't conflate them. The serve command uses `options.py`; CLI data commands use 
 
 1. **Auto-generated schema**: `iscc_search/schema.py` is generated from `iscc_search/openapi/openapi.yaml` via
     `uv run poe build-schema`. Don't hand-edit it — edit the YAML and rebuild.
-1. **Coverage omits**: `cli/*`, `schema.py`, `protocols/*`, and `server/playground.py` are excluded from
-    coverage (see `pyproject.toml [tool.coverage.run]`).
+1. **Coverage omits**: `cli/*`, `schema.py`, and `protocols/*` are excluded from coverage (see
+    `pyproject.toml [tool.coverage.run]`).
 1. **Test fixtures**: Use fixtures from `tests/conftest.py` for ISCC code generation
 1. **Type-only imports**: Ruff F401 doesn't recognize PEP 484 type-comment imports. Use the `TYPE_CHECKING`
     pattern:

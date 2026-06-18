@@ -1,5 +1,6 @@
 """Test fixtures for IsccUnitIndex testing."""
 
+import json
 import iscc_core as ic
 import pytest
 from fastapi.testclient import TestClient
@@ -39,6 +40,31 @@ def isolate_tests_from_user_data(tmp_path_factory):
     # Restore original settings after all tests
     iscc_search.options.search_opts.index_uri = original_index_uri
     os.environ.pop("ISCC_SEARCH_INDEX_URI", None)
+
+
+# Small LMDB map for the whole test session. UsearchIndex defaults to a 1 TiB map_size;
+# on Windows an LMDB map charges process commit even with writemap=False, so dozens of
+# xdist workers opening 1 TiB maps overflow the page file (ERROR_COMMITMENT_LIMIT). Test
+# datasets are tiny, so 64 MiB is ample (LmdbIndex already relies on the small lmdb default,
+# and auto-resize still covers any growth). Explicit per-test lmdb_options override this.
+TEST_LMDB_MAP_SIZE = 64 * 1024 * 1024  # 64 MiB
+
+
+@pytest.fixture(scope="session", autouse=True)
+def shrink_usearch_lmdb_map():
+    # type: () -> None
+    """
+    Open usearch test indexes with a small LMDB map to avoid Windows commit exhaustion.
+
+    Lowers UsearchIndex's 1 TiB default map_size for the session so parallel workers do
+    not overflow the Windows page file. Restored afterwards; explicit lmdb_options win.
+    """
+    from iscc_search.indexes.usearch.index import UsearchIndex
+
+    original = UsearchIndex.DEFAULT_LMDB_OPTIONS["map_size"]
+    UsearchIndex.DEFAULT_LMDB_OPTIONS["map_size"] = TEST_LMDB_MAP_SIZE
+    yield
+    UsearchIndex.DEFAULT_LMDB_OPTIONS["map_size"] = original
 
 
 @pytest.fixture
@@ -258,6 +284,59 @@ def sample_iscc_codes():
         iscc_code = ic.gen_iscc_code_v0([f"ISCC:{data_unit}", f"ISCC:{instance_unit}"], wide=True)["iscc"]
         codes.append(iscc_code)
     return codes
+
+
+# IDP aggregator fixtures
+
+# Values from the iscc-hub spec schema examples (specs/schemas/iscc-note.yaml)
+IDP_LOG_ENTRY_SCHEMA = "http://purl.org/iscc/schema/iscc-log-entry-0.8.0.json"
+IDP_NOTE_SCHEMA = "http://purl.org/iscc/schema/iscc-note-0.8.0.json"
+IDP_NOTE_DELETE_SCHEMA = "http://purl.org/iscc/schema/iscc-note-delete-0.8.0.json"
+IDP_ISCC_CODE = "ISCC:KACWN77F73NA44D6EUG3S3QNJIL2BPPQFMW6ZX6CZNOKPAK23S2IJ2I"
+IDP_DATAHASH = "1e205ca7815adcb484e9a136c11efe69c1d530176d549b5d18d038eb5280b4b3470c"
+IDP_SIGNATURE = {
+    "version": "ISCC-SIG v1.0",
+    "pubkey": "z6MkmeDbeC5BecFmVnTHA5PWEBaVUrGLdB3weGE2KYnXfHso",
+    "proof": "z5j9nrpPw3oYSAN4XbCvk2sUtkwrueTD6V2Y35gS1KFTode2ED2YQWokPmoXw6QBYtYEFxtAQfzBhdNyr8PMwP79G",
+}
+
+
+@pytest.fixture
+def make_log_record():
+    # type: () -> typing.Callable
+    """
+    Factory building JCS-canonical IDP log-entry records as JSON bytes.
+
+    Produces declaration records by default; deletion records with
+    deletion=True; arbitrary note schemas via note_schema for
+    forward-compatibility tests.
+    """
+
+    def make(iscc_id, iscc_code=IDP_ISCC_CODE, gateway=None, units=None, deletion=False, note_schema=None):
+        # type: (str, str, str|None, list[str]|None, bool, str|None) -> bytes
+        if deletion:
+            note = {
+                "$schema": note_schema or IDP_NOTE_DELETE_SCHEMA,
+                "iscc_id": iscc_id,
+                "nonce": "001d17437f53f6899ed01ecb8659118b",
+                "signature": IDP_SIGNATURE,
+            }
+        else:
+            note = {
+                "$schema": note_schema or IDP_NOTE_SCHEMA,
+                "iscc_code": iscc_code,
+                "datahash": IDP_DATAHASH,
+                "nonce": "0013a3c214c05796673503e6e549446d",
+                "signature": IDP_SIGNATURE,
+            }
+            if gateway is not None:
+                note["gateway"] = gateway
+            if units is not None:
+                note["units"] = units
+        record = {"$schema": IDP_LOG_ENTRY_SCHEMA, "iscc_id": iscc_id, "note": note}
+        return json.dumps(record, separators=(",", ":"), sort_keys=True).encode("utf-8")
+
+    return make
 
 
 # Server testing fixtures

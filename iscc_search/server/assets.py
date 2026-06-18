@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from iscc_search.protocols.index import IsccIndexProtocol
 from iscc_search.schema import IsccAddResult, IsccEntry
 from iscc_search.server import get_index_from_state
-from iscc_search.server.auth import verify_api_key
+from iscc_search.server.auth import block_foreign_index_if_aggregator, block_if_aggregator, verify_api_key
 
 
 router = APIRouter(tags=["assets"])
@@ -15,6 +15,7 @@ router = APIRouter(tags=["assets"])
     response_model=list[IsccAddResult],
     response_model_exclude_unset=True,
     status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(block_if_aggregator)],
 )
 def add_assets(
     name: str,
@@ -44,7 +45,12 @@ def add_assets(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.get("/indexes/{name}/assets/{iscc_id}", response_model=IsccEntry, response_model_exclude_unset=True)
+@router.get(
+    "/indexes/{name}/assets/{iscc_id}",
+    response_model=IsccEntry,
+    response_model_exclude_unset=True,
+    dependencies=[Depends(block_foreign_index_if_aggregator)],
+)
 def get_asset(
     name: str,
     iscc_id: str,

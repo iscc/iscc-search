@@ -5,7 +5,7 @@ import pytest
 from fastapi.testclient import TestClient
 from iscc_search import __version__
 from iscc_search.options import search_opts
-from iscc_search.server import app, custom_docs, init_sentry, root
+from iscc_search.server import app, custom_docs, init_sentry
 
 
 @pytest.fixture
@@ -45,7 +45,7 @@ def test_app_instance():
 
 
 def test_root_endpoint(client):
-    """Test root endpoint returns API information."""
+    """Test root endpoint returns API information for non-browser clients."""
     response = client.get("/")
     assert response.status_code == 200
     data = response.json()
@@ -53,6 +53,8 @@ def test_root_endpoint(client):
     assert data["version"] == __version__
     assert data["docs"] == "/docs"
     assert "description" in data
+    assert data["mode"] == "normal"
+    assert data["network"] is None
 
 
 def test_docs_endpoint(client):
@@ -78,15 +80,6 @@ def test_custom_docs_function():
     assert "/openapi/openapi.json" in html_content
     assert "hideExport" in html_content
     assert "logo" in html_content
-
-
-def test_root_function():
-    """Test root function directly."""
-    result = root()
-    assert isinstance(result, dict)
-    assert result["title"] == "ISCC-Search API"
-    assert result["version"] == __version__
-    assert result["docs"] == "/docs"
 
 
 def test_openapi_static_files(client):

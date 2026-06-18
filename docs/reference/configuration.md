@@ -40,6 +40,18 @@ direct instantiation in code.
 | `ISCC_SEARCH_LOG_LEVEL`                       | `info`                 | Log level (`debug`, `info`, `warning`, `error`)    |
 | `ISCC_SEARCH_SENTRY_DSN`                      | `None`                 | Sentry error tracking DSN                          |
 | `ISCC_SEARCH_SENTRY_TRACES_SAMPLE_RATE`       | `0.05`                 | Sentry performance sampling rate (0.0-1.0)         |
+| `ISCC_SEARCH_AGGREGATOR_NETWORK`              | `None`                 | Enable aggregator mode (`testnet` or `mainnet`)    |
+| `ISCC_SEARCH_AGGREGATOR_HUB_LIST_URL`         | `None`                 | Override hub-list source (URL or local file path)  |
+| `ISCC_SEARCH_AGGREGATOR_POLL_INTERVAL`        | `60`                   | Seconds between hub checkpoint polls               |
+| `ISCC_SEARCH_AGGREGATOR_HUB_REFRESH_INTERVAL` | `3600`                 | Seconds between hub-list refreshes                 |
+
+### Aggregator mode
+
+Setting `ISCC_SEARCH_AGGREGATOR_NETWORK` to `testnet` or `mainnet` switches the server into
+aggregator mode, a read-only discovery index that ingests ISCC Declaration Protocol declarations
+from a network's iscc-hubs. The remaining `ISCC_SEARCH_AGGREGATOR_*` variables tune the polling
+loop and hub-list source. See the [deployment guide](../howto/deployment.md#aggregator-mode-idp)
+for operational details on what the mode exposes, index naming, and the single-process requirement.
 
 ### .env file support
 

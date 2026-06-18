@@ -32,11 +32,11 @@ dependencies = [
     "uvicorn[standard]>=0.38.0",
     "pydantic-settings>=2.0.0",
     "httpx>=0.28.1",
-    "iscc-sct>=0.1.3",
     "python-dotenv>=1.2.1",
     "sentry-sdk[fastapi]>=2.0",
     "huggingface-hub>=1.10",
     "pyarrow>=19",
+    "pyyaml>=6.0.3",
 ]
 
 [project.urls]
@@ -83,6 +83,7 @@ include = [
     "iscc_search/log_config.json",
     "iscc_search/openapi/*.json",
     "iscc_search/openapi/*.yaml",
+    "iscc_search/server/static/**/*",
 ]
 
 [tool.hatch.metadata]
@@ -109,7 +110,7 @@ fail_under = 100
 [tool.coverage.run]
 branch = true
 source = ["iscc_search"]
-omit = ["iscc_search/cli/*", "iscc_search/schema.py", "iscc_search/protocols/*", "iscc_search/server/playground.py"]
+omit = ["iscc_search/cli/*", "iscc_search/schema.py", "iscc_search/protocols/*"]
 
 [tool.datamodel-codegen]
 input = "iscc_search/openapi/openapi.yaml"

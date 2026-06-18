@@ -25,6 +25,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 from iscc_usearch import ShardedIndex128
 
+from iscc_search.indexes import common
 from iscc_search.indexes.simprint import lmdb_ops
 
 if TYPE_CHECKING:
@@ -262,6 +263,12 @@ class UsearchSimprintIndex:
         # type: () -> int
         """Return number of vectors in the index."""
         return len(self._index)
+
+    @property
+    def data_size(self):
+        # type: () -> int
+        """Serialized data size in bytes of the underlying sharded index, unflushed included."""
+        return common.sharded_data_bytes(self._index)
 
     @property
     def shard_count(self):

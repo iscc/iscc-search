@@ -209,6 +209,11 @@ class MemoryIndex:
         match_list = []
         index_data = self._indexes[index_name]
 
+        # Per-unit-type breakdown for an exact iscc_code match: every queried unit matches at 1.0.
+        # normalize_query guarantees query.units is populated whenever iscc_code is set, so this
+        # is non-empty for any asset that reaches the append below.
+        match_types = {common.get_unit_type(unit): 1.0 for unit in query.units or []}
+
         for asset in index_data["assets"].values():
             # Match by iscc_code (query always has iscc_code after normalization)
             if query.iscc_code and asset.iscc_code:
@@ -217,7 +222,7 @@ class MemoryIndex:
                         IsccGlobalMatch(
                             iscc_id=asset.iscc_id,  # type: ignore
                             score=1.0,
-                            types={},
+                            types=match_types,
                             metadata=asset.metadata,
                         )
                     )

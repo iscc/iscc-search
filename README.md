@@ -33,8 +33,10 @@ HNSW-accelerated indexes.
 - Variable-length ISCC-UNIT indexing using the NPHD metric (via
     [iscc-usearch](https://github.com/iscc/iscc-usearch))
 - Granular ISCC-SIMPRINT search for fine-grained content matching
+- Aggregator mode for ISCC Declaration Protocol (IDP) transparency-log ingestion
+- Built-in web frontend for ISCC lookup/search and aggregator monitoring
 - Cross-platform (Linux, macOS, Windows)
-- Python 3.10–3.13
+- Python 3.11–3.14
 
 ## What is ISCC?
 
@@ -97,7 +99,7 @@ The server reads its configuration from environment variables prefixed with `ISC
 | `ISCC_SEARCH_LOG_LEVEL`    | `info`           | Loguru log level                                             |
 
 Additional knobs control HNSW parameters, shard sizes, match thresholds, and scoring — see
-`iscc_search/options.py` or the [deployment guide](docs/deployment.md) for the full list.
+`iscc_search/options.py` or the [deployment guide](docs/howto/deployment.md) for the full list.
 
 ## Architecture
 
@@ -116,7 +118,7 @@ iscc-search uses a protocol-based design so the CLI, REST API, and library users
             (LMDB)    (HNSW + LMDB)
 ```
 
-See [docs/architecture.md](docs/architecture.md) for the full picture.
+See [docs/explanation/architecture.md](docs/explanation/architecture.md) for the full picture.
 
 ## Development
 
@@ -125,7 +127,7 @@ This project uses [uv](https://docs.astral.sh/uv/) for package management and
 
 ### Prerequisites
 
-- Python 3.10 or higher
+- Python 3.11 or higher
 - [uv](https://docs.astral.sh/uv/) package manager
 
 ### Common tasks
@@ -168,7 +170,7 @@ iscc-search depends on for its HNSW backend.
 - **LMDB** is used for durable key-value storage: ISCC entries, metadata, and the inverted prefix-search index.
 - **usearch** (HNSW) is used for approximate nearest-neighbor search over ISCC-UNITs and ISCC-SIMPRINTS.
 - Multi-worker deployments are **not** supported with the usearch backend — see
-    [docs/deployment.md](docs/deployment.md) for details.
+    [docs/howto/deployment.md](docs/howto/deployment.md) for details.
 
 ## License
 

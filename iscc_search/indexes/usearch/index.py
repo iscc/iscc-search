@@ -790,6 +790,32 @@ class UsearchIndex:
             self._env_rwlock.release_write()
 
     @property
+    def derived_sizes(self):
+        # type: () -> dict[str, int]
+        """
+        Serialized data size in bytes of all loaded derived indexes, keyed by component.
+
+        Measures live index state, so unflushed vectors are included (on-disk
+        shard files lag behind until flush/close). Keys match the on-disk
+        directory names: unit types for NPHD indexes and SIMPRINT_{sp_type}
+        for simprint indexes.
+
+        Holds ``_write_lock`` only to snapshot the index registries, then
+        measures each index outside the lock — the per-index byte count walks
+        shard files on disk, and that I/O must not block add_assets/rebuild,
+        which contend on the same lock. A measurement racing a concurrent write
+        sees at worst a transient under/over-count (monitoring data), never a
+        torn registry.
+        """
+        with self._write_lock:
+            nphd_indexes = list(self._nphd_indexes.items())
+            simprint_indexes = list(self._simprint_indexes.items())
+        sizes = {unit_type: common.sharded_data_bytes(index) for unit_type, index in nphd_indexes}
+        for sp_type, sp_index in simprint_indexes:
+            sizes[f"SIMPRINT_{sp_type}"] = sp_index.data_size
+        return sizes
+
+    @property
     def tracked_unit_types(self):
         # type: () -> list[str]
         """Sorted list of NPHD unit_types tracked in LMDB metadata."""
@@ -1714,13 +1740,17 @@ class UsearchIndex:
         results = {}  # type: dict[int, float]
 
         with self._read_txn() as txn:
-            instance_db = self.env.open_db(
-                b"__instance__",
-                txn=txn,
-                dupsort=True,
-                dupfixed=True,
-                integerdup=True,
-            )
+            try:
+                instance_db = self.env.open_db(
+                    b"__instance__",
+                    txn=txn,
+                    dupsort=True,
+                    dupfixed=True,
+                    integerdup=True,
+                )
+            except lmdb.ReadonlyError:
+                # Database doesn't exist yet (fresh index with no assets)
+                return results
 
             cursor = txn.cursor(instance_db)
             # Bidirectional prefix matching (like LmdbIndex)

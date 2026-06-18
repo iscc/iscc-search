@@ -140,6 +140,69 @@ def test_get_index_success(manager):
     assert result.size >= 0
 
 
+def test_get_index_size_excludes_sparse_lmdb_map(manager, sample_iscc_ids, sample_content_units):
+    """Reported size reflects actual disk usage, not the sparse 1 TiB LMDB map size."""
+    manager.create_index(IsccIndex(name="test"))
+    asset = IsccEntry(iscc_id=sample_iscc_ids[0], units=[sample_content_units[0], sample_content_units[1]])
+    manager.add_assets("test", [asset])
+
+    result = manager.get_index("test")
+
+    # On Windows index.lmdb's st_size equals the nominal 1 TiB map (1,048,576 MB).
+    assert result.size < 100
+
+
+def test_get_index_sizes_breakdown(manager, sample_assets_with_simprints):
+    """Per-component sizes report lmdb plus every loaded derived index, flushed or not."""
+    manager.create_index(IsccIndex(name="test"))
+    manager.add_assets("test", [sample_assets_with_simprints[0]])
+
+    # No flush — derived components must still appear via in-memory measurement.
+    result = manager.get_index("test")
+
+    assert "lmdb" in result.sizes
+    assert "CONTENT_TEXT_V0" in result.sizes
+    assert "SIMPRINT_CONTENT_TEXT_V0" in result.sizes
+    assert "SIMPRINT_SEMANTIC_TEXT_V0" in result.sizes
+    assert all(size_mb >= 0 for size_mb in result.sizes.values())
+
+
+def test_get_index_sizes_counts_unloaded_dirs(manager):
+    """Shard directories not loaded as derived indexes are still measured raw from disk."""
+    manager.create_index(IsccIndex(name="test"))
+    leftover = manager.base_path / "test" / "CONTENT_AUDIO_V0"
+    leftover.mkdir()
+    (leftover / "shard_0000.usearch").write_bytes(b"\x00" * (3 * 1024 * 1024))
+
+    result = manager.get_index("test")
+
+    assert result.sizes["CONTENT_AUDIO_V0"] == 3
+    assert result.size >= 3
+
+
+def test_sharded_data_bytes_tracks_unflushed_state(manager, sample_iscc_ids, sample_content_units):
+    """sharded_data_bytes reports byte-exact data size before and after flush without double counting."""
+    from iscc_search.indexes import common
+
+    manager.create_index(IsccIndex(name="test"))
+    asset = IsccEntry(iscc_id=sample_iscc_ids[0], units=[sample_content_units[0], sample_content_units[1]])
+    manager.add_assets("test", [asset])
+    nphd = manager._index_cache["test"]._nphd_indexes["CONTENT_TEXT_V0"]
+
+    unflushed = common.sharded_data_bytes(nphd)
+    assert unflushed > 0  # measured live despite no shard files on disk yet
+
+    manager._index_cache["test"].flush()
+    flushed = common.sharded_data_bytes(nphd)
+    assert flushed >= unflushed  # same shard data from disk, plus persisted bloom filter
+
+    asset2 = IsccEntry(iscc_id=sample_iscc_ids[1], units=[sample_content_units[0], sample_content_units[1]])
+    manager.add_assets("test", [asset2])
+    dirty_again = common.sharded_data_bytes(nphd)
+    # Active shard measured live, its stale on-disk file excluded (no double counting)
+    assert flushed < dirty_again < 2 * flushed
+
+
 def test_get_index_not_found(manager):
     """Test get_index with non-existent index raises FileNotFoundError."""
     with pytest.raises(FileNotFoundError, match="not found"):

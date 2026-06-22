@@ -94,15 +94,11 @@ code, .mono {
     display: none !important;
 }
 
-/* ---------- Page shell (rounded card on paper) ---------- */
+/* ---------- Page shell (full-bleed; each section carries its own background,
+   content is centered by the inner .container) ---------- */
 
 .page {
-    max-width: 1280px;
-    margin: 28px auto;
     background: var(--white);
-    border-radius: 18px;
-    overflow: hidden;
-    box-shadow: var(--shadow-xl);
 }
 
 /* ---------- Header ---------- */
@@ -121,32 +117,33 @@ code, .mono {
     justify-content: space-between;
     gap: 1rem;
     flex-wrap: wrap;
-    min-height: 72px;
-    padding-top: 0.85rem;
-    padding-bottom: 0.85rem;
+    min-height: 88px;
+    padding-top: 1.4rem;
+    padding-bottom: 1.4rem;
 }
 
 .brand {
     display: flex;
     align-items: center;
-    gap: 0.9rem;
+    gap: 1.1rem;
     min-width: 0;
 }
 
+/* Logo lockup sized to match the iscc-hub header (h-10 lg:h-12, text-3xl lg:text-4xl). */
 .brand img {
-    height: 22px;
+    height: clamp(40px, 3.5vw, 48px);
     display: block;
 }
 
 .brand .divider {
     width: 2px;
-    height: 20px;
+    height: clamp(34px, 3vw, 40px);
     background: var(--yellow);
     border-radius: 1px;
 }
 
 .brand .wordmark {
-    font-size: 1.15rem;
+    font-size: clamp(1.875rem, 3vw, 2.25rem);
     font-weight: 300;
     letter-spacing: 0.22em;
 }
@@ -234,6 +231,25 @@ code, .mono {
     padding: clamp(2.25rem, 6vw, 3.75rem) 0 clamp(3rem, 7vw, 4.5rem);
 }
 
+/* Aggregator hero: text column (1/3) beside the lookup card (2/3).
+   Scoped to aggregator so the normal search page keeps its stacked hero. */
+[data-mode="aggregator"] .hero .container {
+    display: grid;
+    grid-template-columns: 1fr 2fr;
+    gap: clamp(2rem, 4vw, 3.5rem);
+    align-items: center;
+}
+
+[data-mode="aggregator"] .hero-sub {
+    margin-bottom: 0;
+}
+
+@media (max-width: 900px) {
+    [data-mode="aggregator"] .hero .container {
+        grid-template-columns: 1fr;
+    }
+}
+
 .hero-kicker {
     font-family: var(--font-mono);
     font-size: 0.75rem;
@@ -283,7 +299,7 @@ code, .mono {
 }
 
 .lookup-accent {
-    height: 5px;
+    height: 16px;
     background: var(--coral);
 }
 
@@ -291,71 +307,72 @@ code, .mono {
     padding: clamp(1.4rem, 3vw, 1.9rem) clamp(1.25rem, 3vw, 1.9rem);
 }
 
-.lookup-kicker {
-    display: block;
-    font-family: var(--font-mono);
-    font-size: 0.7rem;
-    letter-spacing: 0.16em;
-    text-transform: uppercase;
-    color: var(--cyan);
-    margin-bottom: 1rem;
+.lookup-title {
+    text-align: center;
+    font-size: clamp(1.5rem, 3vw, 1.875rem);
+    font-weight: 600;
+    color: var(--white);
+    margin: 0.25rem 0 1.25rem;
 }
 
+/* Input and button form one rounded group whose border turns coral on focus,
+   matching the iscc-hub lookup field. */
 .lookup-row {
     display: flex;
     align-items: stretch;
-    gap: 0.65rem;
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    border-radius: 12px;
+    overflow: hidden;
+    background: rgba(255, 255, 255, 0.1);
+    transition: border-color 0.3s ease;
 }
 
-.lookup-input {
-    flex: 1;
-    min-width: 0;
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    background: var(--white);
-    border-radius: 11px;
-    padding: 0 1rem;
-    box-shadow: var(--shadow-md);
+.lookup-row:focus-within {
+    border-color: var(--coral);
 }
 
-.lookup-input svg {
-    flex-shrink: 0;
-    color: #8aa0bf;
-}
-
-.lookup-input input {
+/* input[type="text"] in the selector outranks the global form rule
+   (textarea, input[type="text"], ...) which would otherwise paint the field
+   off-white with 8px corners — the source of the navy corner notches. */
+.lookup-row input[type="text"] {
     flex: 1;
     min-width: 0;
     border: 0;
+    border-radius: 0;
     outline: none;
     background: transparent;
     font-family: var(--font-mono);
-    font-size: 0.9rem;
-    color: var(--ink);
-    padding: 0.95rem 0;
+    font-weight: 300;
+    font-size: 0.95rem;
+    letter-spacing: -0.01em;
+    color: var(--white);
+    padding: 1rem 1.1rem;
 }
 
-.lookup-input input::placeholder {
-    color: #8aa0bf;
+.lookup-row input::placeholder {
+    color: #9ca3af;
+}
+
+/* Suppress the global input:focus outline; focus is shown on the group border. */
+.lookup-row input:focus {
+    outline: none;
 }
 
 .lookup-row button {
     flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     border: none;
-    border-radius: 11px;
     background: var(--coral);
     color: var(--white);
-    font-family: var(--font-sans);
-    font-weight: 600;
-    font-size: 0.95rem;
-    padding: 0 1.65rem;
+    padding: 0 1.2rem;
     cursor: pointer;
-    transition: filter 0.15s ease;
+    transition: background-color 0.2s ease;
 }
 
 .lookup-row button:hover {
-    filter: brightness(1.07);
+    background: #e0454e;
 }
 
 .lookup-hint {
@@ -375,7 +392,13 @@ code, .mono {
 
 main {
     background: var(--white);
-    padding: clamp(2rem, 5vw, 3.25rem) 0 clamp(2.5rem, 6vw, 3.75rem);
+}
+
+/* main is also .container; target both so the vertical padding outranks
+   .container's `padding: 0 ...` shorthand while keeping its horizontal padding. */
+main.container {
+    padding-top: clamp(3rem, 6vw, 4.5rem);
+    padding-bottom: clamp(2.5rem, 6vw, 3.75rem);
 }
 
 .card {
@@ -387,7 +410,8 @@ main {
     margin-bottom: 1.5rem;
 }
 
-.card h2 {
+.card h2,
+.status-section h2 {
     font-size: clamp(1.35rem, 3vw, 1.65rem);
     font-weight: 700;
     letter-spacing: -0.01em;
@@ -395,7 +419,8 @@ main {
     margin: 0;
 }
 
-.card .card-note {
+.card .card-note,
+.status-section .card-note {
     font-size: 0.85rem;
     font-weight: 300;
     color: var(--fg-2);
@@ -928,21 +953,6 @@ details.card > summary::-webkit-details-marker {
 /* ---------- Responsive ---------- */
 
 @media (max-width: 720px) {
-    .page {
-        margin: 0;
-        border-radius: 0;
-    }
-
-    .lookup-row {
-        flex-direction: column;
-        align-items: stretch;
-    }
-
-    .lookup-row button {
-        width: 100%;
-        padding: 0.85rem 0;
-    }
-
     .status-head {
         align-items: flex-start;
     }

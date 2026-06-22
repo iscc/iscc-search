@@ -242,7 +242,7 @@ async function runLookup(value) {
 function fmtSizeParts(megabytes) {
     if (megabytes >= 1024) return { value: (megabytes / 1024).toFixed(megabytes >= 10240 ? 0 : 1), unit: "GB" };
     if (megabytes < 1) return { value: "< 1", unit: "MB" };
-    return { value: megabytes.toLocaleString(), unit: "MB" };
+    return { value: megabytes.toFixed(1), unit: "MB" };
 }
 
 function fmtSize(megabytes) {
@@ -312,8 +312,8 @@ function renderHeadlineStats(status) {
         clear(value);
         value.appendChild(document.createTextNode(size.value + " "));
         value.appendChild(el("span", "unit", size.unit));
-        const detail = sizesText(index.sizes);
-        byId("statSizeDetail").textContent = detail ? "across all hubs · " + detail : "across all hubs";
+        const seq = (status.hubs || []).reduce((sum, hub) => sum + (hub.cursor || 0), 0);
+        byId("statSizeDetail").textContent = "across all hubs · SEQ " + seq.toLocaleString();
     }
     renderHubStat(status.hubs || []);
 }

@@ -29,27 +29,28 @@
 
         <section class="hero">
             <div class="container">
-                <p class="hero-kicker">ISCC Integrated Discovery Protocol</p>
-                <h1>Transparency-Log <span class="accent">Aggregator</span></h1>
-                <p class="hero-sub">
-                    Continuously indexes content declarations from every <strong id="networkName">network</strong>
-                    hub and makes them discoverable by <strong>ISCC similarity search</strong>.
-                </p>
+                <div class="hero-text">
+                    <p class="hero-kicker">ISCC DISCOVERY PROTOCOL</p>
+                    <h1>ISCC-Search <span class="accent">Aggregator</span></h1>
+                    <p class="hero-sub">
+                        Continuously indexes content declarations from every <strong id="networkName">network</strong>
+                        hub and makes them discoverable by <strong>ISCC similarity search</strong>.
+                    </p>
+                </div>
                 <div class="lookup-card">
                     <div class="lookup-accent"></div>
                     <div class="lookup-body">
-                        <span class="lookup-kicker">ISCC Lookup &amp; Search</span>
+                        <h3 class="lookup-title">ISCC Lookup &amp; Search</h3>
                         <form id="lookupForm" class="lookup-row">
-                            <div class="lookup-input">
-                                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor"
+                            <input id="lookupInput" type="text" spellcheck="false" autocomplete="off"
+                                   placeholder="ISCC:KACT4EBWK27737D2… (ISCC-CODE or ISCC-ID)">
+                            <button type="submit" aria-label="Search">
+                                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor"
                                      stroke-width="2" aria-hidden="true">
                                     <circle cx="11" cy="11" r="8"></circle>
                                     <path d="M21 21l-4.35-4.35" stroke-linecap="round"></path>
                                 </svg>
-                                <input id="lookupInput" type="text" spellcheck="false" autocomplete="off"
-                                       placeholder="ISCC:KACT4EBWK27737D2… (ISCC-CODE or ISCC-ID)">
-                            </div>
-                            <button type="submit">Search</button>
+                            </button>
                         </form>
                         <p class="lookup-hint">
                             Paste a full <strong>ISCC-CODE</strong> or an <strong>ISCC-ID</strong>. An ID resolves to

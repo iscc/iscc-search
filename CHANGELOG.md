@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.1] - 2026-06-22
+
+### Changed
+
+- **Web frontend polish.** Full-bleed hero background; the aggregator hero now places the intro
+    text (one third) beside the lookup card (two thirds) and collapses to a single column on narrow
+    screens. Larger header logo, a restyled translucent search field with a coral search button, and
+    a centered "ISCC Lookup & Search" title — aligning the look with iscc-hub. Landing copy updated
+    (hero kicker "ISCC DISCOVERY PROTOCOL", headline "ISCC-Search Aggregator").
+- **Index Size card** drops the per-component size breakdown in favor of the aggregate log position
+    (`SEQ`, the sum of all hub cursors); size values now show one decimal place consistently for both
+    MB and GB.
+
+### Fixed
+
+- Corrected vertical spacing in the aggregator "Ingestion Status" section. A CSS specificity
+    collision (the `.container` `padding` shorthand overriding `main`'s vertical padding) had zeroed
+    the gap above the section, and the heading/intro lost their styling when the block stopped being
+    a `.card`.
+
 ## [0.3.0] - 2026-06-18
 
 ### Added
@@ -226,3 +246,4 @@ Initial release of iscc-search.
 [0.2.1]: https://github.com/iscc/iscc-search/releases/tag/v0.2.1
 [0.2.2]: https://github.com/iscc/iscc-search/releases/tag/v0.2.2
 [0.3.0]: https://github.com/iscc/iscc-search/releases/tag/v0.3.0
+[0.3.1]: https://github.com/iscc/iscc-search/releases/tag/v0.3.1

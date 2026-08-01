@@ -8,6 +8,7 @@ import io
 import pytest
 import iscc_core as ic
 from iscc_search.indexes.usearch.index import UsearchIndex
+from iscc_search.models import IsccID, IsccUnit
 from iscc_search.schema import IsccEntry, IsccQuery
 
 
@@ -944,3 +945,90 @@ def test_set_mapsize_with_concurrent_readers(tmp_path):
     idx.close()
 
     assert not errors, f"Concurrent resize errors: {errors}"
+
+
+def test_usearch_index_add_assets_skips_noop_updates(usearch_index, sample_iscc_ids):
+    """Re-adding an identical asset reports updated but skips derived-index churn.
+
+    usearch remove+add churn degrades HNSW graph connectivity over time, and the
+    aggregator re-adds every asset on each restart re-backfill, so unchanged assets
+    must not touch the NPHD indexes.
+    """
+    content = ic.gen_text_code_v0("No-op update fixture text", bits=256)["iscc"]
+    instance_unit = f"ISCC:{ic.Code.rnd(ic.MT.INSTANCE, bits=128)}"
+    asset = IsccEntry(iscc_id=sample_iscc_ids[0], units=[instance_unit, content])
+    results = usearch_index.add_assets([asset])
+    assert results[0].status == "created"
+
+    nphd = usearch_index._nphd_indexes["CONTENT_TEXT_V0"]
+    dirty_before = nphd.dirty
+
+    # Identical re-add: reported as updated, but no vector mutations happen
+    results = usearch_index.add_assets([asset])
+    assert results[0].status == "updated"
+    assert nphd.dirty == dirty_before
+
+    # Changed asset is a real update and re-indexes
+    changed = IsccEntry(iscc_id=sample_iscc_ids[0], units=[instance_unit, content], metadata={"title": "changed"})
+    results = usearch_index.add_assets([changed])
+    assert results[0].status == "updated"
+    assert nphd.dirty > dirty_before
+
+    # Asset remains searchable after the whole sequence
+    result = usearch_index.search_assets(IsccQuery(units=[content]))
+    assert result.global_matches[0].iscc_id == sample_iscc_ids[0]
+    assert result.global_matches[0].score == 1.0
+
+
+def test_usearch_index_add_assets_reindexes_when_nphd_vector_missing(usearch_index, sample_iscc_ids):
+    """An unchanged re-add falls through the no-op skip when the derived vector is absent.
+
+    NPHD additions run after the LMDB commit, so a failure in between leaves the stored
+    bytes current but the vector missing; the retried batch must restore searchability.
+    """
+    content = ic.gen_text_code_v0("Recovery fixture text", bits=256)["iscc"]
+    instance_unit = f"ISCC:{ic.Code.rnd(ic.MT.INSTANCE, bits=128)}"
+    asset = IsccEntry(iscc_id=sample_iscc_ids[0], units=[instance_unit, content])
+    usearch_index.add_assets([asset])
+
+    # Simulate a crash between LMDB commit and NPHD add: vector vanishes, bytes remain
+    nphd = usearch_index._nphd_indexes["CONTENT_TEXT_V0"]
+    nphd.remove([int(IsccID(sample_iscc_ids[0]))])
+    result = usearch_index.search_assets(IsccQuery(units=[content]))
+    assert result.global_matches == []
+
+    # Identical re-add must re-index instead of no-op skipping
+    results = usearch_index.add_assets([asset])
+    assert results[0].status == "updated"
+    result = usearch_index.search_assets(IsccQuery(units=[content]))
+    assert result.global_matches[0].iscc_id == sample_iscc_ids[0]
+    assert result.global_matches[0].score == 1.0
+
+
+def test_usearch_index_add_assets_update_removes_stale_instance_rows(usearch_index, sample_iscc_ids):
+    """Upgrading an asset's units removes the old INSTANCE body from the exact-match index.
+
+    A leftover shorter body would prefix-match any longer digest sharing its first
+    64 bits and falsely score 1.0 for data the asset never contained.
+    """
+    datahash = bytes(range(32))
+    inst_64 = "ISCC:" + ic.encode_component(ic.MT.INSTANCE, ic.ST.NONE, ic.VS.V0, 64, datahash[:8])
+    inst_256 = "ISCC:" + ic.encode_component(ic.MT.INSTANCE, ic.ST.NONE, ic.VS.V0, 256, datahash)
+    content_256 = ic.gen_text_code_v0("Stale instance fixture text", bits=256)["iscc"]
+    content_64 = "ISCC:" + ic.encode_component(
+        ic.MT.CONTENT, ic.ST_CC.TEXT, ic.VS.V0, 64, IsccUnit(content_256).body[:8]
+    )
+
+    usearch_index.add_assets([IsccEntry(iscc_id=sample_iscc_ids[0], units=[content_64, inst_64])])
+    usearch_index.add_assets([IsccEntry(iscc_id=sample_iscc_ids[0], units=[content_256, inst_256])])
+
+    # A different 256-bit digest sharing the first 64 bits must not identity-match
+    foreign = datahash[:8] + bytes(24)
+    foreign_256 = "ISCC:" + ic.encode_component(ic.MT.INSTANCE, ic.ST.NONE, ic.VS.V0, 256, foreign)
+    result = usearch_index.search_assets(IsccQuery(units=[foreign_256]))
+    assert result.global_matches == []
+
+    # The true digest still matches exactly
+    result = usearch_index.search_assets(IsccQuery(units=[inst_256]))
+    assert result.global_matches[0].iscc_id == sample_iscc_ids[0]
+    assert result.global_matches[0].score == 1.0

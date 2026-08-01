@@ -8,6 +8,7 @@ schema version bump is an unknown note type with unreviewed field semantics).
 """
 
 import json
+import iscc_core as ic
 from iscc_search.aggregator import NETWORKS
 from iscc_search.indexes.common import validate_iscc_id
 from iscc_search.models import IsccCode, IsccID, IsccUnit
@@ -55,10 +56,15 @@ def record_to_entry(record, network):
     """
     Convert a log-entry record into an IsccEntry, classifying skips.
 
-    Declarations index the ISCC-CODE decomposed into units merged (deduped)
-    with any extra note.units; the optional gateway is template-expanded at
-    ingestion and stored as the only metadata field. The function never
-    raises — the caller keeps per-reason counters and does its own logging.
+    Declarations index one unit per ISCC-UNIT-TYPE, keeping the longest
+    available form: note.units carry the expanded (typically 256-bit) versions
+    of the ISCC-CODE's units, and the full 256-bit INSTANCE unit derives from
+    note.datahash. The hub validates that expanded units and datahash
+    reconstruct the declared ISCC-CODE, so shorter code-derived units are
+    always prefixes of their expansions. The optional gateway is
+    template-expanded at ingestion and stored as the only metadata field. The
+    function never raises — the caller keeps per-reason counters and does its
+    own logging.
 
     :param record: JCS-canonical log-entry JSON bytes ({$schema, iscc_id, note})
     :param network: Deployment network ("testnet" or "mainnet") for realm checks
@@ -81,11 +87,20 @@ def record_to_entry(record, network):
         if IsccID(iscc_id).realm_id != NETWORKS[network]["realm"]:
             return None, "realm_mismatch"
         iscc_code = note["iscc_code"]
-        units = [str(unit) for unit in IsccCode(iscc_code).units]
-        # IsccUnit(...).unit_type raises for undecodable units, so a bad extra unit
-        # is classified "malformed" here instead of failing the whole batch in add_assets
-        extra = [unit for unit in note.get("units", []) if IsccUnit(unit).unit_type]
-        units = list(dict.fromkeys(units + extra))
+        instance = "ISCC:" + ic.encode_component(
+            ic.MT.INSTANCE, ic.ST.NONE, ic.VS.V0, 256, bytes.fromhex(note["datahash"][4:])
+        )
+        candidates = [str(unit) for unit in IsccCode(iscc_code).units] + list(note.get("units", [])) + [instance]
+        # Keep the longest unit per unit_type; insertion order preserves code order.
+        # IsccUnit(...) raises for undecodable units, so a bad extra unit is classified
+        # "malformed" here instead of failing the whole batch in add_assets.
+        longest = {}  # type: dict[str, IsccUnit]
+        for unit_str in candidates:
+            unit = IsccUnit(unit_str)
+            prev = longest.get(unit.unit_type)
+            if prev is None or len(unit.body) > len(prev.body):
+                longest[unit.unit_type] = unit
+        units = [str(unit) for unit in longest.values()]
         metadata = None
         if note.get("gateway"):
             metadata = {"gateway": expand_gateway(note["gateway"], iscc_id, iscc_code, note["datahash"])}

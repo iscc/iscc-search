@@ -277,12 +277,42 @@ class UsearchIndex:
                         # Check if asset exists (for status)
                         existing = txn.get(key_bytes, db=assets_db)
                         status = Status.updated if existing else Status.created
+
+                        _t = time.perf_counter()
+                        asset_bytes = common.serialize_asset(asset)
+                        lmdb_serialize_t += time.perf_counter() - _t
+
+                        # Skip no-op updates: identical stored bytes mean units and metadata
+                        # are unchanged, so re-indexing would only churn the derived indexes.
+                        # usearch remove+add churn degrades HNSW graph connectivity over time
+                        # (keys stay contained but become unreachable via graph traversal),
+                        # and aggregator re-backfills re-add every asset on each restart.
+                        # The presence check keeps failed batches retryable: NPHD additions
+                        # run after the LMDB commit, so identical bytes alone do not prove
+                        # the derived vectors ever made it in.
+                        if (
+                            existing == asset_bytes
+                            and not asset.simprints
+                            and self._nphd_units_present(key, asset.units)
+                        ):
+                            results.append(IsccAddResult(iscc_id=asset.iscc_id, status=status))
+                            continue
+
                         if existing:
                             nphd_updated_keys.add(key)
+                            # Drop INSTANCE rows the update no longer carries — the unit loop
+                            # below only puts current bodies, and a stale shorter body would
+                            # keep prefix-matching as a 1.0 identity hit for foreign digests.
+                            new_units = set(asset.units or [])
+                            for old_unit_str in common.deserialize_asset(existing).units or []:  # pragma: no branch
+                                if old_unit_str in new_units:
+                                    continue
+                                old_unit = IsccUnit(old_unit_str)
+                                if old_unit.unit_type.startswith("INSTANCE_"):
+                                    txn.delete(old_unit.body, value=key_bytes, db=instance_db)
 
                         # Store asset
                         _t = time.perf_counter()
-                        asset_bytes = common.serialize_asset(asset)
                         txn.put(key_bytes, asset_bytes, db=assets_db)
                         lmdb_serialize_t += time.perf_counter() - _t
 
@@ -472,6 +502,31 @@ class UsearchIndex:
                 self._write_lock.release()
 
         return results
+
+    def _nphd_units_present(self, key, units):
+        # type: (int, list[str] | None) -> bool
+        """
+        Check that every similarity unit of an asset is indexed under the given key.
+
+        Gates the no-op update skip in add_assets: identical stored bytes only prove the
+        LMDB side is current. Derived NPHD additions run after the LMDB commit, so a
+        failure in between leaves vectors missing while the bytes already match — the
+        retried batch must fall through to a full re-index to restore them. INSTANCE
+        units live in LMDB itself and commit atomically with the asset, so they need
+        no check.
+
+        :param key: Integer ISCC-ID key
+        :param units: ISCC-UNIT strings of the asset
+        :return: True if all similarity units have their key in the derived NPHD indexes
+        """
+        for unit_str in units or []:  # pragma: no branch
+            unit_type = IsccUnit(unit_str).unit_type
+            if unit_type.startswith("INSTANCE_"):
+                continue
+            nphd_index = self._nphd_indexes.get(unit_type)
+            if nphd_index is None or key not in nphd_index:
+                return False
+        return True
 
     def get_asset(self, iscc_id):
         # type: (str) -> IsccEntry
@@ -1435,9 +1490,10 @@ class UsearchIndex:
         start_time = time_module.time()
         logger.info(f"Rebuilding ShardedNphdIndex for unit_type '{unit_type}'...")
 
-        # Collect all vectors for this unit_type from LMDB
-        keys = []  # type: list[int]
-        vectors = []  # type: list[bytes]
+        # Collect one vector per key for this unit_type from LMDB. Keep the longest
+        # body when legacy entries carry the same unit_type at multiple lengths —
+        # usearch silently drops duplicate keys in a batch add, keeping the first.
+        best = {}  # type: dict[int, bytes]
 
         with self._read_txn() as txn:
             assets_db = self.env.open_db(b"__assets__", txn=txn)
@@ -1453,8 +1509,11 @@ class UsearchIndex:
                     unit = IsccUnit(unit_str)
                     if unit.unit_type == unit_type:
                         key = struct.unpack(">Q", key_bytes)[0]
-                        keys.append(key)
-                        vectors.append(unit.body)
+                        if key not in best or len(unit.body) > len(best[key]):
+                            best[key] = unit.body
+
+        keys = list(best.keys())  # type: list[int]
+        vectors = list(best.values())  # type: list[bytes]
 
         if not keys:
             logger.info(f"No vectors found for unit_type '{unit_type}' - skipping rebuild")

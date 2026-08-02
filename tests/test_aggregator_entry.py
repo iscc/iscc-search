@@ -9,36 +9,55 @@ from conftest import IDP_DATAHASH, IDP_ISCC_CODE
 TESTNET_ID = ic.gen_iscc_id(timestamp=1750000000000000, hub_id=0, realm_id=0)["iscc"]
 MAINNET_ID = ic.gen_iscc_id(timestamp=1750000000000000, hub_id=0, realm_id=1)["iscc"]
 DECOMPOSED_UNITS = [str(unit) for unit in IsccCode(IDP_ISCC_CODE).units]
+# The full 256-bit INSTANCE unit derived from note.datahash always replaces the code's short form
+INSTANCE_256 = "ISCC:" + ic.encode_component(ic.MT.INSTANCE, ic.ST.NONE, ic.VS.V0, 256, bytes.fromhex(IDP_DATAHASH[4:]))
+BASE_UNITS = DECOMPOSED_UNITS[:-1] + [INSTANCE_256]
+META_256 = "ISCC:AADWN77F73NA44D6X3N4VEUAPOW5HJKGK5JKLNGLNFPOESXWYDVDVUQ"
 
 
 def test_declaration_ok(make_log_record):
-    """A declaration converts to an IsccEntry with decomposed units and no metadata."""
+    """A declaration converts to an IsccEntry with one unit per type and no metadata."""
     record = make_log_record(iscc_id=TESTNET_ID)
     entry, reason = record_to_entry(record, "testnet")
     assert reason == "ok"
     assert entry.iscc_id == TESTNET_ID
     assert entry.iscc_code == IDP_ISCC_CODE
-    assert entry.units == DECOMPOSED_UNITS
+    assert entry.units == BASE_UNITS
     assert len(entry.units) >= 2  # iscc_code always yields DATA+INSTANCE minimum (U3 resolution)
     assert entry.metadata is None
 
 
-def test_declaration_units_merged_and_deduped(make_log_record):
-    """Extra note.units merge after the decomposed units without duplicates."""
-    extra = "ISCC:AADWN77F73NA44D6X3N4VEUAPOW5HJKGK5JKLNGLNFPOESXWYDVDVUQ"
-    record = make_log_record(iscc_id=TESTNET_ID, units=[DECOMPOSED_UNITS[0], extra])
+def test_declaration_units_expanded_replace_short(make_log_record):
+    """A 256-bit note unit replaces the code's 64-bit unit of the same type, keeping position."""
+    record = make_log_record(iscc_id=TESTNET_ID, units=[META_256])
     entry, reason = record_to_entry(record, "testnet")
     assert reason == "ok"
-    assert entry.units == DECOMPOSED_UNITS + [extra]
+    assert entry.units == [META_256] + BASE_UNITS[1:]
+
+
+def test_declaration_units_short_extra_dropped(make_log_record):
+    """A note unit no longer than the code's unit of the same type is redundant and dropped."""
+    record = make_log_record(iscc_id=TESTNET_ID, units=[DECOMPOSED_UNITS[0]])
+    entry, reason = record_to_entry(record, "testnet")
+    assert reason == "ok"
+    assert entry.units == BASE_UNITS
 
 
 def test_declaration_units_dedup_within_note(make_log_record):
     """Duplicate extra units within note.units collapse to a single entry."""
-    extra = "ISCC:AADWN77F73NA44D6X3N4VEUAPOW5HJKGK5JKLNGLNFPOESXWYDVDVUQ"
-    record = make_log_record(iscc_id=TESTNET_ID, units=[extra, extra])
+    record = make_log_record(iscc_id=TESTNET_ID, units=[META_256, META_256])
     entry, reason = record_to_entry(record, "testnet")
     assert reason == "ok"
-    assert entry.units == DECOMPOSED_UNITS + [extra]
+    assert entry.units == [META_256] + BASE_UNITS[1:]
+
+
+def test_declaration_units_extra_type_appended(make_log_record):
+    """A note unit of a type absent from the ISCC-CODE is appended after the code's types."""
+    semantic = "ISCC:CAD2H5QZIOMD4C4BV55BM33UVL3TTI47NSYXNYD2KXGCCQLICVGCK6Q"
+    record = make_log_record(iscc_id=TESTNET_ID, units=[semantic])
+    entry, reason = record_to_entry(record, "testnet")
+    assert reason == "ok"
+    assert entry.units == BASE_UNITS + [semantic]
 
 
 def test_declaration_gateway_plain_url(make_log_record):

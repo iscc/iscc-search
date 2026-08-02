@@ -9,6 +9,7 @@ import shutil
 
 import iscc_core as ic
 from iscc_search.indexes.usearch.index import UsearchIndex
+from iscc_search.models import IsccID
 from iscc_search.schema import IsccEntry, IsccQuery
 
 
@@ -672,3 +673,36 @@ def test_usearch_index_crash_recovery_multiple_missing_dirs(tmp_path, sample_isc
         assert any(m.iscc_id == sample_iscc_ids[i] for m in result.global_matches)
 
     idx2.close()
+
+
+def test_usearch_index_rebuild_keeps_longest_unit_per_key(tmp_path, sample_iscc_ids):
+    """Rebuild dedupes same-type units per key, keeping the longest body.
+
+    Legacy entries may carry a 64-bit prefix and its 256-bit expansion of the same
+    unit type. usearch silently drops duplicate keys within a batch add (first
+    wins), so without dedup a rebuild would downgrade vectors to 64 bits.
+    """
+    idx = UsearchIndex(tmp_path / "rebuild_dedup", realm_id=0, max_dim=256)
+
+    bodies = {}
+    assets = []
+    # One asset with the short prefix first (replace branch), one with it last (keep branch)
+    for i, (text, reverse) in enumerate((("Rebuild dedup fixture text", False), ("Second fixture text", True))):
+        full = ic.gen_text_code_v0(text, bits=256)["iscc"]
+        body = ic.Code(full.split(":")[1]).hash_bytes
+        short = "ISCC:" + ic.encode_component(ic.MT.CONTENT, ic.ST_CC.TEXT, ic.VS.V0, 64, body[:8])
+        units = [full, short] if reverse else [short, full]
+        units.append(f"ISCC:{ic.Code.rnd(ic.MT.INSTANCE, bits=128)}")
+        assets.append(IsccEntry(iscc_id=sample_iscc_ids[i], units=units))
+        bodies[int(IsccID(sample_iscc_ids[i]))] = body
+    idx.add_assets(assets)
+
+    unit_type = "CONTENT_TEXT_V0"
+    rebuilt = idx._rebuild_nphd_index(unit_type)
+
+    assert rebuilt is True
+    for key, body in bodies.items():
+        stored = idx._nphd_indexes[unit_type].get(key)
+        assert bytes(stored) == body  # 256-bit expansion won, not the 64-bit prefix
+
+    idx.close()

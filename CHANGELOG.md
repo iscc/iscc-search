@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.2] - 2026-08-02
+
+### Fixed
+
+- **Aggregator entries no longer store duplicate units.** `record_to_entry` merged the ISCC-CODE's
+    decomposed 64-bit units with the declaration's expanded 256-bit `note.units` by exact string
+    comparison, so every entry carried both lengths of each unit type (e.g. 9 units instead of 5).
+    The merge now keeps the longest unit per unit type and derives the full 256-bit INSTANCE unit
+    from the declaration's `datahash`.
+- **Restart re-backfills no longer churn the HNSW indexes.** The usearch backend's `add_assets`
+    skips updates whose stored bytes are unchanged instead of re-indexing every unit. Aggregator
+    cursors are in-memory, so every restart re-adds every existing asset; the resulting remove+add
+    cycles degrade usearch HNSW graph connectivity until affected assets become unreachable in
+    similarity search while still resolving by exact lookup (upstream:
+    [iscc-usearch#30](https://github.com/iscc/iscc-usearch/issues/30)). The skip verifies the
+    derived vectors are actually present, so a batch that failed after the LMDB commit is still
+    re-indexed when retried.
+- **Updates remove stale INSTANCE index rows.** Updating an asset now deletes INSTANCE bodies the
+    update no longer carries. A leftover shorter body would identity-match (score 1.0) any longer
+    digest sharing its first 64 bits.
+- **`index rebuild` keeps the longest unit per asset.** The NPHD rebuild deduplicates per key,
+    preferring the longest unit body. Rebuilding an index containing legacy duplicate-unit entries
+    previously kept the 64-bit vector (usearch silently drops duplicate keys within a batch),
+    silently downgrading search precision.
+
 ## [0.3.1] - 2026-06-22
 
 ### Changed
@@ -247,3 +272,4 @@ Initial release of iscc-search.
 [0.2.2]: https://github.com/iscc/iscc-search/releases/tag/v0.2.2
 [0.3.0]: https://github.com/iscc/iscc-search/releases/tag/v0.3.0
 [0.3.1]: https://github.com/iscc/iscc-search/releases/tag/v0.3.1
+[0.3.2]: https://github.com/iscc/iscc-search/releases/tag/v0.3.2

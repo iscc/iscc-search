@@ -118,6 +118,22 @@ class UsearchSimprintIndex:
             return
         self._index.remove(composite_keys)
 
+    def __contains__(self, composite_key):
+        # type: (bytes) -> bool
+        """
+        Report whether a single 16-byte composite key is present in the derived index.
+
+        Mirrors ``key in nphd_index`` for the NPHD side: lets the caller confirm that a
+        vector actually reached this derived index, which is updated after the LMDB commit
+        and so can lag it (e.g. a batch that committed LMDB then failed in the simprint
+        phase). Delegates to the underlying ShardedIndex128, whose membership is exact
+        (its bloom filter only fast-rejects absent keys, never reports a false positive).
+
+        :param composite_key: 16-byte composite key (iscc_id_body + offset + size)
+        :return: True if the key is present in the derived index
+        """
+        return composite_key in self._index
+
     def search_raw(self, simprints, limit=10, threshold=0.0, detailed=False, doc_freq_fn=None, total_assets=0):
         # type: (list[bytes], int, float, bool, Callable[[bytes], int] | None, int) -> list[SimprintMatchRaw]
         """

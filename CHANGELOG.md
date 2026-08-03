@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **Extend the idempotent no-op to assets with unchanged simprints (usearch backend).**
+    0.3.2 made a byte-identical re-add a no-op only when the asset carries no simprints; an asset
+    *with* simprints still took the full update path and hit the `ShardedNphdIndex` / simprint
+    `remove()` → `drain_rotations()` wedge — the common case for semantic content. `add_assets` now
+    also no-ops when every supplied simprint type is already indexed unchanged, verified via a
+    canonical, order-independent per-type simprint fingerprint stored in the `sp_assets` databases
+    (previously an empty presence marker). Because the no-op now also skips the derived simprint
+    index, the 0.3.2 `_nphd_units_present` retryability guard is extended to it: every incoming
+    simprint's vector must also be present in the derived `ShardedIndex128`, so a batch that
+    committed LMDB then failed in the simprint phase (the very `drain_rotations()` wedge this guards
+    against) is re-indexed on retry instead of being no-oped forever with its vectors dropped. The
+    simprint gate uses subset semantics matching the update path, so a re-send that omits simprints
+    or a subset of types is a no-op. Assets indexed before fingerprints existed (legacy empty marker) are verified by
+    reconstructing the stored simprint triples from the data database and lazily migrated to a
+    fingerprint in the same write transaction, so the first re-add over an existing corpus is a no-op
+    too. Repeated ISCC-IDs within one `add_assets` batch are collapsed to their last occurrence before
+    indexing, preventing stale simprint unions from the deferred batched write. Genuine content or
+    simprint changes still go through the full remove-before-add path.
+
 ## [0.3.2] - 2026-08-02
 
 ### Fixed

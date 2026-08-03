@@ -180,6 +180,11 @@ def parse_simprints_from_features(features, simprint_bits=None):
 
             simprint_list.append({"simprint": simprint_str, "offset": offsets[i], "size": sizes[i]})
 
+        # Skip types that end up empty (schema requires at least one entry per type)
+        if not simprint_list:
+            logger.warning(f"Skipping {simprint_type}: no valid simprint entries")
+            continue
+
         # Add to result (merge if type already exists - shouldn't happen but handle gracefully)
         if simprint_type in result:
             logger.warning(f"Duplicate simprint type {simprint_type}, merging entries")

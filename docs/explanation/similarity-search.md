@@ -22,9 +22,9 @@ lengths by aligning on their common prefix.
 **How it works:**
 
 1. **Prefix alignment**: Given two codes of lengths $m$ and $n$ bits, take the first $\min(m, n)$ bits from
-   each.
-2. **Hamming distance**: Count the number of differing bits in the common prefix.
-3. **Normalization**: Divide by the common prefix length.
+    each.
+1. **Hamming distance**: Count the number of differing bits in the common prefix.
+1. **Normalization**: Divide by the common prefix length.
 
 $$\text{NPHD}(a, b) = \frac{\text{hamming}(a_{[:\min(m,n)]},\; b_{[:\min(m,n)]})}{\min(m, n)}$$
 
@@ -79,13 +79,13 @@ no match.
 nearest neighbor lookup. The query code is compared against indexed codes using NPHD. Results are ranked by
 distance. There is no fixed boundary - you control the match quality through a threshold parameter.
 
-| Aspect | Hard-boundary | Soft-boundary |
-|--------|--------------|---------------|
-| **Method** | Inverted index (LMDB) | HNSW graph (usearch) |
-| **Matching** | Exact prefix collision | Approximate nearest neighbor |
-| **Used for** | INSTANCE-UNITs, SIMPRINTs (exact mode) | META, CONTENT, DATA units, SIMPRINTs (approx mode) |
-| **Speed** | O(1) lookup | O(log n) search |
-| **Flexibility** | Binary (match/no match) | Continuous distance scores |
+| Aspect          | Hard-boundary                          | Soft-boundary                                      |
+| --------------- | -------------------------------------- | -------------------------------------------------- |
+| **Method**      | Inverted index (LMDB)                  | HNSW graph (usearch)                               |
+| **Matching**    | Exact prefix collision                 | Approximate nearest neighbor                       |
+| **Used for**    | INSTANCE-UNITs, SIMPRINTs (exact mode) | META, CONTENT, DATA units, SIMPRINTs (approx mode) |
+| **Speed**       | O(1) lookup                            | O(log n) search                                    |
+| **Flexibility** | Binary (match/no match)                | Continuous distance scores                         |
 
 Both strategies are used together. INSTANCE matching identifies exact duplicates quickly. Similarity matching
 finds related content that is not identical.
@@ -97,18 +97,18 @@ After per-unit searches complete, iscc-search aggregates scores across unit type
 **Per-unit scoring** (normalized 0.0 to 1.0):
 
 - **INSTANCE units**: Binary scoring. Any prefix match scores 1.0. No match means the asset does not appear in
-  results for that unit type.
+    results for that unit type.
 - **Similarity units** (META, CONTENT, DATA): `score = 1.0 - NPHD`. A perfect prefix match scores 1.0
-  regardless of code length.
+    regardless of code length.
 
 **Aggregation steps:**
 
 1. **Filter**: Discard matches below `match_threshold_units` (default: 0.75). This removes noise from weak
-   matches.
-2. **Weight**: Apply confidence exponent: $\text{score}^{\text{confidence\_exponent}}$ (default exponent: 4).
-   This amplifies differences between good and mediocre matches.
-3. **Average**: Calculate weighted average: $\frac{\sum s^e}{\sum s}$ where $s$ is the score and $e$ is the
-   exponent.
+    matches.
+1. **Weight**: Apply confidence exponent: $\text{score}^{\text{confidence\_exponent}}$ (default exponent: 4).
+    This amplifies differences between good and mediocre matches.
+1. **Average**: Calculate weighted average: $\frac{\sum s^e}{\sum s}$ where $s$ is the score and $e$ is the
+    exponent.
 
 The effect: a single high-confidence match (e.g., 0.95 on CONTENT) ranks higher than multiple mediocre matches
 (e.g., 0.78 on META + 0.76 on DATA). Quality beats quantity.
@@ -118,13 +118,13 @@ The effect: a single high-confidence match (e.g., 0.95 on CONTENT) ranks higher 
 ISCC-UNIT types differ in what they prove about content relationships. When interpreting search results, consider
 which unit types matched:
 
-| Unit Type | Strength | What a match proves |
-|-----------|----------|-------------------|
-| INSTANCE | Strongest | Identical binary data (cryptographic certainty) |
-| DATA | Strong | Same raw data structure (high confidence) |
-| CONTENT | Medium | Perceptually similar (human-recognizable similarity) |
-| SEMANTIC | Medium | Conceptually related (meaning-level similarity) |
-| META | Weakest | Similar titles or descriptions (surface-level similarity) |
+| Unit Type | Strength  | What a match proves                                       |
+| --------- | --------- | --------------------------------------------------------- |
+| INSTANCE  | Strongest | Identical binary data (cryptographic certainty)           |
+| DATA      | Strong    | Same raw data structure (high confidence)                 |
+| CONTENT   | Medium    | Perceptually similar (human-recognizable similarity)      |
+| SEMANTIC  | Medium    | Conceptually related (meaning-level similarity)           |
+| META      | Weakest   | Similar titles or descriptions (surface-level similarity) |
 
 An INSTANCE match means two files are byte-identical (or share a common data prefix). A META match only means
 the titles look alike. The aggregation algorithm does not apply explicit type-based weights - the confidence
@@ -135,10 +135,10 @@ exponent naturally separates strong matches from weak ones.
 Two parameters control minimum match quality:
 
 - **`match_threshold_units`** (default: 0.75): Minimum score for ISCC-UNIT matches. A value of 0.75 means at
-  least 75% bit-level similarity in the common prefix. Matches below this threshold are discarded before
-  aggregation.
+    least 75% bit-level similarity in the common prefix. Matches below this threshold are discarded before
+    aggregation.
 - **`match_threshold_simprints`** (default: 0.75): Minimum score for ISCC-SIMPRINT matches. Applied
-  independently from the unit threshold.
+    independently from the unit threshold.
 
 A threshold of 0.75 on 64-bit codes means at most 16 bits can differ. On 256-bit codes, at most 64 bits can
 differ. The threshold is length-independent because NPHD normalizes by prefix length.

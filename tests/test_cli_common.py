@@ -154,3 +154,34 @@ def test_parse_simprints_from_features_missing_fields():
     result = parse_simprints_from_features(features)
     # Should return None or empty dict when essential fields are missing
     assert result is None or len(result) == 0
+
+
+def test_parse_simprints_from_features_skips_empty_type():
+    """A type whose entries all drop out is skipped (IsccEntry rejects empty per-type lists)."""
+    simprint_64bit = ic.encode_base64(b"z" * 8)
+
+    # min_len = 0: simprints present but no offsets/sizes to zip against
+    features = [
+        {
+            "maintype": "semantic",
+            "subtype": "text",
+            "version": 0,
+            "simprints": [simprint_64bit],
+            "offsets": [],
+            "sizes": [],
+        }
+    ]
+    assert parse_simprints_from_features(features) is None
+
+    # All entries fail truncation (64-bit simprint cannot be truncated to 128 bits)
+    features = [
+        {
+            "maintype": "content",
+            "subtype": "text",
+            "version": 0,
+            "simprints": [simprint_64bit],
+            "offsets": [0],
+            "sizes": [100],
+        }
+    ]
+    assert parse_simprints_from_features(features, simprint_bits=128) is None

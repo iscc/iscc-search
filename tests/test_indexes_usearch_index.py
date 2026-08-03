@@ -7,9 +7,10 @@ Tests UsearchIndex directly to cover edge cases not exercised through UsearchInd
 import io
 import pytest
 import iscc_core as ic
+from iscc_search.indexes.simprint import lmdb_ops
 from iscc_search.indexes.usearch.index import UsearchIndex
 from iscc_search.models import IsccID, IsccUnit
-from iscc_search.schema import IsccEntry, IsccQuery
+from iscc_search.schema import IsccEntry, IsccQuery, IsccSimprint
 
 
 @pytest.fixture
@@ -1032,3 +1033,397 @@ def test_usearch_index_add_assets_update_removes_stale_instance_rows(usearch_ind
     result = usearch_index.search_assets(IsccQuery(units=[inst_256]))
     assert result.global_matches[0].iscc_id == sample_iscc_ids[0]
     assert result.global_matches[0].score == 1.0
+
+
+def _make_simprint(simprint, offset, size):
+    """Build an IsccSimprint entry."""
+    return IsccSimprint(simprint=simprint, offset=offset, size=size)
+
+
+def test_usearch_index_idempotent_reindex_noop(usearch_index, sample_iscc_ids):
+    """Re-adding a byte-identical asset is an idempotent no-op.
+
+    Status is 'updated', neither LMDB nor the derived NPHD/simprint indexes grow or are
+    mutated (dirty counters unchanged, proving remove()/add() never ran), and a search
+    returns the asset exactly once (no duplicate hit).
+    """
+    instance_unit = f"ISCC:{ic.Code.rnd(ic.MT.INSTANCE, bits=128)}"
+    content_unit = ic.gen_text_code_v0("Idempotent no-op content")["iscc"]
+
+    def make_asset():
+        return IsccEntry(
+            iscc_id=sample_iscc_ids[0],
+            units=[instance_unit, content_unit],
+            simprints={
+                "CONTENT_TEXT_V0": [
+                    _make_simprint("AXvu3tp2kF8mN9qL4rT1sZ", 0, 500),
+                    _make_simprint("B4kl9mQ1pP7xY3jH8vW2aF", 500, 400),
+                ],
+                "SEMANTIC_TEXT_V0": [
+                    _make_simprint("CYhq2nR8oL3pT5mK9sX4bG", 1000, 300),
+                ],
+            },
+            metadata={"title": "same"},
+        )
+
+    first = usearch_index.add_assets([make_asset()])
+    assert first[0].status == "created"
+
+    len_before = len(usearch_index)
+    nphd = usearch_index._nphd_indexes["CONTENT_TEXT_V0"]
+    nphd_size_before, nphd_dirty_before = nphd.size, nphd.dirty
+    sp_size_before = {t: idx.size for t, idx in usearch_index._simprint_indexes.items()}
+    sp_dirty_before = {t: idx.dirty for t, idx in usearch_index._simprint_indexes.items()}
+
+    # Re-add the identical asset -> idempotent no-op
+    second = usearch_index.add_assets([make_asset()])
+    assert second[0].status == "updated"
+
+    # No growth and no mutation of LMDB or the derived indexes
+    assert len(usearch_index) == len_before
+    assert (nphd.size, nphd.dirty) == (nphd_size_before, nphd_dirty_before)
+    assert {t: idx.size for t, idx in usearch_index._simprint_indexes.items()} == sp_size_before
+    assert {t: idx.dirty for t, idx in usearch_index._simprint_indexes.items()} == sp_dirty_before
+
+    # Global search returns the asset exactly once (no duplicate hit)
+    result = usearch_index.search_assets(IsccQuery(units=[instance_unit, content_unit]), limit=10)
+    hits = [m for m in result.global_matches if m.iscc_id == sample_iscc_ids[0]]
+    assert len(hits) == 1
+
+
+def test_usearch_index_reindex_changed_simprints_updates(usearch_index, sample_iscc_ids):
+    """A re-add with identical units/metadata but CHANGED simprints must NOT no-op.
+
+    serialize_asset excludes simprints, so the stored asset bytes are identical; the
+    simprint fingerprint gate detects the change and routes through the real update path,
+    replacing the old simprint with the new one.
+    """
+    instance_unit = f"ISCC:{ic.Code.rnd(ic.MT.INSTANCE, bits=128)}"
+    content_unit = ic.gen_text_code_v0("Changed simprints content")["iscc"]
+    old_sp = "AXvu3tp2kF8mN9qL4rT1sZ"
+    new_sp = "B4kl9mQ1pP7xY3jH8vW2aF"
+
+    def make_asset(sp_value):
+        return IsccEntry(
+            iscc_id=sample_iscc_ids[0],
+            units=[instance_unit, content_unit],
+            simprints={"CONTENT_TEXT_V0": [_make_simprint(sp_value, 0, 500)]},
+            metadata={"title": "same"},
+        )
+
+    usearch_index.add_assets([make_asset(old_sp)])
+    result = usearch_index.add_assets([make_asset(new_sp)])
+    assert result[0].status == "updated"
+
+    # New simprint is now indexed; the old one was removed (deterministic exact search)
+    hit_new = usearch_index.search_assets(IsccQuery(simprints={"CONTENT_TEXT_V0": [new_sp]}), limit=10, exact=True)
+    assert any(m.iscc_id == sample_iscc_ids[0] for m in hit_new.chunk_matches)
+
+    hit_old = usearch_index.search_assets(IsccQuery(simprints={"CONTENT_TEXT_V0": [old_sp]}), limit=10, exact=True)
+    assert not any(m.iscc_id == sample_iscc_ids[0] for m in hit_old.chunk_matches)
+
+
+def test_usearch_index_idempotent_reindex_noop_without_simprints(usearch_index, sample_iscc_ids):
+    """Re-adding a simprint-free asset is a correct no-op even when other types are registered.
+
+    Asset A registers a simprint database; asset B carries no simprints. Re-adding B must be
+    recognized as unchanged (its ISCC-ID is absent from every sp_assets database).
+    """
+    # Asset A registers the CONTENT_TEXT_V0 simprint database
+    inst_a = f"ISCC:{ic.Code.rnd(ic.MT.INSTANCE, bits=128)}"
+    content_a = ic.gen_text_code_v0("Asset A with simprints")["iscc"]
+    asset_a = IsccEntry(
+        iscc_id=sample_iscc_ids[0],
+        units=[inst_a, content_a],
+        simprints={"CONTENT_TEXT_V0": [_make_simprint("AXvu3tp2kF8mN9qL4rT1sZ", 0, 500)]},
+    )
+    usearch_index.add_assets([asset_a])
+    assert "CONTENT_TEXT_V0" in usearch_index._sp_assets_dbs
+
+    # Asset B has NO simprints
+    inst_b = f"ISCC:{ic.Code.rnd(ic.MT.INSTANCE, bits=128)}"
+    content_b = ic.gen_text_code_v0("Asset B without simprints")["iscc"]
+
+    def make_b():
+        return IsccEntry(iscc_id=sample_iscc_ids[1], units=[inst_b, content_b], metadata={"x": 1})
+
+    first = usearch_index.add_assets([make_b()])
+    assert first[0].status == "created"
+
+    len_before = len(usearch_index)
+    second = usearch_index.add_assets([make_b()])
+    assert second[0].status == "updated"
+    assert len(usearch_index) == len_before
+
+    # B is still retrievable and appears exactly once
+    result = usearch_index.search_assets(IsccQuery(units=[inst_b, content_b]), limit=10)
+    hits = [m for m in result.global_matches if m.iscc_id == sample_iscc_ids[1]]
+    assert len(hits) == 1
+
+
+def test_usearch_index_idempotent_reindex_noop_legacy_marker(usearch_index, sample_iscc_ids):
+    """A re-add over a legacy (pre-fingerprint) empty marker is a no-op that upgrades the marker.
+
+    Simulates a production index written before per-type fingerprints existed: the sp_assets
+    value is the empty byte string. The first re-add must be recognized as unchanged by
+    reconstructing the stored simprint triples (no remove()/drain_rotations()) and must lazily
+    rewrite the marker to a 16-byte fingerprint. A second asset shares the type so the
+    reconstruction scan steps over foreign entries.
+    """
+    inst_main = f"ISCC:{ic.Code.rnd(ic.MT.INSTANCE, bits=128)}"
+    content_main = ic.gen_text_code_v0("Legacy marker main content")["iscc"]
+
+    def make_main():
+        return IsccEntry(
+            iscc_id=sample_iscc_ids[0],
+            units=[inst_main, content_main],
+            simprints={
+                "CONTENT_TEXT_V0": [
+                    _make_simprint("AXvu3tp2kF8mN9qL4rT1sZ", 0, 500),
+                    _make_simprint("B4kl9mQ1pP7xY3jH8vW2aF", 500, 400),
+                ],
+            },
+        )
+
+    # A second asset of the same type so read_asset_simprints scans past foreign entries.
+    other = IsccEntry(
+        iscc_id=sample_iscc_ids[1],
+        units=[f"ISCC:{ic.Code.rnd(ic.MT.INSTANCE, bits=128)}", ic.gen_text_code_v0("Other asset")["iscc"]],
+        simprints={"CONTENT_TEXT_V0": [_make_simprint("CYhq2nR8oL3pT5mK9sX4bG", 0, 300)]},
+    )
+    usearch_index.add_assets([make_main(), other])
+
+    # Simulate a pre-fingerprint index: force the main asset's marker back to the legacy empty value.
+    iscc_id_body = IsccID(sample_iscc_ids[0]).body
+    sp_assets_db = usearch_index._sp_assets_dbs["CONTENT_TEXT_V0"]
+    with usearch_index.env.begin(write=True) as txn:
+        txn.put(iscc_id_body, b"", db=sp_assets_db)
+
+    nphd = usearch_index._nphd_indexes["CONTENT_TEXT_V0"]
+    sp = usearch_index._simprint_indexes["CONTENT_TEXT_V0"]
+    nphd_state, sp_state, len_before = (nphd.size, nphd.dirty), (sp.size, sp.dirty), len(usearch_index)
+
+    # First re-add over legacy data must be a genuine no-op ...
+    result = usearch_index.add_assets([make_main()])
+    assert result[0].status == "updated"
+    assert len(usearch_index) == len_before
+    assert (nphd.size, nphd.dirty) == nphd_state
+    assert (sp.size, sp.dirty) == sp_state
+
+    # ... and the legacy marker was lazily upgraded to a 16-byte fingerprint.
+    with usearch_index.env.begin() as txn:
+        marker = txn.get(iscc_id_body, db=sp_assets_db)
+    assert marker != b""
+    assert len(marker) == UsearchIndex.SP_FINGERPRINT_BYTES
+
+
+def test_usearch_index_legacy_marker_changed_simprints_updates(usearch_index, sample_iscc_ids):
+    """A re-add over a legacy empty marker with CHANGED simprints falls through to the update path."""
+    inst = f"ISCC:{ic.Code.rnd(ic.MT.INSTANCE, bits=128)}"
+    content = ic.gen_text_code_v0("Legacy changed content")["iscc"]
+    old_sp, new_sp = "AXvu3tp2kF8mN9qL4rT1sZ", "B4kl9mQ1pP7xY3jH8vW2aF"
+
+    def make_asset(sp_value):
+        return IsccEntry(
+            iscc_id=sample_iscc_ids[0],
+            units=[inst, content],
+            simprints={"CONTENT_TEXT_V0": [_make_simprint(sp_value, 0, 500)]},
+        )
+
+    usearch_index.add_assets([make_asset(old_sp)])
+
+    # Force the legacy empty marker, then re-add with a different simprint.
+    iscc_id_body = IsccID(sample_iscc_ids[0]).body
+    sp_assets_db = usearch_index._sp_assets_dbs["CONTENT_TEXT_V0"]
+    with usearch_index.env.begin(write=True) as txn:
+        txn.put(iscc_id_body, b"", db=sp_assets_db)
+
+    result = usearch_index.add_assets([make_asset(new_sp)])
+    assert result[0].status == "updated"
+
+    # Reconstruction detected the change: new simprint indexed, old one removed.
+    hit_new = usearch_index.search_assets(IsccQuery(simprints={"CONTENT_TEXT_V0": [new_sp]}), limit=10, exact=True)
+    assert any(m.iscc_id == sample_iscc_ids[0] for m in hit_new.chunk_matches)
+    hit_old = usearch_index.search_assets(IsccQuery(simprints={"CONTENT_TEXT_V0": [old_sp]}), limit=10, exact=True)
+    assert not any(m.iscc_id == sample_iscc_ids[0] for m in hit_old.chunk_matches)
+
+
+def test_usearch_index_reindex_adds_new_simprint_type_updates(usearch_index, sample_iscc_ids):
+    """Re-adding identical units/metadata but with a NEW simprint type must NOT no-op.
+
+    The serialized asset is byte-identical (simprints are excluded), so the type-set mismatch is
+    what forces the full update path that indexes the newly supplied simprints.
+    """
+    inst = f"ISCC:{ic.Code.rnd(ic.MT.INSTANCE, bits=128)}"
+    content = ic.gen_text_code_v0("New simprint type content")["iscc"]
+
+    # First add: units + metadata, NO simprints.
+    usearch_index.add_assets([IsccEntry(iscc_id=sample_iscc_ids[0], units=[inst, content], metadata={"k": "v"})])
+
+    # Re-add: same units + metadata, now WITH simprints of a not-yet-seen type.
+    sp = "AXvu3tp2kF8mN9qL4rT1sZ"
+    result = usearch_index.add_assets([
+        IsccEntry(
+            iscc_id=sample_iscc_ids[0],
+            units=[inst, content],
+            metadata={"k": "v"},
+            simprints={"CONTENT_TEXT_V0": [_make_simprint(sp, 0, 500)]},
+        )
+    ])
+    assert result[0].status == "updated"
+
+    # The new simprints are now searchable.
+    hit = usearch_index.search_assets(IsccQuery(simprints={"CONTENT_TEXT_V0": [sp]}), limit=10, exact=True)
+    assert any(m.iscc_id == sample_iscc_ids[0] for m in hit.chunk_matches)
+
+
+def test_usearch_index_duplicate_iscc_id_in_batch_keeps_last_simprints(usearch_index, sample_iscc_ids):
+    """Same ISCC-ID twice in one batch with different simprints indexes only the last version.
+
+    Guards against the stale-union bug: simprint writes are deferred to one putmulti after the
+    per-asset loop, so a naive per-occurrence delete would leave both simprint sets in data_db.
+    """
+    inst = f"ISCC:{ic.Code.rnd(ic.MT.INSTANCE, bits=128)}"
+    content = ic.gen_text_code_v0("Dedup batch simprints")["iscc"]
+    old_sp, new_sp = "AXvu3tp2kF8mN9qL4rT1sZ", "B4kl9mQ1pP7xY3jH8vW2aF"
+
+    def make(sp_value):
+        return IsccEntry(
+            iscc_id=sample_iscc_ids[0],
+            units=[inst, content],
+            simprints={"CONTENT_TEXT_V0": [_make_simprint(sp_value, 0, 500)]},
+        )
+
+    results = usearch_index.add_assets([make(old_sp), make(new_sp)])
+    assert [r.status for r in results] == ["created", "updated"]
+
+    hit_new = usearch_index.search_assets(IsccQuery(simprints={"CONTENT_TEXT_V0": [new_sp]}), limit=10, exact=True)
+    assert any(m.iscc_id == sample_iscc_ids[0] for m in hit_new.chunk_matches)
+    # The superseded first occurrence's simprint must NOT be indexed (no stale union).
+    hit_old = usearch_index.search_assets(IsccQuery(simprints={"CONTENT_TEXT_V0": [old_sp]}), limit=10, exact=True)
+    assert not any(m.iscc_id == sample_iscc_ids[0] for m in hit_old.chunk_matches)
+
+
+def test_usearch_index_reindex_subset_of_types_noop(usearch_index, sample_iscc_ids):
+    """A re-send that omits a stored simprint type is a no-op; the omitted type is left intact.
+
+    This is the subset-gate case: the update path never deletes types it is not given, so omitting
+    a type must not force the remove()/drain_rotations() path for zero end-state change.
+    """
+    inst = f"ISCC:{ic.Code.rnd(ic.MT.INSTANCE, bits=128)}"
+    content = ic.gen_text_code_v0("Subset types content")["iscc"]
+
+    usearch_index.add_assets([
+        IsccEntry(
+            iscc_id=sample_iscc_ids[0],
+            units=[inst, content],
+            simprints={
+                "CONTENT_TEXT_V0": [_make_simprint("AXvu3tp2kF8mN9qL4rT1sZ", 0, 500)],
+                "SEMANTIC_TEXT_V0": [_make_simprint("CYhq2nR8oL3pT5mK9sX4bG", 0, 300)],
+            },
+        )
+    ])
+
+    nphd = usearch_index._nphd_indexes["CONTENT_TEXT_V0"]
+    sp_state = {t: (idx.size, idx.dirty) for t, idx in usearch_index._simprint_indexes.items()}
+    nphd_state, len_before = (nphd.size, nphd.dirty), len(usearch_index)
+
+    # Re-send identical units/metadata but only ONE of the two stored simprint types.
+    result = usearch_index.add_assets([
+        IsccEntry(
+            iscc_id=sample_iscc_ids[0],
+            units=[inst, content],
+            simprints={"CONTENT_TEXT_V0": [_make_simprint("AXvu3tp2kF8mN9qL4rT1sZ", 0, 500)]},
+        )
+    ])
+    assert result[0].status == "updated"
+
+    # No-op: nothing grew or was mutated ...
+    assert len(usearch_index) == len_before
+    assert (nphd.size, nphd.dirty) == nphd_state
+    assert {t: (idx.size, idx.dirty) for t, idx in usearch_index._simprint_indexes.items()} == sp_state
+
+    # ... and the omitted SEMANTIC_TEXT_V0 simprints are still present.
+    hit = usearch_index.search_assets(
+        IsccQuery(simprints={"SEMANTIC_TEXT_V0": ["CYhq2nR8oL3pT5mK9sX4bG"]}), limit=10, exact=True
+    )
+    assert any(m.iscc_id == sample_iscc_ids[0] for m in hit.chunk_matches)
+
+
+def test_usearch_index_reordered_simprints_noop(usearch_index, sample_iscc_ids):
+    """A reordered-but-identical simprint list still no-ops on a modern fingerprint marker."""
+    inst = f"ISCC:{ic.Code.rnd(ic.MT.INSTANCE, bits=128)}"
+    content = ic.gen_text_code_v0("Reordered simprints content")["iscc"]
+    a = _make_simprint("AXvu3tp2kF8mN9qL4rT1sZ", 0, 500)
+    b = _make_simprint("B4kl9mQ1pP7xY3jH8vW2aF", 500, 400)
+
+    usearch_index.add_assets([
+        IsccEntry(iscc_id=sample_iscc_ids[0], units=[inst, content], simprints={"CONTENT_TEXT_V0": [a, b]})
+    ])
+
+    nphd = usearch_index._nphd_indexes["CONTENT_TEXT_V0"]
+    sp = usearch_index._simprint_indexes["CONTENT_TEXT_V0"]
+    nphd_state, sp_state, len_before = (nphd.size, nphd.dirty), (sp.size, sp.dirty), len(usearch_index)
+
+    # Re-add with the SAME entries in reversed order -> canonical fingerprint is identical -> no-op.
+    result = usearch_index.add_assets([
+        IsccEntry(iscc_id=sample_iscc_ids[0], units=[inst, content], simprints={"CONTENT_TEXT_V0": [b, a]})
+    ])
+    assert result[0].status == "updated"
+    assert len(usearch_index) == len_before
+    assert (nphd.size, nphd.dirty) == nphd_state
+    assert (sp.size, sp.dirty) == sp_state
+
+
+def test_usearch_index_reindex_when_derived_simprint_vector_missing(usearch_index, sample_iscc_ids):
+    """A committed asset whose derived simprint vector is missing is re-indexed, not no-oped.
+
+    The derived ShardedIndex128 is updated after the LMDB commit, so a batch that committed
+    LMDB (fingerprint + data_db) then died in the simprint phase leaves the vector missing
+    while every LMDB-side gate still passes. The no-op must detect the absent derived vector,
+    fall through to the full update path, and restore it.
+    """
+    inst = f"ISCC:{ic.Code.rnd(ic.MT.INSTANCE, bits=128)}"
+    content = ic.gen_text_code_v0("derived-missing content")["iscc"]
+    sp = _make_simprint("AXvu3tp2kF8mN9qL4rT1sZ", 0, 500)
+
+    def make_asset():
+        return IsccEntry(iscc_id=sample_iscc_ids[0], units=[inst, content], simprints={"CONTENT_TEXT_V0": [sp]})
+
+    assert usearch_index.add_assets([make_asset()])[0].status == "created"
+
+    body = IsccID(sample_iscc_ids[0]).body
+    chunk_ptr = lmdb_ops.pack_chunk_pointer(body, sp.offset, sp.size)
+    sp_index = usearch_index._simprint_indexes["CONTENT_TEXT_V0"]
+    assert chunk_ptr in sp_index  # present after the initial add
+
+    # Simulate a crash after the LMDB commit but within the derived add phase: drop the
+    # derived vector while LMDB still reports the asset as indexed unchanged.
+    sp_index.remove([chunk_ptr])
+    assert chunk_ptr not in sp_index
+
+    # Re-adding must NOT no-op: it detects the missing derived vector and re-indexes it.
+    assert usearch_index.add_assets([make_asset()])[0].status == "updated"
+    assert chunk_ptr in usearch_index._simprint_indexes["CONTENT_TEXT_V0"]
+
+
+def test_usearch_index_reindex_when_derived_simprint_index_absent(usearch_index, sample_iscc_ids):
+    """A re-add re-indexes rather than no-ops when the derived simprint index is absent."""
+    inst = f"ISCC:{ic.Code.rnd(ic.MT.INSTANCE, bits=128)}"
+    content = ic.gen_text_code_v0("derived-absent content")["iscc"]
+
+    def make_asset():
+        return IsccEntry(
+            iscc_id=sample_iscc_ids[0],
+            units=[inst, content],
+            simprints={"CONTENT_TEXT_V0": [_make_simprint("AXvu3tp2kF8mN9qL4rT1sZ", 0, 500)]},
+        )
+
+    assert usearch_index.add_assets([make_asset()])[0].status == "created"
+
+    # Simulate the derived index for this type not being present in memory.
+    del usearch_index._simprint_indexes["CONTENT_TEXT_V0"]
+
+    # Re-adding must NOT no-op: the absent derived index forces a re-index that recreates it.
+    assert usearch_index.add_assets([make_asset()])[0].status == "updated"
+    assert "CONTENT_TEXT_V0" in usearch_index._simprint_indexes

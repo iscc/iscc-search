@@ -52,8 +52,8 @@ Create an index:
 
 ```bash
 curl -X POST http://localhost:8000/indexes \
-  -H "Content-Type: application/json" \
-  -d '{"name": "myindex"}'
+    -H "Content-Type: application/json" \
+    -d '{"name": "myindex"}'
 ```
 
 List all indexes:
@@ -81,8 +81,8 @@ least one of `iscc_code` or `units`:
 
 ```bash
 curl -X POST http://localhost:8000/indexes/myindex/assets \
-  -H "Content-Type: application/json" \
-  -d '[
+    -H "Content-Type: application/json" \
+-d '[
     {
       "iscc_id": "ISCC:MAIGIIFJRDGEQQAA",
       "iscc_code": "ISCC:KECYCMZIOY36XXGZ7S6QJQ2AEEXPOVEHZYPK6GMSFLU3WF54UPZMTPY"
@@ -102,16 +102,16 @@ Search for similar assets using POST with a JSON body:
 
 ```bash
 curl -X POST http://localhost:8000/indexes/myindex/search \
-  -H "Content-Type: application/json" \
-  -d '{"iscc_code": "ISCC:KECYCMZIOY36XXGZ7S6QJQ2AEEXPOVEHZYPK6GMSFLU3WF54UPZMTPY"}'
+    -H "Content-Type: application/json" \
+    -d '{"iscc_code": "ISCC:KECYCMZIOY36XXGZ7S6QJQ2AEEXPOVEHZYPK6GMSFLU3WF54UPZMTPY"}'
 ```
 
 Limit the number of results with a query parameter:
 
 ```bash
 curl -X POST "http://localhost:8000/indexes/myindex/search?limit=5" \
-  -H "Content-Type: application/json" \
-  -d '{"iscc_code": "ISCC:KECYCMZIOY36XXGZ7S6QJQ2AEEXPOVEHZYPK6GMSFLU3WF54UPZMTPY"}'
+    -H "Content-Type: application/json" \
+    -d '{"iscc_code": "ISCC:KECYCMZIOY36XXGZ7S6QJQ2AEEXPOVEHZYPK6GMSFLU3WF54UPZMTPY"}'
 ```
 
 Search using GET with a query parameter:
@@ -131,7 +131,9 @@ curl http://localhost:8000/healthz
 ```
 
 ```json
-{"status": "ok"}
+{
+  "status": "ok"
+}
 ```
 
 **Readiness probe** - returns 200 only when the index is initialized and operational:
@@ -143,13 +145,18 @@ curl http://localhost:8000/readyz
 === "Ready"
 
     ```json
-    {"status": "ready"}
+    {
+      "status": "ready"
+    }
     ```
 
 === "Not ready"
 
     ```json
-    {"status": "not_ready", "reason": "index_not_initialized"}
+    {
+      "status": "not_ready",
+      "reason": "index_not_initialized"
+    }
     ```
 
     Returns HTTP 503 when not ready.

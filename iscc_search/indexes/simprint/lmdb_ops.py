@@ -108,6 +108,34 @@ def delete_asset_simprints(txn, db, iscc_id_body):
     return deleted_keys
 
 
+def read_asset_simprints(txn, db, iscc_id_body):
+    # type: (object, object, bytes) -> set[tuple[bytes, int, int]]
+    """
+    Read all stored simprint triples for a given asset from a dupsort data database.
+
+    Non-mutating full-scan counterpart of ``delete_asset_simprints``: returns the
+    ``(simprint_bytes, offset, size)`` triples currently stored for the asset. Used to
+    verify that a re-add is unchanged against a legacy asset whose ``sp_assets`` marker
+    predates per-type fingerprints. The database key is the raw simprint bytes; the
+    value is a 16-byte chunk pointer whose first 8 bytes are the ISCC-ID body.
+
+    :param txn: LMDB read or write transaction
+    :param db: LMDB database handle (dupsort with 16-byte fixed values)
+    :param iscc_id_body: 8-byte ISCC-ID body identifying the asset
+    :return: Set of (simprint_bytes, offset, size) triples stored for the asset
+    """
+    cursor = txn.cursor(db)
+    triples = set()  # type: set[tuple[bytes, int, int]]
+    has_item = cursor.first()
+    while has_item:
+        value = cursor.value()
+        if value[:8] == iscc_id_body:
+            _, offset, size = unpack_chunk_pointer(bytes(value))
+            triples.add((bytes(cursor.key()), offset, size))
+        has_item = cursor.next()
+    return triples
+
+
 def count_doc_freq(txn, db, simprint_key, dup_limit=1000):
     # type: (object, object, bytes, int) -> int
     """

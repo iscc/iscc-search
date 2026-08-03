@@ -15,6 +15,7 @@ Key strategy: ISCC-ID body as uint64 for LMDB and ShardedNphdIndex. 128-bit comp
 keys (iscc_id_body + offset + size) for ShardedIndex128 simprint indexes.
 """
 
+import hashlib
 import json
 import shutil
 import struct
@@ -36,7 +37,7 @@ from iscc_search.indexes.simprint import lmdb_ops
 import iscc_core as ic
 
 if TYPE_CHECKING:
-    from iscc_search.schema import IsccEntry, IsccQuery, IsccChunkMatch  # noqa: F401
+    from iscc_search.schema import IsccEntry, IsccQuery, IsccChunkMatch, IsccSimprint  # noqa: F401
 
 
 class _RWLock:
@@ -119,6 +120,10 @@ class UsearchIndex:
     # MapFullError retry limits
     MAX_RESIZE_RETRIES = 10  # Maximum number of resize attempts
     MAX_MAP_SIZE = 1024 * 1024 * 1024 * 1024  # 1 TB maximum map size
+
+    # Digest size of the per-type simprint fingerprint stored as the sp_assets value.
+    # A legacy pre-fingerprint marker is the empty byte string (length 0).
+    SP_FINGERPRINT_BYTES = 16
 
     def __init__(self, path, realm_id=None, max_dim=256, lmdb_options=None, **options):
         # type: (str | Path, int | None, int, dict | None, Any) -> None
@@ -255,7 +260,16 @@ class UsearchIndex:
                     # Accumulate simprint LMDB pairs for batched putmulti
                     sp_lmdb_pairs = {}  # type: dict[str, list[tuple[bytes, bytes]]]
 
-                    for asset in assets:
+                    # Deduplicate repeated ISCC-IDs within this batch, keeping the LAST occurrence.
+                    # Simprint writes are deferred to a single putmulti after the loop, so an earlier
+                    # occurrence's staged pairs are invisible to a later occurrence's
+                    # delete_asset_simprints - indexing every occurrence would leave the UNION of
+                    # their simprints in data_db. Only the final version of each key is indexed;
+                    # superseded earlier occurrences still yield a positional result for the caller.
+                    last_occurrence = {asset.iscc_id: i for i, asset in enumerate(assets)}
+                    batch_seen = set()  # type: set[int]
+
+                    for i, asset in enumerate(assets):
                         # Validate iscc_id present
                         if asset.iscc_id is None:
                             raise ValueError("Asset must have iscc_id field when adding to index")
@@ -276,28 +290,44 @@ class UsearchIndex:
 
                         # Check if asset exists (for status)
                         existing = txn.get(key_bytes, db=assets_db)
-                        status = Status.updated if existing else Status.created
+                        # Status reflects prior existence - in the DB or earlier in this same batch.
+                        status = Status.updated if (existing or key in batch_seen) else Status.created
+                        batch_seen.add(key)
 
+                        # Skip superseded earlier duplicates of the same ISCC-ID: only the final
+                        # occurrence is indexed (see batch dedup note above), but every input asset
+                        # still gets a positional result.
+                        if i != last_occurrence[asset.iscc_id]:
+                            results.append(IsccAddResult(iscc_id=asset.iscc_id, status=status))
+                            continue
+
+                        # Serialize once: reused by the idempotency check below and for storage.
                         _t = time.perf_counter()
                         asset_bytes = common.serialize_asset(asset)
                         lmdb_serialize_t += time.perf_counter() - _t
 
-                        # Skip no-op updates: identical stored bytes mean units and metadata
-                        # are unchanged, so re-indexing would only churn the derived indexes.
-                        # usearch remove+add churn degrades HNSW graph connectivity over time
-                        # (keys stay contained but become unreachable via graph traversal),
-                        # and aggregator re-backfills re-add every asset on each restart.
-                        # The presence check keeps failed batches retryable: NPHD additions
-                        # run after the LMDB commit, so identical bytes alone do not prove
-                        # the derived vectors ever made it in.
+                        # Idempotent no-op fast path: re-adding an asset whose derived state is already
+                        # current skips the ShardedNphdIndex and simprint remove() that otherwise block on
+                        # drain_rotations() until all pending shard rotations finish (effectively unbounded
+                        # at scale), wedging every queued writer behind the single LMDB writer. Three gates,
+                        # all required:
+                        #   - existing == asset_bytes: units and metadata unchanged (serialize_asset excludes
+                        #     simprints, so this alone does NOT cover them);
+                        #   - _nphd_units_present: the derived NPHD vectors actually made it in. NPHD additions
+                        #     run AFTER the LMDB commit, so identical bytes alone do not prove a prior (possibly
+                        #     crashed) batch indexed them - this keeps failed batches retryable;
+                        #   - _simprints_already_indexed: every incoming simprint type is already indexed
+                        #     identically (True when the asset carries no simprints).
+                        # Genuine content changes alter asset_bytes or the simprints and fall through to the
+                        # normal remove-before-add update path.
+                        iscc_id_body = iscc_id_obj.body
                         if (
                             existing == asset_bytes
-                            and not asset.simprints
                             and self._nphd_units_present(key, asset.units)
+                            and self._simprints_already_indexed(txn, iscc_id_body, asset)
                         ):
                             results.append(IsccAddResult(iscc_id=asset.iscc_id, status=status))
                             continue
-
                         if existing:
                             nphd_updated_keys.add(key)
                             # Drop INSTANCE rows the update no longer carries — the unit loop
@@ -338,14 +368,15 @@ class UsearchIndex:
                         # Prepare simprints for batched LMDB write
                         if asset.simprints and asset.iscc_id:
                             _t = time.perf_counter()
-                            iscc_id_body = IsccID(asset.iscc_id).body
                             for sp_type, sp_list in asset.simprints.items():
                                 data_db, sp_assets_db = self._open_sp_databases_in_txn(txn, sp_type)
                                 if txn.get(iscc_id_body, db=sp_assets_db) is not None:
                                     # Update: delete old simprint entries before re-indexing
                                     deleted = lmdb_ops.delete_asset_simprints(txn, data_db, iscc_id_body)
                                     sp_deleted_keys.setdefault(sp_type, []).extend(deleted)
-                                txn.put(iscc_id_body, b"", db=sp_assets_db)
+                                # Store the per-type fingerprint (not just a presence marker) so a
+                                # later byte-identical re-add can be proven a no-op cheaply.
+                                txn.put(iscc_id_body, self._simprint_fingerprint(sp_list), db=sp_assets_db)
                                 for sp_obj in sp_list:
                                     sp_bytes = ic.decode_base64(sp_obj.simprint)
                                     chunk_ptr = lmdb_ops.pack_chunk_pointer(iscc_id_body, sp_obj.offset, sp_obj.size)
@@ -381,7 +412,8 @@ class UsearchIndex:
                     nphd_index = self._get_or_create_nphd_index(unit_type)
 
                     # Deduplicate keys within batch (keep last occurrence for each duplicate).
-                    # Remove-before-add at line 314 is still needed for update semantics.
+                    # An asset can carry the same unit_type at two lengths, and both share the
+                    # asset's single ISCC-ID key; remove-before-add below still needs unique keys.
                     if len(keys) != len(set(keys)):
                         # Build dict with key -> (last) vector mapping
                         unique_items = {}  # type: dict[int, np.ndarray]
@@ -522,6 +554,145 @@ class UsearchIndex:
             if nphd_index is None or key not in nphd_index:
                 return False
         return True
+
+    @staticmethod
+    def _simprint_fingerprint(simprints):
+        # type: (list[IsccSimprint]) -> bytes
+        """
+        Compute a stable fingerprint of one simprint type's entries.
+
+        Canonical and order-independent: the decoded ``(simprint_bytes, offset, size)``
+        triples are sorted before hashing, so any reordering of an otherwise identical
+        simprint list yields the same digest, while any change to a simprint value,
+        offset, or size produces a different one. This is the same normalized,
+        set-semantic form used by ``_legacy_simprints_match`` and the ``data_db``, so the
+        modern-fingerprint and legacy-reconstruction paths decide equivalence identically.
+        Each entry is length-prefixed to keep the concatenation unambiguous.
+
+        :param simprints: Simprint entries for a single simprint type
+        :return: 16-byte digest identifying this set of entries
+        """
+        triples = sorted((ic.decode_base64(sp.simprint), sp.offset, sp.size) for sp in simprints)
+        hasher = hashlib.blake2b(digest_size=UsearchIndex.SP_FINGERPRINT_BYTES)
+        for sp_bytes, offset, size in triples:
+            hasher.update(struct.pack("!I", len(sp_bytes)))
+            hasher.update(sp_bytes)
+            hasher.update(struct.pack("!II", offset, size))
+        return hasher.digest()
+
+    def _simprints_already_indexed(self, txn, iscc_id_body, asset):
+        # type: (lmdb.Transaction, bytes, IsccEntry) -> bool
+        """
+        Report whether the asset's simprints are already indexed unchanged.
+
+        Uses SUBSET semantics that mirror the update path, which only ever iterates
+        ``asset.simprints`` and so leaves stored types the asset does not supply
+        untouched. The no-op is therefore allowed iff every type PRESENT in the incoming
+        asset is already indexed with identical entries; stored types absent from the
+        incoming asset are ignored (left in place), giving an end state identical to the
+        update path. In particular a byte-identical re-send that omits simprints (or a
+        subset of types) is a no-op instead of hitting the ``remove()`` /
+        ``drain_rotations()`` wedge for zero end-state change. Per incoming type:
+
+        - type not indexed for this asset (no marker) -> new type, genuine change (False);
+        - stored fingerprint equals the incoming fingerprint -> unchanged;
+        - stored value is a 16-byte fingerprint that differs -> genuine change (False);
+        - stored value is a legacy empty marker (pre-fingerprint index) -> verify by
+          reconstructing the stored (simprint, offset, size) triples from the data
+          database and comparing them to the incoming entries. On a match the type is
+          unchanged AND its marker is lazily upgraded to a fingerprint (a cheap value
+          rewrite in the current write txn - no remove()/drain_rotations()).
+
+        Every type the LMDB side reports as unchanged must ALSO have its vectors present in
+        the derived ShardedIndex128 (``_simprints_present_in_derived``); the derived index is
+        updated after the LMDB commit, so a batch that committed LMDB then failed in the
+        simprint phase is re-indexed on retry instead of being no-oped forever.
+
+        Marker upgrades are applied only once every incoming type is confirmed unchanged,
+        so a rejected re-add never half-migrates - correctness over speed.
+
+        :param txn: Active LMDB write transaction
+        :param iscc_id_body: 8-byte ISCC-ID body used as the sp_assets key
+        :param asset: Incoming asset whose simprints are being verified
+        :return: True if every incoming simprint type is already indexed unchanged
+        """
+        incoming = asset.simprints or {}
+
+        upgrades = []  # type: list[tuple[str, bytes]]
+        for sp_type, sp_list in incoming.items():
+            sp_assets_db = self._sp_assets_dbs.get(sp_type)
+            stored_value = txn.get(iscc_id_body, db=sp_assets_db) if sp_assets_db is not None else None
+            if stored_value is None:
+                return False  # type not indexed for this asset - new simprints to add
+            fingerprint = self._simprint_fingerprint(sp_list)
+            if stored_value == fingerprint:
+                pass  # modern fingerprint matches - LMDB side unchanged
+            elif len(stored_value) == self.SP_FINGERPRINT_BYTES:
+                return False  # modern fingerprint differs - genuine change
+            elif not self._legacy_simprints_match(txn, iscc_id_body, sp_type, sp_list):
+                return False  # legacy marker, reconstructed entries differ - genuine change
+            else:
+                upgrades.append((sp_type, fingerprint))  # legacy match - schedule marker upgrade
+            # LMDB says this type is unchanged, but the derived ShardedIndex128 is updated AFTER
+            # the LMDB commit, so a matching fingerprint alone does not prove the vectors reached
+            # the derived index. A batch that committed LMDB then died in the simprint phase (the
+            # very drain_rotations() wedge this no-op guards against) would otherwise be no-oped
+            # forever on retry, permanently dropping its vectors. Require the derived vectors to
+            # be present too - mirrors _nphd_units_present on the NPHD side.
+            if not self._simprints_present_in_derived(iscc_id_body, sp_type, sp_list):
+                return False
+
+        # All incoming types unchanged: lazily migrate any legacy markers to fingerprints.
+        for sp_type, fingerprint in upgrades:
+            txn.put(iscc_id_body, fingerprint, db=self._sp_assets_dbs[sp_type])
+        return True
+
+    def _simprints_present_in_derived(self, iscc_id_body, sp_type, simprints):
+        # type: (bytes, str, list[IsccSimprint]) -> bool
+        """
+        Report whether every incoming simprint's vector is present in the derived index.
+
+        The derived ShardedIndex128 is updated after the LMDB transaction commits, so it can
+        lag LMDB when a batch fails mid-add. This gates the idempotent no-op so a partially
+        written asset (LMDB current, derived vectors missing) is re-indexed on retry rather
+        than skipped forever. Mirrors ``_nphd_units_present`` for the simprint side.
+
+        :param iscc_id_body: 8-byte ISCC-ID body identifying the asset
+        :param sp_type: Simprint type being verified
+        :param simprints: Incoming simprint entries for this type
+        :return: True if the derived index holds every incoming (offset, size) chunk pointer
+        """
+        sp_index = self._simprint_indexes.get(sp_type)
+        if sp_index is None:
+            return False
+        for sp_obj in simprints:
+            chunk_ptr = lmdb_ops.pack_chunk_pointer(iscc_id_body, sp_obj.offset, sp_obj.size)
+            if chunk_ptr not in sp_index:
+                return False
+        return True
+
+    def _legacy_simprints_match(self, txn, iscc_id_body, sp_type, simprints):
+        # type: (lmdb.Transaction, bytes, str, list[IsccSimprint]) -> bool
+        """
+        Verify incoming simprints equal those already stored for a legacy asset.
+
+        For assets indexed before per-type fingerprints existed, the sp_assets marker
+        is an empty byte string, so equivalence cannot be decided from the marker alone.
+        This reconstructs the stored ``(simprint_bytes, offset, size)`` triples from the
+        dupsort data database and compares them - order-independent - to the incoming
+        entries. The data database layout never changed, so legacy entries reconstruct
+        exactly.
+
+        :param txn: Active LMDB transaction
+        :param iscc_id_body: 8-byte ISCC-ID body identifying the asset
+        :param sp_type: Simprint type being verified
+        :param simprints: Incoming simprint entries for this type
+        :return: True if the incoming entries match the stored ones exactly
+        """
+        data_db = self._sp_data_dbs[sp_type]
+        incoming_triples = {(ic.decode_base64(sp.simprint), sp.offset, sp.size) for sp in simprints}
+        stored_triples = lmdb_ops.read_asset_simprints(txn, data_db, iscc_id_body)
+        return incoming_triples == stored_triples
 
     def get_asset(self, iscc_id):
         # type: (str) -> IsccEntry

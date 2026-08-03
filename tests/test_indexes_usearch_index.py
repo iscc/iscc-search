@@ -7,6 +7,7 @@ Tests UsearchIndex directly to cover edge cases not exercised through UsearchInd
 import io
 import pytest
 import iscc_core as ic
+from iscc_search.indexes.simprint import lmdb_ops
 from iscc_search.indexes.usearch.index import UsearchIndex
 from iscc_search.models import IsccID, IsccUnit
 from iscc_search.schema import IsccEntry, IsccQuery, IsccSimprint
@@ -1169,8 +1170,6 @@ def test_usearch_index_idempotent_reindex_noop_legacy_marker(usearch_index, samp
     rewrite the marker to a 16-byte fingerprint. A second asset shares the type so the
     reconstruction scan steps over foreign entries.
     """
-    from iscc_search.models import IsccID
-
     inst_main = f"ISCC:{ic.Code.rnd(ic.MT.INSTANCE, bits=128)}"
     content_main = ic.gen_text_code_v0("Legacy marker main content")["iscc"]
 
@@ -1220,8 +1219,6 @@ def test_usearch_index_idempotent_reindex_noop_legacy_marker(usearch_index, samp
 
 def test_usearch_index_legacy_marker_changed_simprints_updates(usearch_index, sample_iscc_ids):
     """A re-add over a legacy empty marker with CHANGED simprints falls through to the update path."""
-    from iscc_search.models import IsccID
-
     inst = f"ISCC:{ic.Code.rnd(ic.MT.INSTANCE, bits=128)}"
     content = ic.gen_text_code_v0("Legacy changed content")["iscc"]
     old_sp, new_sp = "AXvu3tp2kF8mN9qL4rT1sZ", "B4kl9mQ1pP7xY3jH8vW2aF"
@@ -1386,8 +1383,6 @@ def test_usearch_index_reindex_when_derived_simprint_vector_missing(usearch_inde
     while every LMDB-side gate still passes. The no-op must detect the absent derived vector,
     fall through to the full update path, and restore it.
     """
-    from iscc_search.indexes.simprint import lmdb_ops
-
     inst = f"ISCC:{ic.Code.rnd(ic.MT.INSTANCE, bits=128)}"
     content = ic.gen_text_code_v0("derived-missing content")["iscc"]
     sp = _make_simprint("AXvu3tp2kF8mN9qL4rT1sZ", 0, 500)

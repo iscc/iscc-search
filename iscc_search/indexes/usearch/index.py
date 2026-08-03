@@ -321,10 +321,16 @@ class UsearchIndex:
                         # Genuine content changes alter asset_bytes or the simprints and fall through to the
                         # normal remove-before-add update path.
                         iscc_id_body = iscc_id_obj.body
+                        # Per-type fingerprints are consumed by the no-op gate and again when
+                        # storing - compute them once per asset.
+                        sp_fingerprints = {
+                            sp_type: self._simprint_fingerprint(sp_list)
+                            for sp_type, sp_list in (asset.simprints or {}).items()
+                        }
                         if (
                             existing == asset_bytes
                             and self._nphd_units_present(key, asset.units)
-                            and self._simprints_already_indexed(txn, iscc_id_body, asset)
+                            and self._simprints_already_indexed(txn, iscc_id_body, asset, sp_fingerprints)
                         ):
                             results.append(IsccAddResult(iscc_id=asset.iscc_id, status=status))
                             continue
@@ -376,7 +382,7 @@ class UsearchIndex:
                                     sp_deleted_keys.setdefault(sp_type, []).extend(deleted)
                                 # Store the per-type fingerprint (not just a presence marker) so a
                                 # later byte-identical re-add can be proven a no-op cheaply.
-                                txn.put(iscc_id_body, self._simprint_fingerprint(sp_list), db=sp_assets_db)
+                                txn.put(iscc_id_body, sp_fingerprints[sp_type], db=sp_assets_db)
                                 for sp_obj in sp_list:
                                     sp_bytes = ic.decode_base64(sp_obj.simprint)
                                     chunk_ptr = lmdb_ops.pack_chunk_pointer(iscc_id_body, sp_obj.offset, sp_obj.size)
@@ -580,8 +586,8 @@ class UsearchIndex:
             hasher.update(struct.pack("!II", offset, size))
         return hasher.digest()
 
-    def _simprints_already_indexed(self, txn, iscc_id_body, asset):
-        # type: (lmdb.Transaction, bytes, IsccEntry) -> bool
+    def _simprints_already_indexed(self, txn, iscc_id_body, asset, fingerprints):
+        # type: (lmdb.Transaction, bytes, IsccEntry, dict[str, bytes]) -> bool
         """
         Report whether the asset's simprints are already indexed unchanged.
 
@@ -614,6 +620,7 @@ class UsearchIndex:
         :param txn: Active LMDB write transaction
         :param iscc_id_body: 8-byte ISCC-ID body used as the sp_assets key
         :param asset: Incoming asset whose simprints are being verified
+        :param fingerprints: Precomputed per-type fingerprints of the asset's simprints
         :return: True if every incoming simprint type is already indexed unchanged
         """
         incoming = asset.simprints or {}
@@ -624,7 +631,7 @@ class UsearchIndex:
             stored_value = txn.get(iscc_id_body, db=sp_assets_db) if sp_assets_db is not None else None
             if stored_value is None:
                 return False  # type not indexed for this asset - new simprints to add
-            fingerprint = self._simprint_fingerprint(sp_list)
+            fingerprint = fingerprints[sp_type]
             if stored_value == fingerprint:
                 pass  # modern fingerprint matches - LMDB side unchanged
             elif len(stored_value) == self.SP_FINGERPRINT_BYTES:

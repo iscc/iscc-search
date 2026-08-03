@@ -4,11 +4,15 @@
 from __future__ import annotations
 from pydantic import AnyUrl, BaseModel, ConfigDict, Field, RootModel
 from typing import Annotated, Any
+from typing_extensions import TypeAliasType
 from enum import StrEnum
 
 
 class HttpError(BaseModel):
     detail: str | list[str]
+
+
+SizesAdditionalProperty = TypeAliasType("SizesAdditionalProperty", Annotated[int, Field(ge=0)])
 
 
 class IsccIndex(BaseModel):
@@ -30,7 +34,7 @@ class IsccIndex(BaseModel):
         int | None, Field(description="Size of index in megabytes (server-generated, read-only)", examples=[42], ge=0)
     ] = None
     sizes: Annotated[
-        dict[str, int] | None,
+        dict[str, SizesAdditionalProperty] | None,
         Field(
             description='Size in megabytes per index component (server-generated, read-only). Key "lmdb" covers primary key-value storage measured on disk; additional keys are derived similarity sub-indexes named by ISCC-UNIT-TYPE or simprint type, measured as serialized data size from the live index (includes unflushed data).',
             examples=[{"lmdb": 30, "CONTENT_TEXT_V0": 12}],
@@ -68,7 +72,7 @@ class IsccSimprint(BaseModel):
     ]
 
 
-class Simprint(RootModel[str]):
+class SimprintsAdditionalProperty1Item(RootModel[str]):
     root: Annotated[
         str,
         Field(
@@ -77,6 +81,15 @@ class Simprint(RootModel[str]):
             pattern="^[A-Za-z0-9+/_=-]+$",
         ),
     ]
+
+
+SimprintsAdditionalProperty1 = TypeAliasType(
+    "SimprintsAdditionalProperty1",
+    Annotated[
+        list[SimprintsAdditionalProperty1Item],
+        Field(description="Array of base64-encoded simprint hashes (headerless, variable length)", min_length=1),
+    ],
+)
 
 
 class IsccQuery(BaseModel):
@@ -113,7 +126,7 @@ class IsccQuery(BaseModel):
         ),
     ] = None
     simprints: Annotated[
-        dict[str, list[Simprint]] | None,
+        dict[str, SimprintsAdditionalProperty1] | None,
         Field(
             description='Simprint groups for chunk-level matching. Keys are simprint type identifiers\n(e.g., "CONTENT_TEXT_V0", "SEMANTIC_TEXT_V0", "INSTANCE_NONE_V0"), values are\narrays of headerless base64-encoded simprints.\n\n**Simprint types** are versioned identifiers that determine:\n- Matching strategy (exact collision vs approximate similarity)\n- Abstraction level (semantic vs content vs data)\n- Segmentation approach (sentence chunks, embedding windows, etc.)\n\n**Extensibility**: New simprint types can be added without schema changes.\nUnknown types are ignored gracefully.\n\n**Common types**:\n- `CONTENT_TEXT_V0`: Lexical similarity (near-duplicates, minor edits)\n- `SEMANTIC_TEXT_V0`: Conceptual similarity (paraphrases, translations)\n- `INSTANCE_NONE_V0`: Exact bitstream matches (cryptographic identity)\n',
             examples=[
@@ -147,6 +160,9 @@ class IsccAddResult(BaseModel):
             examples=["created"],
         ),
     ]
+
+
+TypesAdditionalProperty = TypeAliasType("TypesAdditionalProperty", Annotated[float, Field(ge=0.0, le=1.0)])
 
 
 class IsccMetadata(BaseModel):
@@ -304,6 +320,12 @@ class IsccChunk(BaseModel):
     ] = None
 
 
+SimprintsAdditionalProperty = TypeAliasType(
+    "SimprintsAdditionalProperty",
+    Annotated[list[IsccSimprint], Field(description="Array of simprint entries with location metadata", min_length=1)],
+)
+
+
 class IsccEntry(BaseModel):
     iscc_id: Annotated[
         str | None,
@@ -326,7 +348,7 @@ class IsccEntry(BaseModel):
         Field(description="List of ISCC-UNITs as canonical strings (variable-length, 64-256 bits)", min_length=2),
     ] = None
     simprints: Annotated[
-        dict[str, list[IsccSimprint]] | None,
+        dict[str, SimprintsAdditionalProperty] | None,
         Field(
             description='Simprint groups for chunk-level indexing. Keys are simprint type identifiers\n(e.g., "CONTENT_TEXT_V0", "SEMANTIC_TEXT_V0"), values are arrays of simprint\nentries with location metadata.\n\n**Simprint types** are versioned identifiers determining matching strategy and\nabstraction level:\n- `CONTENT_TEXT_V0`: Lexical similarity (near-duplicates, minor edits)\n- `SEMANTIC_TEXT_V0`: Conceptual similarity (paraphrases, translations)\n- `INSTANCE_NONE_V0`: Exact bitstream matches (cryptographic identity)\n\n**Extensibility**: New simprint types can be added without schema changes.\n\n**Storage**: Each simprint is indexed with its parent iscc_id, enabling reverse\nlookup from simprint → chunks → assets.\n',
             examples=[
@@ -378,7 +400,7 @@ class IsccGlobalMatch(BaseModel):
         ),
     ]
     types: Annotated[
-        dict[str, float],
+        dict[str, TypesAdditionalProperty],
         Field(
             description='Per-unit-type similarity breakdown. Keys are unit type identifiers\n(e.g., "META_NONE_V0", "CONTENT_TEXT_V0"), values are similarity scores (0.0-1.0).\n\n**Missing keys**: Unit types that were queried but not found in this asset\nare omitted (implicitly 0.0).\n\n**Score semantics** (normalized against query unit length):\n- 1.0: Perfect match (all query bits matched)\n- 0.0-1.0: Partial match (NPHD distance for similarity-preserving units)\n- INSTANCE units: Binary scoring (1.0 = identity match, 0.0 = no match)\n\nA 64-bit query with perfect 64-bit match scores 1.0, same as 256-bit perfect match.\nScore reflects "how well does this match MY query", not absolute bit count.\n',
             examples=[{"META_NONE_V0": 1.0, "CONTENT_TEXT_V0": 1.0, "DATA_NONE_V0": 1.0, "INSTANCE_NONE_V0": 0.25}],

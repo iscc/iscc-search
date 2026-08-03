@@ -1172,41 +1172,49 @@ def test_rebuild_with_existing_directory(tmp_path, sample_iscc_ids):
 
 
 def test_update_removes_stale_derived_vectors(tmp_path, sample_iscc_ids):
-    """Updating asset with empty simprints removes stale vectors from derived index."""
+    """Updating asset with changed simprints removes stale vectors from derived index."""
     index_path = tmp_path / "stale_removal"
     sp_type = "CONTENT_TEXT_V0"
-    sp_bytes = b"\xaa" * 16
+    old_sp = b"\xaa" * 16
+    new_sp = b"\x55" * 16  # All 128 bits differ from old_sp
 
     instance_unit = f"ISCC:{ic.Code.rnd(ic.MT.INSTANCE, bits=128)}"
     content_unit = ic.gen_text_code_v0("Stale removal test")["iscc"]
 
     idx = UsearchIndex(index_path, realm_id=0, max_dim=256)
 
-    # Add asset with simprints
+    # Add asset with the old simprint
     asset = IsccEntry(
         iscc_id=sample_iscc_ids[0],
         units=[instance_unit, content_unit],
-        simprints=_make_entry_simprints(sp_type, [(sp_bytes, 0, 500)]),
+        simprints=_make_entry_simprints(sp_type, [(old_sp, 0, 500)]),
     )
     idx.add_assets([asset])
     assert sp_type in idx._simprint_indexes
     assert idx._simprint_indexes[sp_type].size == 1
 
-    # Update same asset with empty simprints (removes all for this type)
+    # Update the same asset with a different simprint at a different chunk location
     asset_updated = IsccEntry(
         iscc_id=sample_iscc_ids[0],
         units=[instance_unit, content_unit],
-        simprints={sp_type: []},
+        simprints=_make_entry_simprints(sp_type, [(new_sp, 500, 400)]),
     )
     idx.add_assets([asset_updated])
 
-    # Derived index should have the stale vector removed
-    assert idx._simprint_indexes[sp_type].size == 0
+    # Stale vector was removed: size stays at 1 (a leaked old vector would make it 2,
+    # since the changed offset/size gives the new simprint a different composite key)
+    assert idx._simprint_indexes[sp_type].size == 1
 
-    # Approximate search should return no results
-    query = IsccQuery(simprints=_make_query_simprints(sp_type, [sp_bytes]))
-    result = idx.search_assets(query, limit=10)
-    assert len(result.chunk_matches) == 0
+    # The new simprint is searchable with a perfect score
+    query_new = IsccQuery(simprints=_make_query_simprints(sp_type, [new_sp]))
+    result_new = idx.search_assets(query_new, limit=10)
+    assert len(result_new.chunk_matches) == 1
+    assert result_new.chunk_matches[0].score == 1.0
+
+    # The old simprint no longer yields an exact match (stale vector gone)
+    query_old = IsccQuery(simprints=_make_query_simprints(sp_type, [old_sp]))
+    result_old = idx.search_assets(query_old, limit=10)
+    assert not any(m.score == 1.0 for m in result_old.chunk_matches)
 
     idx.close()
 

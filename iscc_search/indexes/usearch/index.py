@@ -407,7 +407,10 @@ class UsearchIndex:
                 nphd_elapsed = time.perf_counter() - nphd_t0
 
                 # Update derived ShardedIndex128 simprint indexes
-                # Remove stale keys first (from updated assets), then add new vectors
+                # Remove stale keys first (from updated assets), then add new vectors.
+                # Per-type simprint lists are non-empty (schema enforces minItems 1), so every
+                # type with deletions also has additions staged in sp_batches - no separate
+                # deletions-only pass is needed.
                 sp_t0 = time.perf_counter()
                 sp_remove_t = 0.0
                 sp_add_t = 0.0
@@ -423,14 +426,6 @@ class UsearchIndex:
                     sp_add_t += time.perf_counter() - _t
                     batch_sp_vectors += len(composite_keys)
                     self._update_sp_metadata(sp_type, sp_index.size)
-
-                # Remove stale vectors for types with only deletions (no new vectors)
-                for sp_type, deleted_keys in sp_deleted_keys.items():
-                    if sp_type not in sp_batches and sp_type in self._simprint_indexes:
-                        _t = time.perf_counter()
-                        self._simprint_indexes[sp_type].remove(deleted_keys)
-                        sp_remove_t += time.perf_counter() - _t
-                        self._update_sp_metadata(sp_type, self._simprint_indexes[sp_type].size)
                 sp_elapsed = time.perf_counter() - sp_t0
 
                 # Auto-flush sub-indexes that exceed flush_interval
